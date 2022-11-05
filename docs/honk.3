@@ -67,11 +67,12 @@ The
 .Fa action
 value should be
 .Dq honk .
+Content type must be multipart/form-data.
 The following values are recognized:
 .Bl -tag -width placename
 .It Fa noise
 The contents of the honk.
-.It fa format
+.It Fa format
 The format of noise.
 Defaults to markdown.
 May also be html.
@@ -79,6 +80,8 @@ May also be html.
 A file to attach.
 .It Fa donkdesc
 A description for the attached file.
+.It Fa donkxid
+The XID of a previously uploaded attachment.
 .It Fa placename
 The name of an associated location.
 .It Fa placeurl
@@ -94,6 +97,13 @@ The ActivityPub ID that this honk is in reply to.
 .El
 .Pp
 Upon success, the honk action will return the URL for the created honk.
+.Ss donk
+Upload just an attachment using
+.Fa donk
+and
+.Fa donkdesc .
+Content type must be multipart/form-data.
+Will return the XID.
 .Ss gethonks
 The
 .Dq gethonks
@@ -113,6 +123,41 @@ If there are no results, wait this many seconds for something to appear.
 .El
 .Pp
 The result will be returned as json.
+.Ss zonkit
+The
+.Dq zonkit
+action began life as a delete function, but has since evolved some other
+powers as specified by the
+.Fa wherefore
+parameter.
+The target of the action is specified by the
+.Fa what
+parameter and is generally the XID of a honk.
+.Pp
+Wherefore must be one of the following.
+.Bl -tag -width zonvoy
+.It bonk
+Share honk with others.
+.It unbonk
+Undo share.
+.It save
+Mark honk as saved.
+.It unsave
+Unmark honk as saved.
+.It react
+Post an emoji reaction.
+A custom reaction may be specified with
+.Fa reaction .
+.It ack
+Mark honk as read.
+.It deack
+Unmark honk as read.
+.It zonk
+Delete this honk.
+.It zonvoy
+Mute this thread.
+What should identify a convoy.
+.El
 .Ss sendactivity
 Send anything.
 No limits, no error checking.

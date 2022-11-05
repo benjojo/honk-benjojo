@@ -39,6 +39,61 @@
 <p class="Pp">The vital improvements module, <code class="Nm">vim</code>, is
     used to customize and extend honk in such rare cases as the existing
     functionality proves insufficient.</p>
+<section class="Ss">
+<h2 class="Ss" id="Files"><a class="permalink" href="#Files">Files</a></h2>
+<dl class="Bl-tag">
+  <dt>activity.go</dt>
+  <dd>Conversion to and from ActivityPub format and interop with other
+      implementations.</dd>
+  <dt>admin.go</dt>
+  <dd>The console admin interface.</dd>
+  <dt>avatar.go</dt>
+  <dd>Code to generate blocky avatar images.</dd>
+  <dt>backend.go</dt>
+  <dd>Interface to the image resizing backend helper process.</dd>
+  <dt>bloat.go</dt>
+  <dd>Bad stuff.</dd>
+  <dt>database.go</dt>
+  <dd>Loading and saving things to database.</dd>
+  <dt>deliverator.go</dt>
+  <dd>Sending messages and handling retries.</dd>
+  <dt>fun.go</dt>
+  <dd>All sorts of fun stuff.</dd>
+  <dt>hfcs.go</dt>
+  <dd>Filtering framework.</dd>
+  <dt>honk.go</dt>
+  <dd>Just a few data types.</dd>
+  <dt>hoot.go</dt>
+  <dd>Twitter scraper.</dd>
+  <dt>import.go</dt>
+  <dd>Importers from other service data dumps.</dd>
+  <dt>markitzero.go</dt>
+  <dd>Markdown converter.</dd>
+  <dt>schema.go</dt>
+  <dd>Generated from schema.sql.</dd>
+  <dt>sensors.go</dt>
+  <dd>Monitor memory and CPU.</dd>
+  <dt>skulduggery.go</dt>
+  <dd>Reduce some stupidity.</dd>
+  <dt>unveil.go</dt>
+  <dd>OpenBSD pledge and unveil.</dd>
+  <dt>upgradedb.go</dt>
+  <dd>Upgrade between schema versions.</dd>
+  <dt>util.go</dt>
+  <dd>Boring code.</dd>
+  <dt>web.go</dt>
+  <dd>The web interface.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Schema"><a class="permalink" href="#Schema">Schema</a></h2>
+<p class="Pp">The current schema is stored in
+    <span class="Pa">schema.sql</span>.</p>
+<p class="Pp">After changing the schema, edit
+    <span class="Pa">upgradedb.go</span> to update
+    <var class="Va">myVersion</var> and add relevant update statements to the
+    bottom of the large switch.</p>
+</section>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
@@ -48,8 +103,8 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">March 9, 2020</td>
-    <td class="foot-os">OpenBSD 6.6</td>
+    <td class="foot-date">June 30, 2020</td>
+    <td class="foot-os">OpenBSD 6.7</td>
   </tr>
 </table>
 </body>

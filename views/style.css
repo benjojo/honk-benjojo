@@ -188,6 +188,21 @@ input[type=file] {
 	overflow: hidden;
 }
 
+.chat {
+	border-bottom: 0.5px solid var(--fg-subtle);
+	padding-left: 1em;
+}
+.chat p {
+	margin-top: 0.2em;
+	margin-bottom: 0.2em;
+}
+.chattarget {
+	border-bottom: 1px solid var(--fg-subtle);
+}
+.chatstamp {
+	margin-left: -1em;
+}
+
 .honk	#honkform {
 		padding: 1em;
 		border: 1px solid var(--fg);

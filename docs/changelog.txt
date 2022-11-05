@@ -1,5 +1,25 @@
 changelog
 
+=== 0.9.1 Late Stage Lusciousness
+
+++ Boing boom tschak chonky chatter. Chat messages with Pleroma.
+
++ Custom rgb flag: emoji.
+
++ Slightly better ActivityPub compat
+
++ ## headings for markdown
+
++ Workaround js only twitter for hoot: feature.
+
++ Quote unquote reliability improvements.
+
++ Much better omit images handling.
+
++ Fix update activity.
+
++ A few API refinements and additions.
+
 === 0.9.0 Monitor vs Merrimack
 
 --- Add Reactions.

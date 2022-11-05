@@ -174,7 +174,15 @@ and unzip any zip files contained within.
 .Ss Advanced Options
 To support separate mentions without a subdomain,
 e.g. @user@example.com and https://honk.example.com/u/user,
-add a ('masqname', 'example.com') row the config table of the database.
+add a ('masqname', 'example.com') row to the config table of the database.
+Route
+.Pa /.well-known/webfinger
+from the top domain to honk.
+.Pp
+Custom URL seperators (not "u" and "h") may be specified by adding
+"usersep" and "honksep" options to the config table.
+e.g. example.com/users/username/honk/somehonk instead of
+example.com/u/username/h/somehonk.
 .Sh FILES
 .Nm
 files are split between the data directory and the view directory.

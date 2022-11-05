@@ -146,12 +146,14 @@ func New(options Options) *Lighter {
 	hl.AddLexer("js", strings.NewReader(lexer_js))
 	hl.AddLexer("lua", strings.NewReader(lexer_lua))
 	hl.AddLexer("py", strings.NewReader(lexer_py))
+	hl.AddLexer("rs", strings.NewReader(lexer_rs))
 	hl.AddLexer("sql", strings.NewReader(lexer_sql))
 
 	hl.aliases = make(map[string]string)
 	hl.aliases["h"] = "c"
 	hl.aliases["patch"] = "diff"
 	hl.aliases["python"] = "py"
+	hl.aliases["rust"] = "rs"
 
 	return hl
 }

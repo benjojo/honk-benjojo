@@ -59,9 +59,6 @@ func getuserstyle(u *login.UserInfo) template.CSS {
 	if user.Options.SkinnyCSS {
 		css += "main { max-width: 700px; }\n"
 	}
-	if user.Options.OmitImages {
-		css += ".honk .noise img { display: none; }\n"
-	}
 	return css
 }
 
@@ -562,7 +559,7 @@ func serveractor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	j := junkuser(user)
-	w.Write(j)
+	j.Write(w)
 }
 
 func ximport(w http.ResponseWriter, r *http.Request) {
@@ -1092,6 +1089,7 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 	var userid int64 = -1
 	if u != nil {
 		userid = u.UserID
+		templinfo["User"], _ = butwhatabout(u.Username)
 	}
 	reverbolate(userid, honks)
 	templinfo["Honks"] = honks
@@ -1118,6 +1116,7 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	user, _ := butwhatabout(u.Username)
 	db := opendatabase()
+
 	options := user.Options
 	if r.FormValue("skinny") == "skinny" {
 		options.SkinnyCSS = true
@@ -1135,17 +1134,25 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 		options.MapLink = ""
 	}
 	options.Reaction = r.FormValue("reaction")
-	if ava := re_avatar.FindString(whatabout); ava != "" {
+
+	sendupdate := false
+	ava := re_avatar.FindString(whatabout)
+	if ava != "" {
 		whatabout = re_avatar.ReplaceAllString(whatabout, "")
 		ava = ava[7:]
 		if ava[0] == ' ' {
 			ava = ava[1:]
 		}
-		options.Avatar = fmt.Sprintf("https://%s/meme/%s", serverName, ava)
-	} else {
-		options.Avatar = ""
+		ava = fmt.Sprintf("https://%s/meme/%s", serverName, ava)
+	}
+	if ava != options.Avatar {
+		options.Avatar = ava
+		sendupdate = true
 	}
 	whatabout = strings.TrimSpace(whatabout)
+	if whatabout != user.About {
+		sendupdate = true
+	}
 	j, err := jsonify(options)
 	if err == nil {
 		_, err = db.Exec("update users set about = ?, options = ? where username = ?", whatabout, j, u.Username)
@@ -1155,18 +1162,19 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	}
 	somenamedusers.Clear(u.Username)
 	somenumberedusers.Clear(u.UserID)
+	oldjonkers.Clear(u.Username)
+
+	if sendupdate {
+		updateMe(u.Username)
+	}
 
 	http.Redirect(w, r, "/account", http.StatusSeeOther)
 }
 
-func submitbonk(w http.ResponseWriter, r *http.Request) {
-	xid := r.FormValue("xid")
-	userinfo := login.GetUserInfo(r)
-	user, _ := butwhatabout(userinfo.Username)
-
+func bonkit(xid string, user *WhatAbout) {
 	log.Printf("bonking %s", xid)
 
-	xonk := getxonk(userinfo.UserID, xid)
+	xonk := getxonk(user.ID, xid)
 	if xonk == nil {
 		return
 	}
@@ -1189,8 +1197,8 @@ func submitbonk(w http.ResponseWriter, r *http.Request) {
 	}
 	dt := time.Now().UTC()
 	bonk := &Honk{
-		UserID:   userinfo.UserID,
-		Username: userinfo.Username,
+		UserID:   user.ID,
+		Username: user.Name,
 		What:     "bonk",
 		Honker:   user.URL,
 		Oonker:   oonker,
@@ -1218,23 +1226,32 @@ func submitbonk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go honkworldwide(user, bonk)
+}
+
+func submitbonk(w http.ResponseWriter, r *http.Request) {
+	xid := r.FormValue("xid")
+	userinfo := login.GetUserInfo(r)
+	user, _ := butwhatabout(userinfo.Username)
+
+	bonkit(xid, user)
 
 	if r.FormValue("js") != "1" {
 		templinfo := getInfo(r)
 		templinfo["ServerMessage"] = "Bonked!"
-		err = readviews.Execute(w, "msg.html", templinfo)
+		err := readviews.Execute(w, "msg.html", templinfo)
 		if err != nil {
 			log.Print(err)
 		}
 	}
 }
 
-func sendzonkofsorts(xonk *Honk, user *WhatAbout, what string) {
+func sendzonkofsorts(xonk *Honk, user *WhatAbout, what string, aux string) {
 	zonk := &Honk{
 		What:     what,
 		XID:      xonk.XID,
 		Date:     time.Now().UTC(),
 		Audience: oneofakind(xonk.Audience),
+		Noise:    aux,
 	}
 	zonk.Public = loudandproud(zonk.Audience)
 
@@ -1271,7 +1288,11 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "react" {
-		if user.Options.Reaction == "none" {
+		reaction := user.Options.Reaction
+		if r2 := r.FormValue("reaction"); r2 != "" {
+			reaction = r2
+		}
+		if reaction == "none" {
 			return
 		}
 		xonk := getxonk(userinfo.UserID, what)
@@ -1280,7 +1301,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("error saving: %s", err)
 			}
-			sendzonkofsorts(xonk, user, "react")
+			sendzonkofsorts(xonk, user, "react", reaction)
 		}
 		return
 	}
@@ -1295,7 +1316,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("error acking: %s", err)
 			}
-			sendzonkofsorts(xonk, user, "ack")
+			sendzonkofsorts(xonk, user, "ack", "")
 		}
 		return
 	}
@@ -1307,8 +1328,14 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("error deacking: %s", err)
 			}
-			sendzonkofsorts(xonk, user, "deack")
+			sendzonkofsorts(xonk, user, "deack", "")
 		}
+		return
+	}
+
+	if wherefore == "bonk" {
+		user, _ := butwhatabout(userinfo.Username)
+		bonkit(what, user)
 		return
 	}
 
@@ -1321,7 +1348,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("error unbonking: %s", err)
 			}
-			sendzonkofsorts(xonk, user, "unbonk")
+			sendzonkofsorts(xonk, user, "unbonk", "")
 		}
 		return
 	}
@@ -1347,7 +1374,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 		if xonk != nil {
 			deletehonk(xonk.ID)
 			if xonk.Whofore == 2 || xonk.Whofore == 3 {
-				sendzonkofsorts(xonk, user, "zonk")
+				sendzonkofsorts(xonk, user, "zonk", "")
 			}
 		}
 	}
@@ -1428,12 +1455,100 @@ func canedithonk(user *WhatAbout, honk *Honk) bool {
 	return true
 }
 
+func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
+	file, filehdr, err := r.FormFile("donk")
+	if err != nil {
+		if err != http.ErrMissingFile {
+			log.Printf("error reading donk: %s", err)
+			http.Error(w, "error reading donk", http.StatusUnsupportedMediaType)
+		}
+		return nil, err
+	}
+	var buf bytes.Buffer
+	io.Copy(&buf, file)
+	file.Close()
+	data := buf.Bytes()
+	xid := xfiltrate()
+	var media, name string
+	img, err := shrinkit(data)
+	if err == nil {
+		data = img.Data
+		format := img.Format
+		media = "image/" + format
+		if format == "jpeg" {
+			format = "jpg"
+		}
+		name = xid + "." + format
+		xid = name
+	} else {
+		ct := http.DetectContentType(data)
+		switch ct {
+		case "application/pdf":
+			maxsize := 10000000
+			if len(data) > maxsize {
+				log.Printf("bad image: %s too much pdf: %d", err, len(data))
+				http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+				return nil, err
+			}
+			media = ct
+			xid += ".pdf"
+			name = filehdr.Filename
+			if name == "" {
+				name = xid
+			}
+		default:
+			maxsize := 100000
+			if len(data) > maxsize {
+				log.Printf("bad image: %s too much text: %d", err, len(data))
+				http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+				return nil, err
+			}
+			for i := 0; i < len(data); i++ {
+				if data[i] < 32 && data[i] != '\t' && data[i] != '\r' && data[i] != '\n' {
+					log.Printf("bad image: %s not text: %d", err, data[i])
+					http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+					return nil, err
+				}
+			}
+			media = "text/plain"
+			xid += ".txt"
+			name = filehdr.Filename
+			if name == "" {
+				name = xid
+			}
+		}
+	}
+	desc := strings.TrimSpace(r.FormValue("donkdesc"))
+	if desc == "" {
+		desc = name
+	}
+	url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
+	fileid, err := savefile(xid, name, desc, url, media, true, data)
+	if err != nil {
+		log.Printf("unable to save image: %s", err)
+		http.Error(w, "failed to save attachment", http.StatusUnsupportedMediaType)
+		return nil, err
+	}
+	d := &Donk{
+		FileID: fileid,
+		XID:    xid,
+		Desc:   desc,
+		URL:    url,
+		Local:  true,
+	}
+	return d, nil
+}
+
 func submitwebhonk(w http.ResponseWriter, r *http.Request) {
-	submithonk(w, r, false)
+	h := submithonk(w, r)
+	if h == nil {
+		return
+	}
+	http.Redirect(w, r, h.XID[len(serverName)+8:], http.StatusSeeOther)
 }
 
 // what a hot mess this function is
-func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
+func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	rid := r.FormValue("rid")
 	noise := r.FormValue("noise")
 	format := r.FormValue("format")
@@ -1442,7 +1557,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	}
 	if !(format == "markdown" || format == "html") {
 		http.Error(w, "unknown format", 500)
-		return
+		return nil
 	}
 
 	userinfo := login.GetUserInfo(r)
@@ -1455,7 +1570,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		honk = getxonk(userinfo.UserID, updatexid)
 		if !canedithonk(user, honk) {
 			http.Error(w, "no editing that please", http.StatusInternalServerError)
-			return
+			return nil
 		}
 		honk.Date = dt
 		honk.What = "update"
@@ -1489,7 +1604,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		xonk := getxonk(userinfo.UserID, rid)
 		if xonk == nil {
 			http.Error(w, "replyto disappeared", http.StatusNotFound)
-			return
+			return nil
 		}
 		if xonk.Public {
 			honk.Audience = append(honk.Audience, xonk.Audience...)
@@ -1525,88 +1640,20 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	if len(honk.Audience) == 0 {
 		log.Printf("honk to nowhere")
 		http.Error(w, "honk to nowhere...", http.StatusNotFound)
-		return
+		return nil
 	}
 	honk.Public = loudandproud(honk.Audience)
 	honk.Convoy = convoy
 
 	donkxid := r.FormValue("donkxid")
 	if donkxid == "" {
-		file, filehdr, err := r.FormFile("donk")
-		if err == nil {
-			var buf bytes.Buffer
-			io.Copy(&buf, file)
-			file.Close()
-			data := buf.Bytes()
-			xid := xfiltrate()
-			var media, name string
-			img, err := shrinkit(data)
-			if err == nil {
-				data = img.Data
-				format := img.Format
-				media = "image/" + format
-				if format == "jpeg" {
-					format = "jpg"
-				}
-				name = xid + "." + format
-				xid = name
-			} else {
-				ct := http.DetectContentType(data)
-				switch ct {
-				case "application/pdf":
-					maxsize := 1000000
-					if len(data) > maxsize {
-						log.Printf("bad image: %s too much pdf: %d", err, len(data))
-						http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
-						return
-					}
-					media = ct
-					xid += ".pdf"
-					name = filehdr.Filename
-					if name == "" {
-						name = xid
-					}
-				default:
-					maxsize := 100000
-					if len(data) > maxsize {
-						log.Printf("bad image: %s too much text: %d", err, len(data))
-						http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
-						return
-					}
-					for i := 0; i < len(data); i++ {
-						if data[i] < 32 && data[i] != '\t' && data[i] != '\r' && data[i] != '\n' {
-							log.Printf("bad image: %s not text: %d", err, data[i])
-							http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
-							return
-						}
-					}
-					media = "text/plain"
-					xid += ".txt"
-					name = filehdr.Filename
-					if name == "" {
-						name = xid
-					}
-				}
-			}
-			desc := strings.TrimSpace(r.FormValue("donkdesc"))
-			if desc == "" {
-				desc = name
-			}
-			url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
-			fileid, err := savefile(xid, name, desc, url, media, true, data)
-			if err != nil {
-				log.Printf("unable to save image: %s", err)
-				return
-			}
-			d := &Donk{
-				FileID: fileid,
-				XID:    xid,
-				Desc:   desc,
-				URL:    url,
-				Local:  true,
-			}
+		d, err := submitdonk(w, r)
+		if err != nil && err != http.ErrMissingFile {
+			return nil
+		}
+		if d != nil {
 			honk.Donks = append(honk.Donks, d)
-			donkxid = xid
+			donkxid = d.XID
 		}
 	} else {
 		xid := donkxid
@@ -1689,7 +1736,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		if err != nil {
 			log.Print(err)
 		}
-		return
+		return nil
 	}
 
 	if updatexid != "" {
@@ -1699,7 +1746,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		err := savehonk(honk)
 		if err != nil {
 			log.Printf("uh oh")
-			return
+			return nil
 		}
 	}
 
@@ -1709,11 +1756,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 
 	go honkworldwide(user, honk)
 
-	if isAPI {
-		w.Write([]byte(honk.XID))
-	} else {
-		http.Redirect(w, r, honk.XID[len(serverName)+8:], http.StatusSeeOther)
-	}
+	return honk
 }
 
 func showhonkers(w http.ResponseWriter, r *http.Request) {
@@ -1725,6 +1768,67 @@ func showhonkers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 	}
+}
+
+func showchatter(w http.ResponseWriter, r *http.Request) {
+	u := login.GetUserInfo(r)
+	chatter := loadchatter(u.UserID)
+	for _, chat := range chatter {
+		for _, ch := range chat.Chonks {
+			filterchonk(ch)
+		}
+	}
+
+	templinfo := getInfo(r)
+	templinfo["Chatter"] = chatter
+	templinfo["ChonkCSRF"] = login.GetCSRF("sendchonk", r)
+	err := readviews.Execute(w, "chatter.html", templinfo)
+	if err != nil {
+		log.Print(err)
+	}
+}
+
+func submitchonk(w http.ResponseWriter, r *http.Request) {
+	u := login.GetUserInfo(r)
+	user, _ := butwhatabout(u.Username)
+	noise := r.FormValue("noise")
+	target := r.FormValue("target")
+	format := "markdown"
+	dt := time.Now().UTC()
+	xid := fmt.Sprintf("%s/%s/%s", user.URL, "chonk", xfiltrate())
+
+	if !strings.HasPrefix(target, "https://") {
+		target = fullname(target, u.UserID)
+	}
+	if target == "" {
+		http.Error(w, "who is that?", http.StatusInternalServerError)
+		return
+	}
+	ch := Chonk{
+		UserID: u.UserID,
+		XID:    xid,
+		Who:    user.URL,
+		Target: target,
+		Date:   dt,
+		Noise:  noise,
+		Format: format,
+	}
+	d, err := submitdonk(w, r)
+	if err != nil && err != http.ErrMissingFile {
+		return
+	}
+	if d != nil {
+		ch.Donks = append(ch.Donks, d)
+	}
+
+	filterchonk(&ch)
+	savechonk(&ch)
+	// reload for consistency
+	ch.Donks = nil
+	donksforchonks([]*Chonk{&ch})
+	go sendchonk(user, &ch)
+
+	http.Redirect(w, r, "/chatter", http.StatusSeeOther)
 }
 
 var combocache = cache.New(cache.Options{Filler: func(userid int64) ([]string, bool) {
@@ -2170,6 +2274,7 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	reverbolate(userid, honks)
 	templinfo["Honks"] = honks
 	templinfo["MapLink"] = getmaplink(u)
+	templinfo["User"], _ = butwhatabout(u.Username)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err := readviews.Execute(w, "honkfrags.html", templinfo)
 	if err != nil {
@@ -2198,7 +2303,22 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("api request '%s' on behalf of %s", action, u.Username)
 	switch action {
 	case "honk":
-		submithonk(w, r, true)
+		h := submithonk(w, r)
+		if h == nil {
+			return
+		}
+		w.Write([]byte(h.XID))
+	case "donk":
+		d, err := submitdonk(w, r)
+		if err != nil {
+			if err == http.ErrMissingFile {
+				http.Error(w, "missing donk", http.StatusBadRequest)
+			}
+			return
+		}
+		w.Write([]byte(d.XID))
+	case "zonkit":
+		zonkit(w, r)
 	case "gethonks":
 		var honks []*Honk
 		wanted, _ := strconv.ParseInt(r.FormValue("after"), 10, 0)
@@ -2266,6 +2386,21 @@ func enditall() {
 
 var preservehooks []func()
 
+func wait100ms() chan struct{} {
+	c := make(chan struct{})
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(c)
+	}()
+	return c
+}
+
+func bgmonitor() {
+	for {
+		time.Sleep(50 * time.Minute)
+	}
+}
+
 func serve() {
 	db := opendatabase()
 	login.Init(db)
@@ -2274,16 +2409,18 @@ func serve() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	startBackendServer()
+	go runBackendServer()
 	go enditall()
 	go redeliverator()
 	go tracker()
+	go bgmonitor()
+	w100 := wait100ms()
 
-	getconfig("debug", &debugMode)
 	readviews = templates.Load(debugMode,
 		viewDir+"/views/honkpage.html",
 		viewDir+"/views/honkfrags.html",
 		viewDir+"/views/honkers.html",
+		viewDir+"/views/chatter.html",
 		viewDir+"/views/hfcs.html",
 		viewDir+"/views/combos.html",
 		viewDir+"/views/honkform.html",
@@ -2305,6 +2442,7 @@ func serve() {
 		}
 		loadAvatarColors()
 	}
+	<-w100
 
 	for _, h := range preservehooks {
 		h()
@@ -2339,6 +2477,8 @@ func serve() {
 	getters.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
 	getters.HandleFunc("/.well-known/webfinger", fingerlicker)
 
+	getters.HandleFunc("/flag/{code:.+}", bloat_showflag)
+
 	getters.HandleFunc("/server", serveractor)
 	posters.HandleFunc("/server/inbox", serverinbox)
 	posters.HandleFunc("/inbox", serverinbox)
@@ -2355,6 +2495,8 @@ func serve() {
 	loggedin := mux.NewRoute().Subrouter()
 	loggedin.Use(login.Required)
 	loggedin.HandleFunc("/first", homepage)
+	loggedin.HandleFunc("/chatter", showchatter)
+	loggedin.Handle("/sendchonk", login.CSRFWrap("sendchonk", http.HandlerFunc(submitchonk)))
 	loggedin.HandleFunc("/saved", homepage)
 	loggedin.HandleFunc("/account", accountpage)
 	loggedin.HandleFunc("/funzone", showfunzone)

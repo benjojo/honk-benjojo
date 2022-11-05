@@ -1,0 +1,65 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>
+<form action="/sendchonk" method="POST" enctype="multipart/form-data">
+<h3>new chatter</h3>
+<input type="hidden" name="CSRF" value="{{ .ChonkCSRF }}">
+<p><label for=target>target:</label><br>
+<input type="text" name="target" value="" autocomplete=off>
+<p><label for=noise>noise:</label><br>
+<textarea name="noise" id="noise"></textarea>
+<p><button name="chonk" value="chonk">chonk</button>
+</form>
+<script>
+function updatedonker(el) {
+	el = el.parentElement
+	el.children[1].textContent = el.children[0].value.slice(-20)
+}
+</script>
+</div>
+{{ $chonkcsrf := .ChonkCSRF }}
+{{ range .Chatter }}
+<section class="honk">
+<p class="chattarget">
+chatter: {{ .Target }}
+{{ $target := .Target }}
+{{ range .Chonks }}
+<div class="chat">
+<p>
+<span class="chatstamp">{{ .Date.Local.Format "15:04" }} {{ .Handle }}:</span>
+{{ .HTML }}
+{{ range .Donks }}
+{{ if .Local }}
+{{ if eq .Media "text/plain" }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+{{ else if eq .Media "application/pdf" }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+{{ else }}
+<p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+{{ end }}
+{{ else }}
+{{ if .XID }}
+<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+{{ else }}
+{{ if eq .Media "video/mp4" }}
+<p><video controls src="{{ .URL }}">{{ .Name }}</video>
+{{ else }}
+<p><img src="{{ .URL }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+{{ end }}
+{{ end }}
+{{ end }}
+{{ end }}
+</div>
+{{ end }}
+<form action="/sendchonk" method="POST" enctype="multipart/form-data">
+<input type="hidden" name="CSRF" value="{{ $chonkcsrf }}">
+<input type="hidden" name="target" value="{{ $target }}" autocomplete=off>
+<p><label for=noise>noise:</label><br>
+<textarea name="noise" id="noise"></textarea>
+<p><button name="chonk" value="chonk">chonk</button>
+<label class=button id="donker">attach: <input onchange="updatedonker(this);" type="file" name="donk"><span></span></label>
+</form>
+</section>
+{{ end }}
+</main>

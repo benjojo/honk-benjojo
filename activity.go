@@ -17,8 +17,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"database/sql"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -56,12 +57,23 @@ func friendorfoe(ct string) bool {
 	return false
 }
 
+var debugClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	},
+}
+
 func PostJunk(keyname string, key httpsig.PrivateKey, url string, j junk.Junk) error {
 	return PostMsg(keyname, key, url, j.ToBytes())
 }
 
 func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) error {
 	client := http.DefaultClient
+	if debugMode {
+		client = debugClient
+	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(msg))
 	if err != nil {
 		return err
@@ -69,6 +81,9 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	req.Header.Set("User-Agent", "honksnonk/5.0; "+serverName)
 	req.Header.Set("Content-Type", theonetruename)
 	httpsig.SignRequest(keyname, key, req, msg)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	req = req.WithContext(ctx)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -142,14 +157,23 @@ func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
 }
 
 func fetchsome(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	client := http.DefaultClient
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Printf("error fetching %s: %s", url, err)
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	req = req.WithContext(ctx)
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("error fetching %s: %s", url, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, errors.New("not 200")
+		return nil, fmt.Errorf("not 200: %d %s", resp.StatusCode, url)
 	}
 	var buf bytes.Buffer
 	limiter := io.LimitReader(resp.Body, 10*1024*1024)
@@ -161,11 +185,9 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 	if url == "" {
 		return nil
 	}
-	donk := finddonk(url)
-	if donk != nil {
+	if donk := finddonk(url); donk != nil {
 		return donk
 	}
-	donk = new(Donk)
 	log.Printf("saving donk: %s", url)
 	xid := xfiltrate()
 	data := []byte{}
@@ -217,6 +239,7 @@ saveit:
 		log.Printf("error saving file %s: %s", url, err)
 		return nil
 	}
+	donk := new(Donk)
 	donk.FileID = fileid
 	donk.XID = xid
 	return donk
@@ -451,7 +474,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	}
 
 	xonkxonkfn = func(item junk.Junk, origin string) *Honk {
-		// id, _ := item.GetString( "id")
+		id, _ := item.GetString("id")
 		what, _ := item.GetString("type")
 		dt, ok := item.GetString("published")
 		if !ok {
@@ -459,7 +482,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		}
 
 		var err error
-		var xid, rid, url, content, precis, convoy string
+		var xid, rid, url, convoy string
 		var replies []string
 		var obj junk.Junk
 		isUpdate := false
@@ -518,19 +541,20 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if !ok {
 				xid, _ = item.GetString("object")
 				log.Printf("getting created honk: %s", xid)
+				if originate(xid) != origin {
+					log.Printf("out of bounds %s not from %s", xid, origin)
+					return nil
+				}
 				obj, err = GetJunkHardMode(xid)
 				if err != nil {
 					log.Printf("error getting creation: %s", err)
 				}
 			}
-			what = "honk"
-			if obj != nil {
-				t, _ := obj.GetString("type")
-				switch t {
-				case "Event":
-					what = "event"
-				}
+			if obj == nil {
+				log.Printf("no object for creation %s", id)
+				return nil
 			}
+			return xonkxonkfn(obj, origin)
 		case "Read":
 			xid, ok = item.GetString("object")
 			if ok {
@@ -583,6 +607,9 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		case "Event":
 			obj = item
 			what = "event"
+		case "ChatMessage":
+			obj = item
+			what = "chonk"
 		default:
 			log.Printf("unknown activity: %s", what)
 			dumpactivity(item)
@@ -599,7 +626,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			return nil
 		}
 		if originate(xid) != origin {
-			log.Printf("original sin: %s <> %s", xid, origin)
+			log.Printf("original sin: %s not from %s", xid, origin)
 			item.Write(os.Stdout)
 			return nil
 		}
@@ -632,11 +659,11 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if dt2, ok := obj.GetString("published"); ok {
 				dt = dt2
 			}
-			content, _ = obj.GetString("content")
+			content, _ := obj.GetString("content")
 			if !strings.HasPrefix(content, "<p>") {
 				content = "<p>" + content
 			}
-			precis, _ = obj.GetString("summary")
+			precis, _ := obj.GetString("summary")
 			if name, ok := obj.GetString("name"); ok {
 				if precis != "" {
 					content = precis + "<p>" + content
@@ -688,26 +715,48 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if what == "honk" && rid != "" {
 				what = "tonk"
 			}
-			atts, _ := obj.GetArray("attachment")
-			for i, atti := range atts {
-				if rejectxonk(&xonk) {
-					log.Printf("skipping rejected attachment: %s", xid)
-					continue
-				}
-				att, ok := atti.(junk.Junk)
-				if !ok {
-					continue
-				}
+			if len(content) > 90001 {
+				log.Printf("content too long. truncating")
+				content = content[:90001]
+			}
+
+			xonk.Noise = content
+			xonk.Precis = precis
+			if rejectxonk(&xonk) {
+				log.Printf("fast reject: %s", xid)
+				return nil
+			}
+
+			numatts := 0
+			procatt := func(att junk.Junk) {
 				at, _ := att.GetString("type")
 				mt, _ := att.GetString("mediaType")
-				u, _ := att.GetString("url")
+				u, ok := att.GetString("url")
+				if !ok {
+					if ua, ok := att.GetArray("url"); ok && len(ua) > 0 {
+						u, ok = ua[0].(string)
+						if !ok {
+							if uu, ok := ua[0].(junk.Junk); ok {
+								u, _ = uu.GetString("href")
+								if mt == "" {
+									mt, _ = uu.GetString("mediaType")
+								}
+							}
+						}
+					} else if uu, ok := att.GetMap("url"); ok {
+						u, _ = uu.GetString("href")
+						if mt == "" {
+							mt, _ = uu.GetString("mediaType")
+						}
+					}
+				}
 				name, _ := att.GetString("name")
 				desc, _ := att.GetString("summary")
 				if desc == "" {
 					desc = name
 				}
 				localize := false
-				if i > 4 {
+				if numatts > 4 {
 					log.Printf("excessive attachment: %s", at)
 				} else if at == "Document" || at == "Image" {
 					mt = strings.ToLower(mt)
@@ -726,13 +775,22 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				if donk != nil {
 					xonk.Donks = append(xonk.Donks, donk)
 				}
+				numatts++
+			}
+			atts, _ := obj.GetArray("attachment")
+			for _, atti := range atts {
+				att, ok := atti.(junk.Junk)
+				if !ok {
+					log.Printf("attachment that wasn't map?")
+					continue
+				}
+				procatt(att)
+			}
+			if att, ok := obj.GetMap("attachment"); ok {
+				procatt(att)
 			}
 			tags, _ := obj.GetArray("tag")
 			for _, tagi := range tags {
-				if rejectxonk(&xonk) {
-					log.Printf("skipping rejected attachment: %s", xid)
-					continue
-				}
 				tag, ok := tagi.(junk.Junk)
 				if !ok {
 					continue
@@ -830,18 +888,11 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			currenttid = convoy
 		}
 
-		if len(content) > 90001 {
-			log.Printf("content too long. truncating")
-			content = content[:90001]
-		}
-
 		// init xonk
 		xonk.What = what
 		xonk.RID = rid
 		xonk.Date, _ = time.Parse(time.RFC3339, dt)
 		xonk.URL = url
-		xonk.Noise = content
-		xonk.Precis = precis
 		xonk.Format = "html"
 		xonk.Convoy = convoy
 		xonk.Mentions = mentions
@@ -851,6 +902,21 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 		}
 		imaginate(&xonk)
+
+		if what == "chonk" {
+			ch := Chonk{
+				UserID: xonk.UserID,
+				XID:    xid,
+				Who:    xonk.Honker,
+				Target: xonk.Honker,
+				Date:   xonk.Date,
+				Noise:  xonk.Noise,
+				Format: xonk.Format,
+				Donks:  xonk.Donks,
+			}
+			savechonk(&ch)
+			return nil
+		}
 
 		if isUpdate {
 			log.Printf("something has changed! %s", xonk.XID)
@@ -963,6 +1029,23 @@ func subsub(user *WhatAbout, xid string, owner string) {
 	deliverate(0, user.ID, owner, j.ToBytes())
 }
 
+func activatedonks(donks []*Donk) []junk.Junk {
+	var atts []junk.Junk
+	for _, d := range donks {
+		if re_emus.MatchString(d.Name) {
+			continue
+		}
+		jd := junk.New()
+		jd["mediaType"] = d.Media
+		jd["name"] = d.Name
+		jd["summary"] = html.EscapeString(d.Desc)
+		jd["type"] = "Document"
+		jd["url"] = d.URL
+		atts = append(atts, jd)
+	}
+	return atts
+}
+
 // returns activity, object
 func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 	dt := h.Date.Format(time.RFC3339)
@@ -1024,8 +1107,6 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		}
 		translate(h)
 		redoimages(h)
-		jo["summary"] = html.EscapeString(h.Precis)
-		jo["content"] = h.Noise
 		if h.Precis != "" {
 			jo["sensitive"] = true
 		}
@@ -1070,6 +1151,18 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			t["icon"] = i
 			tags = append(tags, t)
 		}
+		for _, e := range bloat_fixupflags(h) {
+			t := junk.New()
+			t["id"] = e.ID
+			t["type"] = "Emoji"
+			t["name"] = e.Name
+			i := junk.New()
+			i["type"] = "Image"
+			i["mediaType"] = "image/png"
+			i["url"] = e.ID
+			t["icon"] = i
+			tags = append(tags, t)
+		}
 		if len(tags) > 0 {
 			jo["tag"] = tags
 		}
@@ -1096,22 +1189,12 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 				jo["duration"] = "PT" + strings.ToUpper(t.Duration.String())
 			}
 		}
-		var atts []junk.Junk
-		for _, d := range h.Donks {
-			if re_emus.MatchString(d.Name) {
-				continue
-			}
-			jd := junk.New()
-			jd["mediaType"] = d.Media
-			jd["name"] = d.Name
-			jd["summary"] = html.EscapeString(d.Desc)
-			jd["type"] = "Document"
-			jd["url"] = d.URL
-			atts = append(atts, jd)
-		}
+		atts := activatedonks(h.Donks)
 		if len(atts) > 0 {
 			jo["attachment"] = atts
 		}
+		jo["summary"] = html.EscapeString(h.Precis)
+		jo["content"] = h.Noise
 		j["object"] = jo
 	case "bonk":
 		j["type"] = "Announce"
@@ -1145,7 +1228,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		if h.Convoy != "" {
 			j["context"] = h.Convoy
 		}
-		j["content"] = user.Options.Reaction
+		j["content"] = h.Noise
 	case "deack":
 		b := junk.New()
 		b["id"] = user.URL + "/" + "ack" + "/" + shortxid(h.XID)
@@ -1208,6 +1291,44 @@ func boxuprcpts(user *WhatAbout, addresses []string, useshared bool) map[string]
 		}
 	}
 	return rcpts
+}
+
+func chonkifymsg(user *WhatAbout, ch *Chonk) []byte {
+	dt := ch.Date.Format(time.RFC3339)
+	aud := []string{ch.Target}
+
+	jo := junk.New()
+	jo["id"] = ch.XID
+	jo["type"] = "ChatMessage"
+	jo["published"] = dt
+	jo["attributedTo"] = user.URL
+	jo["to"] = aud
+	jo["content"] = ch.HTML
+	atts := activatedonks(ch.Donks)
+	if len(atts) > 0 {
+		jo["attachment"] = atts
+	}
+
+	j := junk.New()
+	j["@context"] = itiswhatitis
+	j["id"] = user.URL + "/" + "honk" + "/" + shortxid(ch.XID)
+	j["type"] = "Create"
+	j["actor"] = user.URL
+	j["published"] = dt
+	j["to"] = aud
+	j["object"] = jo
+
+	return j.ToBytes()
+}
+
+func sendchonk(user *WhatAbout, ch *Chonk) {
+	msg := chonkifymsg(user, ch)
+
+	rcpts := make(map[string]bool)
+	rcpts[ch.Target] = true
+	for a := range rcpts {
+		go deliverate(0, user.ID, a, msg)
+	}
 }
 
 func honkworldwide(user *WhatAbout, honk *Honk) {
@@ -1273,7 +1394,7 @@ func collectiveaction(honk *Honk) {
 	}
 }
 
-func junkuser(user *WhatAbout) []byte {
+func junkuser(user *WhatAbout) junk.Junk {
 	about := markitzero(user.About)
 
 	j := junk.New()
@@ -1307,7 +1428,7 @@ func junkuser(user *WhatAbout) []byte {
 	k["publicKeyPem"] = user.Key
 	j["publicKey"] = k
 
-	return j.ToBytes()
+	return j
 }
 
 var oldjonkers = cache.New(cache.Options{Filler: func(name string) ([]byte, bool) {
@@ -1315,7 +1436,10 @@ var oldjonkers = cache.New(cache.Options{Filler: func(name string) ([]byte, bool
 	if err != nil {
 		return nil, false
 	}
-	return junkuser(user), true
+	var buf bytes.Buffer
+	j := junkuser(user)
+	j.Write(&buf)
+	return buf.Bytes(), true
 }, Duration: 1 * time.Minute})
 
 func asjonker(name string) ([]byte, bool) {
@@ -1361,7 +1485,7 @@ var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) 
 		}
 	}
 	return href, true
-}})
+}, Duration: 1 * time.Minute})
 
 func gofish(name string) string {
 	if name[0] == '@' {
@@ -1522,5 +1646,38 @@ func ingesthandle(origin string, obj junk.Junk) {
 		if err != nil {
 			log.Printf("error saving handle: %s", err)
 		}
+	}
+}
+
+func updateMe(username string) {
+	var user *WhatAbout
+	somenamedusers.Get(username, &user)
+	dt := time.Now().UTC().Format(time.RFC3339)
+	j := junk.New()
+	j["@context"] = itiswhatitis
+	j["id"] = fmt.Sprintf("%s/upme/%s/%d", user.URL, user.Name, time.Now().Unix())
+	j["actor"] = user.URL
+	j["published"] = dt
+	j["to"] = []string{thewholeworld, user.URL + "/followers"}
+	j["type"] = "Update"
+	j["object"] = junkuser(user)
+
+	msg := j.ToBytes()
+
+	rcpts := make(map[string]bool)
+	for _, f := range getdubs(user.ID) {
+		if f.XID == user.URL {
+			continue
+		}
+		var box *Box
+		boxofboxes.Get(f.XID, &box)
+		if box != nil && box.Shared != "" {
+			rcpts["%"+box.Shared] = true
+		} else {
+			rcpts[f.XID] = true
+		}
+	}
+	for a := range rcpts {
+		go deliverate(0, user.ID, a, msg)
 	}
 }

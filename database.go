@@ -454,6 +454,36 @@ func donksforhonks(honks []*Honk) {
 	rows.Close()
 }
 
+func donksforchonks(chonks []*Chonk) {
+	db := opendatabase()
+	var ids []string
+	chmap := make(map[int64]*Chonk)
+	for _, ch := range chonks {
+		ids = append(ids, fmt.Sprintf("%d", ch.ID))
+		chmap[ch.ID] = ch
+	}
+	idset := strings.Join(ids, ",")
+	// grab donks
+	q := fmt.Sprintf("select chonkid, donks.fileid, xid, name, description, url, media, local from donks join filemeta on donks.fileid = filemeta.fileid where chonkid in (%s)", idset)
+	rows, err := db.Query(q)
+	if err != nil {
+		log.Printf("error querying donks: %s", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var chid int64
+		d := new(Donk)
+		err = rows.Scan(&chid, &d.FileID, &d.XID, &d.Name, &d.Desc, &d.URL, &d.Media, &d.Local)
+		if err != nil {
+			log.Printf("error scanning donk: %s", err)
+			continue
+		}
+		ch := chmap[chid]
+		ch.Donks = append(ch.Donks, d)
+	}
+}
+
 func savefile(xid string, name string, desc string, url string, media string, local bool, data []byte) (int64, error) {
 	res, err := stmtSaveFile.Exec(xid, name, desc, url, media, local)
 	if err != nil {
@@ -480,6 +510,94 @@ func finddonk(url string) *Donk {
 		log.Printf("error finding file: %s", err)
 	}
 	return nil
+}
+
+func savechonk(ch *Chonk) error {
+	dt := ch.Date.UTC().Format(dbtimeformat)
+	db := opendatabase()
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("can't begin tx: %s", err)
+		return err
+	}
+
+	res, err := tx.Stmt(stmtSaveChonk).Exec(ch.UserID, ch.XID, ch.Who, ch.Target, dt, ch.Noise, ch.Format)
+	if err == nil {
+		ch.ID, _ = res.LastInsertId()
+		for _, d := range ch.Donks {
+			_, err := tx.Stmt(stmtSaveDonk).Exec(-1, ch.ID, d.FileID)
+			if err != nil {
+				log.Printf("error saving donk: %s", err)
+				break
+			}
+		}
+		err = tx.Commit()
+	} else {
+		tx.Rollback()
+	}
+	return err
+}
+
+func loadchatter(userid int64) []*Chatter {
+	duedt := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	rows, err := stmtLoadChonks.Query(userid, duedt)
+	if err != nil {
+		log.Printf("error loading chonks: %s", err)
+		return nil
+	}
+	defer rows.Close()
+	chonks := make(map[string][]*Chonk)
+	var allchonks []*Chonk
+	for rows.Next() {
+		ch := new(Chonk)
+		var dt string
+		err = rows.Scan(&ch.ID, &ch.UserID, &ch.XID, &ch.Who, &ch.Target, &dt, &ch.Noise, &ch.Format)
+		if err != nil {
+			log.Printf("error scanning chonk: %s", err)
+			continue
+		}
+		ch.Date, _ = time.Parse(dbtimeformat, dt)
+		chonks[ch.Target] = append(chonks[ch.Target], ch)
+		allchonks = append(allchonks, ch)
+	}
+	donksforchonks(allchonks)
+	rows.Close()
+	rows, err = stmtGetChatters.Query(userid)
+	if err != nil {
+		log.Printf("error getting chatters: %s", err)
+		return nil
+	}
+	for rows.Next() {
+		var target string
+		err = rows.Scan(&target)
+		if err != nil {
+			log.Printf("error scanning chatter: %s", target)
+			continue
+		}
+		if _, ok := chonks[target]; !ok {
+			chonks[target] = []*Chonk{}
+
+		}
+	}
+	var chatter []*Chatter
+	for target, chonks := range chonks {
+		chatter = append(chatter, &Chatter{
+			Target: target,
+			Chonks: chonks,
+		})
+	}
+	sort.Slice(chatter, func(i, j int) bool {
+		a, b := chatter[i], chatter[j]
+		if len(a.Chonks) == 0 || len(b.Chonks) == 0 {
+			if len(a.Chonks) == len(b.Chonks) {
+				return a.Target < b.Target
+			}
+			return len(a.Chonks) > len(b.Chonks)
+		}
+		return a.Chonks[len(a.Chonks)-1].Date.After(b.Chonks[len(b.Chonks)-1].Date)
+	})
+
+	return chatter
 }
 
 func savehonk(h *Honk) error {
@@ -577,7 +695,7 @@ func deletehonk(honkid int64) error {
 
 func saveextras(tx *sql.Tx, h *Honk) error {
 	for _, d := range h.Donks {
-		_, err := tx.Stmt(stmtSaveDonk).Exec(h.ID, d.FileID)
+		_, err := tx.Stmt(stmtSaveDonk).Exec(h.ID, -1, d.FileID)
 		if err != nil {
 			log.Printf("error saving donk: %s", err)
 			return err
@@ -675,7 +793,7 @@ func cleanupdb(arg string) {
 		sqlargs = append(sqlargs, expdate)
 	}
 	doordie(db, "delete from honks where flags & 4 = 0 and whofore = 0 and "+where, sqlargs...)
-	doordie(db, "delete from donks where honkid not in (select honkid from honks)")
+	doordie(db, "delete from donks where honkid > 0 and honkid not in (select honkid from honks)")
 	doordie(db, "delete from onts where honkid not in (select honkid from honks)")
 	doordie(db, "delete from honkmeta where honkid not in (select honkid from honks)")
 
@@ -739,6 +857,7 @@ var stmtHonksForUserFirstClass *sql.Stmt
 var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteSomeMeta, stmtUpdateHonk *sql.Stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
 var stmtGetTracks *sql.Stmt
+var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
 
 func preparetodie(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
@@ -786,7 +905,7 @@ func prepareStatements(db *sql.DB) {
 	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ? where honkid = ?")
 	stmtSaveOnt = preparetodie(db, "insert into onts (ontology, honkid) values (?, ?)")
 	stmtDeleteOnts = preparetodie(db, "delete from onts where honkid = ?")
-	stmtSaveDonk = preparetodie(db, "insert into donks (honkid, fileid) values (?, ?)")
+	stmtSaveDonk = preparetodie(db, "insert into donks (honkid, chonkid, fileid) values (?, ?, ?)")
 	stmtDeleteDonks = preparetodie(db, "delete from donks where honkid = ?")
 	stmtSaveFile = preparetodie(db, "insert into filemeta (xid, name, description, url, media, local) values (?, ?, ?, ?, ?, ?)")
 	blobdb := openblobdb()
@@ -816,4 +935,7 @@ func prepareStatements(db *sql.DB) {
 	stmtSaveFilter = preparetodie(db, "insert into hfcs (userid, json) values (?, ?)")
 	stmtDeleteFilter = preparetodie(db, "delete from hfcs where userid = ? and hfcsid = ?")
 	stmtGetTracks = preparetodie(db, "select fetches from tracks where xid = ?")
+	stmtSaveChonk = preparetodie(db, "insert into chonks (userid, xid, who, target, dt, noise, format) values (?, ?, ?, ?, ?, ?, ?)")
+	stmtLoadChonks = preparetodie(db, "select chonkid, userid, xid, who, target, dt, noise, format from chonks where userid = ? and dt > ? order by chonkid asc")
+	stmtGetChatters = preparetodie(db, "select distinct(target) from chonks where userid = ?")
 }

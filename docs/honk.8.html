@@ -65,10 +65,10 @@ proxy_set_header Host $http_host;
 <p class="Pp">The following options control where <code class="Nm">honk</code>
     looks for data.</p>
 <dl class="Bl-tag">
-  <dt><a class="permalink" href="#datadir"><code class="Fl" id="datadir">-datadir</code></a></dt>
+  <dt id="datadir"><a class="permalink" href="#datadir"><code class="Fl">-datadir</code></a></dt>
   <dd>The root data directory, where the database and other user data are
       stored. Requires write access. Defaults to &quot;.&quot;.</dd>
-  <dt><a class="permalink" href="#viewdir"><code class="Fl" id="viewdir">-viewdir</code></a></dt>
+  <dt id="viewdir"><a class="permalink" href="#viewdir"><code class="Fl">-viewdir</code></a></dt>
   <dd>The root view directory, where html and other templates are stored. Read
       only. Defaults to &quot;.&quot;.</dd>
 </dl>
@@ -174,7 +174,13 @@ proxy_set_header Host $http_host;
   Options</a></h2>
 <p class="Pp">To support separate mentions without a subdomain, e.g.
     @user@example.com and https://honk.example.com/u/user, add a ('masqname',
-    'example.com') row the config table of the database.</p>
+    'example.com') row to the config table of the database. Route
+    <span class="Pa">/.well-known/webfinger</span> from the top domain to
+  honk.</p>
+<p class="Pp">Custom URL seperators (not &quot;u&quot; and &quot;h&quot;) may be
+    specified by adding &quot;usersep&quot; and &quot;honksep&quot; options to
+    the config table. e.g. example.com/users/username/honk/somehonk instead of
+    example.com/u/username/h/somehonk.</p>
 </section>
 </section>
 <section class="Sh">
@@ -256,8 +262,8 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">March 9, 2020</td>
-    <td class="foot-os">OpenBSD 6.6</td>
+    <td class="foot-date">June 30, 2020</td>
+    <td class="foot-os">OpenBSD 6.7</td>
   </tr>
 </table>
 </body>

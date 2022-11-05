@@ -223,8 +223,11 @@ func deluser(username string) {
 	doordie(db, "delete from donks"+where, userid)
 	doordie(db, "delete from onts"+where, userid)
 	doordie(db, "delete from honkmeta"+where, userid)
+	where = " where chonkid in (select chonkid from chonks where userid = ?)"
+	doordie(db, "delete from donks"+where, userid)
 
 	doordie(db, "delete from honks where userid = ?", userid)
+	doordie(db, "delete from chonks where userid = ?", userid)
 	doordie(db, "delete from honkers where userid = ?", userid)
 	doordie(db, "delete from zonkers where userid = ?", userid)
 	doordie(db, "delete from doovers where userid = ?", userid)

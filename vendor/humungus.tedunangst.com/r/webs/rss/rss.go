@@ -28,12 +28,16 @@ type header struct {
 }
 
 type Feed struct {
-	XMLName     xml.Name `xml:"channel"`
-	Title       string   `xml:"title"`
-	Link        string   `xml:"link"`
-	Description string   `xml:"description"`
-	Image       *Image
-	Items       []*Item
+	XMLName        xml.Name `xml:"channel"`
+	Title          string   `xml:"title"`
+	Link           string   `xml:"link"`
+	Description    string   `xml:"description"`
+	ManagingEditor string   `xml:"managingEditor,omitempty"`
+	PubDate        string   `xml:"pubDate,omitempty"`
+	LastBuildDate  string   `xml:"lastBuildDate,omitempty"`
+	TTL            int      `xml:"ttl,omitempty"`
+	Image          *Image
+	Items          []*Item
 }
 
 type Image struct {
@@ -47,16 +51,24 @@ type Item struct {
 	XMLName     xml.Name `xml:"item"`
 	Title       string   `xml:"title"`
 	Description CData    `xml:"description"`
+	Author      string   `xml:"author,omitempty"`
 	Category    []string `xml:"category"`
 	Link        string   `xml:"link"`
 	PubDate     string   `xml:"pubDate"`
 	Guid        *Guid
+	Source      *Source
 }
 
 type Guid struct {
 	XMLName     xml.Name `xml:"guid"`
 	IsPermaLink bool     `xml:"isPermaLink,attr"`
 	Value       string   `xml:",chardata"`
+}
+
+type Source struct {
+	XMLName xml.Name `xml:"source"`
+	URL     string   `xml:"url,attr"`
+	Title   string   `xml:",chardata"`
 }
 
 type CData struct {

@@ -139,6 +139,7 @@ func reverbolate(userid int64, honks []*Honk) {
 			}
 			return e
 		}
+		bloat_renderflags(h)
 		h.Precis = re_emus.ReplaceAllStringFunc(h.Precis, emuxifier)
 		h.Noise = re_emus.ReplaceAllStringFunc(h.Noise, emuxifier)
 
@@ -175,6 +176,27 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 		}
 		return string(templates.Sprintf(`&lt;img alt="%s" src="<a href="%s">%s</a>"&gt;`, alt, src, src))
 	}
+}
+
+func filterchonk(ch *Chonk) {
+	var htf htfilter.Filter
+	htf.SpanClasses = allowedclasses
+	htf.BaseURL, _ = url.Parse(ch.XID)
+	noise := ch.Noise
+	if ch.Format == "markdown" {
+		noise = markitzero(noise)
+	}
+	ch.HTML, _ = htf.String(noise)
+	n := string(ch.HTML)
+	if strings.HasPrefix(n, "<p>") {
+		ch.HTML = template.HTML(n[3:])
+	}
+	if short := shortname(ch.UserID, ch.Who); short != "" {
+		ch.Handle = short
+	} else {
+		ch.Handle, _ = handles(ch.Who)
+	}
+
 }
 
 func inlineimgsfor(honk *Honk) func(node *html.Node) string {
@@ -454,18 +476,17 @@ func fullname(name string, userid int64) string {
 }
 
 func mentionize(s string) string {
+	fill := `<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`
 	s = re_mentions.ReplaceAllStringFunc(s, func(m string) string {
 		where := gofish(m)
 		if where == "" {
 			return m
 		}
 		who := m[0 : 1+strings.IndexByte(m[1:], '@')]
-		return fmt.Sprintf(`<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`,
-			html.EscapeString(where), html.EscapeString(who))
+		return fmt.Sprintf(fill, html.EscapeString(where), html.EscapeString(who))
 	})
 	s = re_urltions.ReplaceAllStringFunc(s, func(m string) string {
-		return fmt.Sprintf(`<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`,
-			html.EscapeString(m[1:]), html.EscapeString(m))
+		return fmt.Sprintf(fill, html.EscapeString(m[1:]), html.EscapeString(m))
 	})
 	return s
 }

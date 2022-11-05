@@ -81,6 +81,24 @@ var lexer_py = "" +
 	"comment #[^\\n]*\n" +
 	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
 	""
+var lexer_rs = "" +
+	"whitespace [ \\t\\r\\n]+\n" +
+	"number (0[xX][0-9a-fA-F]+|[0-9]+)\n" +
+	"number '(\\\\.|[^'])'\n" +
+	"keyword (extern|if|else|fn|pub|let|for|loop|continue|break|match|return|type|struct|impl)\\b\n" +
+	"builtin (Err|Ok|Result|Some|None|dyn|unsafe|len|new|true|false|unwrap|as_bytes|to_string|as_str)\\b\n" +
+	"builtin (println!|format!)\n" +
+	"type (&?mut|const|&?String|i32|u32|i8|u8|i64|byte|bool|chan|usize)\\b\n" +
+	"type (\\w+::)\n" +
+	"string ^#[^\\n]*\n" +
+	"builtin ^use [^\\n]*\n" +
+	"string `[^`]*`\n" +
+	"string \"(\\\\\"|[^\"])*\"\n" +
+	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
+	"comment //[^\\n]*\n" +
+	"comment /\\*(?s:.*?)\\*/\n" +
+	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	""
 var lexer_sql = "" +
 	"whitespace [ \\t\\r\\n]+\n" +
 	"number (0[xX][0-9a-fA-F]+|[0-9]+)\n" +

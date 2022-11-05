@@ -19,7 +19,6 @@ package httpsig
 import (
 	"bytes"
 	"crypto"
-	"golang.org/x/crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -35,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/ed25519"
 	"humungus.tedunangst.com/r/webs/junk"
 )
 
@@ -189,6 +189,11 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 	if key.Type == None {
 		return keyname, fmt.Errorf("no key for %s", keyname)
 	}
+	required := make(map[string]bool)
+	required["(request-target)"] = true
+	required["host"] = true
+	required["digest"] = true
+	required["date"] = true
 	headers := strings.Split(heads, " ")
 	var stuff []string
 	for _, h := range headers {
@@ -207,10 +212,30 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 			if s != expv {
 				return "", fmt.Errorf("digest header '%s' did not match content", s)
 			}
+		case "date":
+			s = req.Header.Get(h)
+			d, err := time.Parse(http.TimeFormat, s)
+			if err != nil {
+				return "", fmt.Errorf("error parsing date header: %s", err)
+			}
+			now := time.Now()
+			if d.Before(now.Add(-30*time.Minute)) || d.After(now.Add(30*time.Minute)) {
+				return "", fmt.Errorf("date header '%s' out of range", s)
+			}
 		default:
 			s = req.Header.Get(h)
 		}
+		required[h] = false
 		stuff = append(stuff, h+": "+s)
+	}
+	var missing []string
+	for h, req := range required {
+		if req {
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) > 0 {
+		return "", fmt.Errorf("required httpsig headers missing (%s)", strings.Join(missing, ","))
 	}
 
 	h := sha256.New()

@@ -29,7 +29,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.0"
+var softwareVersion = "0.9.1"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -92,6 +92,25 @@ type Honk struct {
 	Place    *Place
 	Time     *Time
 	Mentions []Mention
+}
+
+type Chonk struct {
+	ID     int64
+	UserID int64
+	XID    string
+	Who    string
+	Target string
+	Date   time.Time
+	Noise  string
+	Format string
+	Donks  []*Donk
+	Handle string
+	HTML   template.HTML
+}
+
+type Chatter struct {
+	Target string
+	Chonks []*Chonk
 }
 
 type Mention struct {
@@ -260,6 +279,7 @@ func main() {
 	}
 	getconfig("usersep", &userSep)
 	getconfig("honksep", &honkSep)
+	getconfig("debug", &debugMode)
 	prepareStatements(db)
 	switch cmd {
 	case "admin":

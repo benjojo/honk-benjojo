@@ -19,9 +19,9 @@ package gate
 import (
 	"context"
 	"errors"
+	notrand "math/rand"
 	"sync"
 	"time"
-	notrand "math/rand"
 )
 
 func init() {
@@ -61,6 +61,13 @@ func (l *Limiter) Finish() {
 	l.numout--
 	l.bell.Broadcast()
 	l.lock.Unlock()
+}
+
+// Return current outstanding count
+func (l *Limiter) Outstanding() int {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	return l.numout
 }
 
 type result struct {

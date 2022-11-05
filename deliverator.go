@@ -57,7 +57,7 @@ func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 	}
 }
 
-var garage = gate.NewLimiter(20)
+var garage = gate.NewLimiter(40)
 
 func deliverate(goarounds int64, userid int64, rcpt string, msg []byte) {
 	garage.Start()

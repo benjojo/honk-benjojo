@@ -2,6 +2,7 @@
 {{ $bonkcsrf := .BonkCSRF }}
 {{ $IsPreview := .IsPreview }}
 {{ $maplink := .MapLink }}
+{{ $omitimages := .OmitImages }}
 {{ with .Honk }}
 <header>
 {{ if $bonkcsrf }}
@@ -70,7 +71,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ else if eq .Media "application/pdf" }}
 <p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
+{{ if $omitimages }}
+<p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+{{ else }}
 <p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+{{ end }}
 {{ end }}
 {{ else }}
 {{ if .XID }}
@@ -89,8 +94,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ if and $bonkcsrf (not $IsPreview) }}
 <p>
 <details class="actions">
-<summary>Actions
-</summary>
+<summary>Actions</summary>
 <div>
 <p>
 {{ if .Honk.Public }}
@@ -104,6 +108,10 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 <button onclick="return showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handle }}');"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
 <button onclick="return muteit(this, '{{ .Honk.Convoy }}');">mute</button>
+<button onclick="return showelement('evenmore{{ .Honk.ID }}')">even more</button>
+</div>
+<div id="evenmore{{ .Honk.ID }}" style="display:none">
+<p>
 <button onclick="return zonkit(this, '{{ .Honk.XID }}');">zonk</button>
 {{ if .Honk.IsAcked }}
 <button onclick="return flogit(this, 'deack', '{{ .Honk.XID }}');">deack</button>
@@ -121,10 +129,12 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <button onclick="return flogit(this, 'untag', '{{ .Honk.XID }}');">untag me</button>
 {{ end }}
 <button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
+{{ if not (eq .Badonk "none") }}
 {{ if .Honk.IsReacted }}
 <button disabled>badonked</button>
 {{ else }}
-<button onclick="return flogit(this, 'react', '{{ .Honk.XID }}');">badonk</button>
+<button onclick="return flogit(this, 'react', '{{ .Honk.XID }}');">{{ .Badonk }}</button>
+{{ end }}
 {{ end }}
 </div>
 </details>

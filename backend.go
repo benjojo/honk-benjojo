@@ -100,7 +100,7 @@ func backendServer() {
 	srv.Accept(lis)
 }
 
-func startBackendServer() {
+func runBackendServer() {
 	proc := exec.Command(os.Args[0], "-datadir", dataDir, "backend")
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
@@ -108,4 +108,6 @@ func startBackendServer() {
 	if err != nil {
 		log.Panicf("can't exec backend: %s", err)
 	}
+	err = proc.Wait()
+	log.Printf("lost the backend: %s", err)
 }

@@ -34,8 +34,10 @@ servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
 {{ $BonkCSRF := .HonkCSRF }}
 {{ $IsPreview := .IsPreview }}
 {{ $MapLink := .MapLink }}
+{{ $Badonk := .User.Options.Reaction }}
+{{ $OmitImages := .User.Options.OmitImages }}
 {{ range .Honks }}
-{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview }}
+{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages }}
 {{ end }}
 </div>
 </div>

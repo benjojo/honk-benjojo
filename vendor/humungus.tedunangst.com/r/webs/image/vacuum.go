@@ -26,6 +26,7 @@ import (
 	"io"
 	"math"
 
+	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
@@ -43,6 +44,7 @@ type Params struct {
 	MaxWidth  int
 	MaxHeight int
 	MaxSize   int // max output file size in bytes
+	Quality   int // for jpeg output
 }
 
 const dirLeft = 1
@@ -92,119 +94,18 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 		return nil, err
 	}
 
-	if params.MaxWidth == 0 {
-		params.MaxWidth = 16000
+	maxh := params.MaxHeight
+	maxw := params.MaxWidth
+	if maxw == 0 {
+		maxw = 16000
 	}
-	if params.MaxHeight == 0 {
-		params.MaxHeight = 16000
+	if maxh == 0 {
+		maxh = 16000
 	}
 	if params.MaxSize == 0 {
 		params.MaxSize = 512 * 1024
 	}
 
-	for img.Bounds().Max.X > params.MaxWidth || img.Bounds().Max.Y > params.MaxHeight {
-		switch oldimg := img.(type) {
-		case *image.NRGBA:
-			w, h := oldimg.Rect.Max.X/2, oldimg.Rect.Max.Y/2
-			newimg := image.NewNRGBA(image.Rectangle{Max: image.Point{X: w, Y: h}})
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					p := newimg.Stride*j + i*4
-					q1 := oldimg.Stride*(j*2+0) + i*4*2
-					q2 := oldimg.Stride*(j*2+1) + i*4*2
-					newimg.Pix[p+0] = oldblend(oldimg.Pix, q1+0, q1+4, q2+0, q2+4)
-					newimg.Pix[p+1] = oldblend(oldimg.Pix, q1+1, q1+5, q2+1, q2+5)
-					newimg.Pix[p+2] = oldblend(oldimg.Pix, q1+2, q1+6, q2+2, q2+6)
-					newimg.Pix[p+3] = squish(oldimg.Pix, q1+3, q1+7, q2+3, q2+7)
-				}
-			}
-			img = newimg
-		case *image.RGBA:
-			w, h := oldimg.Rect.Max.X/2, oldimg.Rect.Max.Y/2
-			newimg := image.NewRGBA(image.Rectangle{Max: image.Point{X: w, Y: h}})
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					p := newimg.Stride*j + i*4
-					q1 := oldimg.Stride*(j*2+0) + i*4*2
-					q2 := oldimg.Stride*(j*2+1) + i*4*2
-					newimg.Pix[p+0] = oldblend(oldimg.Pix, q1+0, q1+4, q2+0, q2+4)
-					newimg.Pix[p+1] = oldblend(oldimg.Pix, q1+1, q1+5, q2+1, q2+5)
-					newimg.Pix[p+2] = oldblend(oldimg.Pix, q1+2, q1+6, q2+2, q2+6)
-					newimg.Pix[p+3] = squish(oldimg.Pix, q1+3, q1+7, q2+3, q2+7)
-				}
-			}
-			img = newimg
-		case *image.YCbCr:
-			oldw, oldh := oldimg.Rect.Max.X, oldimg.Rect.Max.Y
-			w, h := oldw/2, oldh/2
-			newimg := image.NewYCbCr(image.Rectangle{Max: image.Point{X: w, Y: h}},
-				oldimg.SubsampleRatio)
-
-			oldg := make([]float32, oldw*oldh)
-			gammaConvert(oldg, oldimg.Y, oldw, oldh, 1, 0, oldimg.YStride)
-			newg := make([]float32, w*h)
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					p := w*j + i
-					q1 := oldw*(j*2+0) + i*2
-					q2 := oldw*(j*2+1) + i*2
-					newg[p+0] = blend(oldg, q1+0, q1+1, q2+0, q2+1)
-				}
-			}
-			gammaRevert(newimg.Y, newg, w, h, 1, 0, newimg.YStride)
-
-			switch newimg.SubsampleRatio {
-			case image.YCbCrSubsampleRatio444:
-				oldw, oldh = oldw, oldh
-			case image.YCbCrSubsampleRatio422:
-				oldw, oldh = (oldw+1)/2, oldh
-			case image.YCbCrSubsampleRatio420:
-				oldw, oldh = (oldw+1)/2, (oldh+1)/2
-			case image.YCbCrSubsampleRatio440:
-				oldw, oldh = oldw, (oldh+1)/2
-			case image.YCbCrSubsampleRatio411:
-				oldw, oldh = (oldw+3)/4, oldh
-			case image.YCbCrSubsampleRatio410:
-				oldw, oldh = (oldw+3)/4, (oldh+1)/2
-			}
-			w, h = oldw/2, oldh/2
-
-			gammaConvert(oldg, oldimg.Cb, oldw, oldh, 1, 0, oldimg.CStride)
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					p := w*j + i
-					q1 := oldw*(j*2+0) + i*2
-					q2 := oldw*(j*2+1) + i*2
-					newg[p+0] = blend(oldg, q1+0, q1+1, q2+0, q2+1)
-				}
-			}
-			gammaRevert(newimg.Cb, newg, w, h, 1, 0, newimg.CStride)
-
-			gammaConvert(oldg, oldimg.Cr, oldw, oldh, 1, 0, oldimg.CStride)
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					p := w*j + i
-					q1 := oldw*(j*2+0) + i*2
-					q2 := oldw*(j*2+1) + i*2
-					newg[p+0] = blend(oldg, q1+0, q1+1, q2+0, q2+1)
-				}
-			}
-			gammaRevert(newimg.Cr, newg, w, h, 1, 0, newimg.CStride)
-
-			img = newimg
-		default:
-			// convert to RGBA, then loop and try again
-			w, h := oldimg.Bounds().Max.X, oldimg.Bounds().Max.Y
-			newimg := image.NewRGBA(image.Rectangle{Max: image.Point{X: w, Y: h}})
-			for j := 0; j < h; j++ {
-				for i := 0; i < w; i++ {
-					c := oldimg.At(i, j)
-					newimg.Set(i, j, c)
-				}
-			}
-			img = newimg
-		}
-	}
 	if format == "jpeg" {
 		for _, sig := range rotateLeftSigs {
 			if bytes.Contains(peek, sig) {
@@ -219,7 +120,34 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 			}
 		}
 	}
-	quality := 80
+
+	bounds := img.Bounds()
+	for bounds.Max.X > maxw || bounds.Max.Y > maxh {
+		if bounds.Max.X > maxw*2 || bounds.Max.Y > maxh*2 {
+			bounds.Max.X = bounds.Max.X / 2
+			bounds.Max.Y = bounds.Max.Y / 2
+		} else {
+			if bounds.Max.X > maxw {
+				r := float64(maxw) / float64(bounds.Max.X)
+				bounds.Max.X = maxw
+				bounds.Max.Y = int(float64(bounds.Max.Y) * r)
+			}
+			if bounds.Max.Y > maxh {
+				r := float64(maxh) / float64(bounds.Max.Y)
+				bounds.Max.Y = maxh
+				bounds.Max.X = int(float64(bounds.Max.X) * r)
+			}
+		}
+		dst := image.NewRGBA(bounds)
+		draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+		img = dst
+		bounds = img.Bounds()
+	}
+
+	quality := params.Quality
+	if quality == 0 {
+		quality = 80
+	}
 	var buf bytes.Buffer
 	for {
 		switch format {

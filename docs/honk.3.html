@@ -72,16 +72,19 @@
 <section class="Ss">
 <h2 class="Ss" id="honk"><a class="permalink" href="#honk">honk</a></h2>
 <p class="Pp">The <var class="Fa">action</var> value should be
-    &#x201C;honk&#x201D;. The following values are recognized:</p>
+    &#x201C;honk&#x201D;. Content type must be multipart/form-data. The
+    following values are recognized:</p>
 <dl class="Bl-tag">
   <dt><var class="Fa">noise</var></dt>
   <dd>The contents of the honk.</dd>
-  <dt>fa format</dt>
+  <dt><var class="Fa">format</var></dt>
   <dd>The format of noise. Defaults to markdown. May also be html.</dd>
   <dt><var class="Fa">donk</var></dt>
   <dd>A file to attach.</dd>
   <dt><var class="Fa">donkdesc</var></dt>
   <dd>A description for the attached file.</dd>
+  <dt><var class="Fa">donkxid</var></dt>
+  <dd>The XID of a previously uploaded attachment.</dd>
   <dt><var class="Fa">placename</var></dt>
   <dd>The name of an associated location.</dd>
   <dt><var class="Fa">placeurl</var></dt>
@@ -99,6 +102,12 @@
     honk.</p>
 </section>
 <section class="Ss">
+<h2 class="Ss" id="donk"><a class="permalink" href="#donk">donk</a></h2>
+<p class="Pp">Upload just an attachment using <var class="Fa">donk</var> and
+    <var class="Fa">donkdesc</var>. Content type must be multipart/form-data.
+    Will return the XID.</p>
+</section>
+<section class="Ss">
 <h2 class="Ss" id="gethonks"><a class="permalink" href="#gethonks">gethonks</a></h2>
 <p class="Pp">The &#x201C;gethonks&#x201D; <var class="Fa">action</var> can be
     used to query for honks. The following parameters are used.</p>
@@ -112,6 +121,36 @@
     appear.</dd>
 </dl>
 <p class="Pp">The result will be returned as json.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="zonkit"><a class="permalink" href="#zonkit">zonkit</a></h2>
+<p class="Pp">The &#x201C;zonkit&#x201D; action began life as a delete function,
+    but has since evolved some other powers as specified by the
+    <var class="Fa">wherefore</var> parameter. The target of the action is
+    specified by the <var class="Fa">what</var> parameter and is generally the
+    XID of a honk.</p>
+<p class="Pp">Wherefore must be one of the following.</p>
+<dl class="Bl-tag">
+  <dt>bonk</dt>
+  <dd>Share honk with others.</dd>
+  <dt>unbonk</dt>
+  <dd>Undo share.</dd>
+  <dt>save</dt>
+  <dd>Mark honk as saved.</dd>
+  <dt>unsave</dt>
+  <dd>Unmark honk as saved.</dd>
+  <dt>react</dt>
+  <dd>Post an emoji reaction. A custom reaction may be specified with
+      <var class="Fa">reaction</var>.</dd>
+  <dt>ack</dt>
+  <dd>Mark honk as read.</dd>
+  <dt>deack</dt>
+  <dd>Unmark honk as read.</dd>
+  <dt>zonk</dt>
+  <dd>Delete this honk.</dd>
+  <dt>zonvoy</dt>
+  <dd>Mute this thread. What should identify a convoy.</dd>
+</dl>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="sendactivity"><a class="permalink" href="#sendactivity">sendactivity</a></h2>
@@ -140,8 +179,8 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">March 9, 2020</td>
-    <td class="foot-os">OpenBSD 6.6</td>
+    <td class="foot-date">June 30, 2020</td>
+    <td class="foot-os">OpenBSD 6.7</td>
   </tr>
 </table>
 </body>
