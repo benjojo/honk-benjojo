@@ -1,6 +1,7 @@
 <article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}">
 {{ $bonkcsrf := .BonkCSRF }}
 {{ $IsPreview := .IsPreview }}
+{{ $maplink := .MapLink }}
 {{ with .Honk }}
 <header>
 {{ if $bonkcsrf }}
@@ -60,7 +61,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ if .Duration }}<br>Duration: {{ .Duration }}{{ end }}
 {{ end }}
 {{ with .Place }}
-<p>Location: {{ with .Url }}<a href="{{ . }}" rel=noreferrer>{{ end }}{{ .Name }}{{ if .Url }}</a>{{ end }}{{ if or .Latitude .Longitude }} <a href="https://www.openstreetmap.org/?mlat={{ .Latitude }}&mlon={{ .Longitude}}#map=16/{{ .Latitude }}/{{ .Longitude }}" rel=noreferrer>{{ .Latitude }} {{ .Longitude }}</a>{{ end }}
+<p>Location: {{ with .Url }}<a href="{{ . }}" rel=noreferrer>{{ end }}{{ .Name }}{{ if .Url }}</a>{{ end }}{{ if or .Latitude .Longitude }} <a href="{{ if eq $maplink "apple" }}https://maps.apple.com/?q={{ or .Name "here" }}&z=16&ll={{ .Latitude }},{{ .Longitude }}{{ else }}https://www.openstreetmap.org/?mlat={{ .Latitude }}&mlon={{ .Longitude}}#map=16/{{ .Latitude }}/{{ .Longitude }}{{ end }}" rel=noreferrer>{{ .Latitude }} {{ .Longitude }}</a>{{ end }}
 {{ end }}
 {{ range .Donks }}
 {{ if .Local }}

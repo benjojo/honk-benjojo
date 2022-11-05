@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var softwareVersion = "0.8.2"
+var softwareVersion = "0.8.4"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -48,6 +48,7 @@ type WhatAbout struct {
 type UserOptions struct {
 	SkinnyCSS bool   `json:",omitempty"`
 	Avatar    string `json:",omitempty"`
+	MapLink   string `json:",omitempty"`
 }
 
 type KeyInfo struct {

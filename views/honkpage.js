@@ -67,6 +67,12 @@ function flogit(el, how, xid) {
 var lehonkform = document.getElementById("honkform")
 var lehonkbutton = document.getElementById("honkingtime")
 
+function oldestnewest(btn) {
+	var els = document.getElementsByClassName("glow")
+	if (els.length) {
+		els[els.length-1].scrollIntoView()
+	}
+}
 function removeglow() {
 	var els = document.getElementsByClassName("glow")
 	while (els.length) {

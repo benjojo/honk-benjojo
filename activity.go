@@ -1433,7 +1433,6 @@ func ingestpubkey(origin string, obj junk.Junk) {
 	if err != nil {
 		log.Printf("error saving key: %s", err)
 	}
-	return
 }
 
 func ingestboxes(origin string, obj junk.Junk) {

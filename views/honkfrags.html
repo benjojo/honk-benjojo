@@ -1,8 +1,9 @@
 <div>{{ .TopHID }}</div>
 {{ $BonkCSRF := .HonkCSRF }}
+{{ $MapLink := .MapLink }}
 <div><p>{{ .ServerMessage }}</div>
 <div>
 {{ range .Honks }}
-{{ template "honk.html" map "Honk" . "BonkCSRF" $BonkCSRF }}
+{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF }}
 {{ end }}
 </div>

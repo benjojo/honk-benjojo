@@ -594,15 +594,17 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (*rsa.PublicK
 		allinjest(originate(keyname), j)
 		row = stmtGetXonker.QueryRow(keyname, "pubkey")
 		err = row.Scan(&data)
-	}
-	if err == nil {
-		_, key, err := httpsig.DecodeKey(data)
 		if err != nil {
-			log.Printf("error decoding %s pubkey: %s", keyname, err)
+			log.Printf("key not found after ingesting")
+			return nil, true
 		}
-		return key, true
 	}
-	return nil, true
+	_, key, err := httpsig.DecodeKey(data)
+	if err != nil {
+		log.Printf("error decoding %s pubkey: %s", keyname, err)
+		return nil, true
+	}
+	return key, true
 }, Limit: 512})
 
 func zaggy(keyname string) *rsa.PublicKey {
