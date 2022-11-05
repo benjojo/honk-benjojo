@@ -1061,21 +1061,25 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			t["icon"] = i
 			tags = append(tags, t)
 		}
+		if len(tags) > 0 {
+			jo["tag"] = tags
+		}
 		if p := h.Place; p != nil {
 			t := junk.New()
 			t["type"] = "Place"
-			t["name"] = p.Name
-			t["latitude"] = p.Latitude
-			t["longitude"] = p.Longitude
-			t["url"] = p.Url
-			if h.What == "event" {
-				jo["location"] = t
-			} else {
-				tags = append(tags, t)
+			if p.Name != "" {
+				t["name"] = p.Name
 			}
-		}
-		if len(tags) > 0 {
-			jo["tag"] = tags
+			if p.Latitude != 0 {
+				t["latitude"] = p.Latitude
+			}
+			if p.Longitude != 0 {
+				t["longitude"] = p.Longitude
+			}
+			if p.Url != "" {
+				t["url"] = p.Url
+			}
+			jo["location"] = t
 		}
 		if t := h.Time; t != nil {
 			jo["startTime"] = t.StartTime.Format(time.RFC3339)
@@ -1259,7 +1263,11 @@ func junkuser(user *WhatAbout) []byte {
 		a := junk.New()
 		a["type"] = "Image"
 		a["mediaType"] = "image/png"
-		a["url"] = fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
+		if ava := user.Options.Avatar; ava != "" {
+			a["url"] = ava
+		} else {
+			a["url"] = fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
+		}
 		j["icon"] = a
 	} else {
 		j["type"] = "Service"

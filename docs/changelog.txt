@@ -1,5 +1,17 @@
 changelog
 
+-- 0.8.1
+
+++ Make it easier to upgrade by decoupling data dir from ".".
+
++ Timestamps displayed in server time with TZ.
+
++ version command to print current version.
+
++ Amend changelog for 0.8.0 to include omitted elements:
+	Syntax highlighting for code blocks.
+	Something resembling an actual manual.
+
 -- 0.8.0
 
 +++ Add Honk Filtering and Censorship System (HFCS).
@@ -47,6 +59,10 @@ changelog
 + More robust retries for fetching objects.
 
 + Don't decode excessively large images and run out of memory.
+
++ Syntax highlighting for code blocks.
+
++ Something resembling an actual manual.
 
 - Sometimes the cached state of the @me feed becomes unsynced.
 	Acked status may display incorrectly.

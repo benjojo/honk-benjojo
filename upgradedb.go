@@ -125,10 +125,7 @@ func upgradedb() {
 	case 21:
 		// here we go...
 		initblobdb()
-		blobdb, err := sql.Open("sqlite3", blobdbname)
-		if err != nil {
-			log.Fatal(err)
-		}
+		blobdb := openblobdb()
 		tx, err := blobdb.Begin()
 		if err != nil {
 			log.Fatalf("can't begin: %s", err)

@@ -61,40 +61,40 @@ proxy_set_header Host $http_host;
     building from source can take several seconds.</p>
 </section>
 <section class="Ss">
+<h2 class="Ss" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h2>
+<p class="Pp">The following options control where <code class="Nm">honk</code>
+    looks for data.</p>
+<dl class="Bl-tag">
+  <dt><a class="permalink" href="#datadir"><code class="Fl" id="datadir">-datadir</code></a></dt>
+  <dd>The root data directory, where the database and other user data are
+      stored. Requires write access. Defaults to &quot;.&quot;.</dd>
+  <dt><a class="permalink" href="#viewdir"><code class="Fl" id="viewdir">-viewdir</code></a></dt>
+  <dd>The root view directory, where html and other templates are stored. Read
+      only. Defaults to &quot;.&quot;.</dd>
+</dl>
+</section>
+<section class="Ss">
 <h2 class="Ss" id="INIT"><a class="permalink" href="#INIT">INIT</a></h2>
-<p class="Pp">Run the <code class="Ic">init</code> command.</p>
-<div class="Bd Bd-indent"><code class="Li">./honk init</code></div>
-This will create the database and ask four questions, as well as creating the
-  initial user.
-<div class="Bd Pp Bd-indent">
-<pre>
-username: (desired username)
-password: (desired password)
-listenaddr: (tcp or unix: localhost:31337, /var/www/honk.sock, etc.)
-servername: (public DNS name: honk.example.com)
-</pre>
-</div>
+<p class="Pp">Run the <code class="Ic">init</code> command. This will create the
+    database and ask four questions, as well as creating the initial user.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="OPERATION"><a class="permalink" href="#OPERATION">OPERATION</a></h2>
-<p class="Pp">Run honk.</p>
-<div class="Bd Bd-indent"><code class="Li">date; ./honk &gt;&gt; log
-  2&gt;&amp;1</code></div>
-Log messages are sent to stderr and should probably be redirected to a file.
+<p class="Pp">Run honk. Log messages are sent to stderr and should probably be
+    redirected to a file.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="CUSTOMIZATION"><a class="permalink" href="#CUSTOMIZATION">CUSTOMIZATION</a></h2>
 <p class="Pp">Add custom memes (stickers) to the <span class="Pa">memes</span>
-    directory. Image and video files are supported.</p>
-<p class="Pp">Add custom emus (emoji) to the <span class="Pa">emus</span>
+    data directory. Image and video files are supported.</p>
+<p class="Pp">Add custom emus (emoji) to the <span class="Pa">emus</span> data
     directory. Image files are supported.</p>
 <p class="Pp">Site CSS may be overridden by creating a
-    <span class="Pa">views/local.css</span> file. A restart is required after
-    changes.</p>
+    <span class="Pa">views/local.css</span> file in the data directory. A
+    restart is required after changes.</p>
 <p class="Pp">Custom HTML messages may be added to select pages by using the
     <code class="Ic">admin</code> command. A restart is required after
   changes.</p>
-<div class="Bd Bd-indent"><code class="Li">./honk admin</code></div>
 <dl class="Bl-tag">
   <dt>server</dt>
   <dd>Displayed on the home page.</dd>
@@ -109,43 +109,89 @@ Log messages are sent to stderr and should probably be redirected to a file.
   ADMIN</a></h2>
 <p class="Pp">New users can be added with the <code class="Ic">adduser</code>
     command. This is discouraged.</p>
-<div class="Bd Bd-indent"><code class="Li">./honk adduser</code></div>
 <p class="Pp">Passwords may be reset with the <code class="Ic">chpass</code>
-    command.</p>
-<div class="Bd Bd-indent"><code class="Li">./honk chpass username</code></div>
+    <var class="Ar">username</var> command.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="MAINTENANCE"><a class="permalink" href="#MAINTENANCE">MAINTENANCE</a></h2>
 <p class="Pp">The database may grow large over time. The
-    <code class="Ic">cleanup</code> command exists to purge old data, by default
-    30 days. This removes unreferenced, unsaved posts and attachments. It does
-    not remove any original content.</p>
+    <code class="Ic">cleanup</code> [<var class="Ar">days</var>] command exists
+    to purge old data, by default 30 days. This removes unreferenced, unsaved
+    posts and attachments. It does not remove any original content.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="UPGRADE"><a class="permalink" href="#UPGRADE">UPGRADE</a></h2>
-<p class="Pp">Stop the old honk process.</p>
-<div class="Bd Bd-indent"><code class="Li">pkill honk</code></div>
-Backup the database.
-<div class="Bd Bd-indent"><code class="Li">cp honk.db backup.db</code></div>
-Perform the upgrade with the <code class="Ic">upgrade</code> command.
-<div class="Bd Bd-indent"><code class="Li">./honk upgrade</code></div>
-Restart.
-<div class="Bd Bd-indent"><code class="Li">./honk</code></div>
+<p class="Pp">Stop the old honk process. Backup the database. Perform the
+    upgrade with the <code class="Ic">upgrade</code> command. Restart.</p>
 <p class="Pp">There's also a <span class="Pa">blob.db</span> file which is
     important to backup and restore.</p>
+<p class="Pp">The current version of the honk binary may be printed with the
+    <code class="Ic">version</code> command.</p>
 </section>
-</section>
-<section class="Sh">
-<h1 class="Sh" id="SECURITY"><a class="permalink" href="#SECURITY">SECURITY</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="SECURITY"><a class="permalink" href="#SECURITY">SECURITY</a></h2>
 <p class="Pp"><code class="Nm">honk</code> is not currently hardened against
     SSRF, server side request forgery. Be mindful of what other services may be
     exposed via localhost or the local network.</p>
 </section>
-<section class="Sh">
-<h1 class="Sh" id="DEBUG"><a class="permalink" href="#DEBUG">DEBUG</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="DEBUG"><a class="permalink" href="#DEBUG">DEBUG</a></h2>
 <p class="Pp">Debug mode may be enabled or disabled by running
     <code class="Ic">debug</code> <var class="Ar">on|off</var>. In debug mode,
     secure cookies are disabled and templates are reloaded every request.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<p class="Pp"><code class="Nm">honk</code> files are split between the data
+    directory and the view directory. Both default to &quot;.&quot; but may be
+    specified by command line options.</p>
+<p class="Pp">The data directory contains:</p>
+<dl class="Bl-tag">
+  <dt><span class="Pa">honk.db</span></dt>
+  <dd>The main database.</dd>
+  <dt><span class="Pa">blob.db</span></dt>
+  <dd>Media and attachment storage.</dd>
+  <dt><span class="Pa">emus</span></dt>
+  <dd>Custom emoji.</dd>
+  <dt><span class="Pa">memes</span></dt>
+  <dd>Stickers and such.</dd>
+  <dt><span class="Pa">views/local.css</span></dt>
+  <dd>Locally customized CSS.</dd>
+</dl>
+<p class="Pp">The view directory contains:</p>
+<dl class="Bl-tag">
+  <dt><span class="Pa">views</span></dt>
+  <dd>HTML templates and CSS files.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">This series of commands creates a new database, sets a friendly
+    welcome message, and runs honk.</p>
+<div class="Bd Pp Bd-indent">
+<pre>
+honk-v98&gt; make
+honk-v98&gt; ./honk -datadir ../honkdata init
+username: puffy
+password: OxychromaticBlowfishSwatDynamite
+listen address: /var/www/honk.sock
+server name: honk.example.com
+honk-v98&gt; ./honk -datadir ../honkdata admin
+honk-v98&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
+</pre>
+</div>
+<p class="Pp">Upgrade to the next version. Clean things up a bit.</p>
+<div class="Bd Pp Bd-indent">
+<pre>
+datadir&gt; cp honk.db backup.db
+datadir&gt; cd ../honk-v99
+honk-v99&gt; make
+honk-v99&gt; ./honk -datadir ../honkdata upgrade
+honk-v99&gt; ./honk -datadir ../honkdata cleanup
+honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
+</pre>
+</div>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
@@ -166,7 +212,7 @@ Restart.
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">November 1, 2019</td>
+    <td class="foot-date">November 7, 2019</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>

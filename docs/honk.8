@@ -49,44 +49,49 @@ to be installed.
 Run make.
 Please be patient.
 Even on fast machines, building from source can take several seconds.
+.Ss OPTIONS
+The following options control where
+.Nm
+looks for data.
+.Bl -tag -width datadirx
+.It Fl datadir
+The root data directory, where the database and other user data are stored.
+Requires write access.
+Defaults to ".".
+.It Fl viewdir
+The root view directory, where html and other templates are stored.
+Read only.
+Defaults to ".".
+.El
 .Ss INIT
 Run the
 .Ic init
 command.
-.Dl ./honk init
 This will create the database and ask four questions, as well as creating
 the initial user.
-.Bd -literal -offset indent
-username: (desired username)
-password: (desired password)
-listenaddr: (tcp or unix: localhost:31337, /var/www/honk.sock, etc.)
-servername: (public DNS name: honk.example.com)
-.Ed
 .Ss OPERATION
 Run honk.
-.Dl date; ./honk >> log 2>&1
 Log messages are sent to stderr and should probably be redirected to a file.
 .Ss CUSTOMIZATION
 Add custom memes (stickers) to the
 .Pa memes
-directory.
+data directory.
 Image and video files are supported.
 .Pp
 Add custom emus (emoji) to the
 .Pa emus
-directory.
+data directory.
 Image files are supported.
 .Pp
 Site CSS may be overridden by creating a
 .Pa views/local.css
-file.
+file in the data directory.
 A restart is required after changes.
 .Pp
 Custom HTML messages may be added to select pages by using the
 .Ic admin
 command.
 A restart is required after changes.
-.Dl ./honk admin
 .Bl -tag -width tenletters
 .It server
 Displayed on the home page.
@@ -101,44 +106,90 @@ New users can be added with the
 .Ic adduser
 command.
 This is discouraged.
-.Dl ./honk adduser
 .Pp
 Passwords may be reset with the
-.Ic chpass
+.Ic chpass Ar username
 command.
-.Dl ./honk chpass username
 .Ss MAINTENANCE
 The database may grow large over time.
 The
-.Ic cleanup
+.Ic cleanup Op Ar days
 command exists to purge old data, by default 30 days.
 This removes unreferenced, unsaved posts and attachments.
 It does not remove any original content.
 .Ss UPGRADE
 Stop the old honk process.
-.Dl pkill honk
 Backup the database.
-.Dl cp honk.db backup.db
 Perform the upgrade with the
 .Ic upgrade
 command.
-.Dl ./honk upgrade
 Restart.
-.Dl ./honk
 .Pp
 There's also a
 .Pa blob.db
 file which is important to backup and restore.
-.Sh SECURITY
+.Pp
+The current version of the honk binary may be printed with the
+.Ic version
+command.
+.Ss SECURITY
 .Nm
 is not currently hardened against SSRF, server side request forgery.
 Be mindful of what other services may be exposed via localhost or the
 local network.
-.Sh DEBUG
+.Ss DEBUG
 Debug mode may be enabled or disabled by running
 .Ic debug Ar on|off .
 In debug mode, secure cookies are disabled and templates are reloaded
 every request.
+.Sh FILES
+.Nm
+files are split between the data directory and the view directory.
+Both default to "." but may be specified by command line options.
+.Pp
+The data directory contains:
+.Bl -tag -width views/local.css
+.It Pa honk.db
+The main database.
+.It Pa blob.db
+Media and attachment storage.
+.It Pa emus
+Custom emoji.
+.It Pa memes
+Stickers and such.
+.It Pa views/local.css
+Locally customized CSS.
+.El
+.Pp
+The view directory contains:
+.Bl -tag -width views
+.It Pa views
+HTML templates and CSS files.
+.El
+.Sh EXAMPLES
+This series of commands creates a new database, sets a friendly
+welcome message, and runs honk.
+.Bd -literal -offset indent
+honk-v98> make
+honk-v98> ./honk -datadir ../honkdata init
+username: puffy
+password: OxychromaticBlowfishSwatDynamite
+listen address: /var/www/honk.sock
+server name: honk.example.com
+honk-v98> ./honk -datadir ../honkdata admin
+honk-v98> date; ./honk -datadir ../honkdata >> log 2>&1
+.Ed
+.Pp
+Upgrade to the next version.
+Clean things up a bit.
+.Bd -literal -offset indent
+datadir> cp honk.db backup.db
+datadir> cd ../honk-v99
+honk-v99> make
+honk-v99> ./honk -datadir ../honkdata upgrade
+honk-v99> ./honk -datadir ../honkdata cleanup
+honk-v99> date; ./honk -datadir ../honkdata >> log 2>&1
+.Ed
 .Sh ENVIRONMENT
 Image processing and scaling requires considerable memory.
 It is recommended to adjust the datasize ulimit to at least 1GB.

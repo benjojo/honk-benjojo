@@ -1,7 +1,10 @@
 
 all: honk
 
-honk: *.go go.mod
+schema.go: schema.sql
+	sh ./genschemago.sh
+
+honk: schema.go *.go go.mod
 	go build -mod=`ls -d vendor 2> /dev/null` -o honk
 
 clean:

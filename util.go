@@ -71,16 +71,11 @@ func getassetparam(file string) string {
 var dbtimeformat = "2006-01-02 15:04:05"
 
 var alreadyopendb *sql.DB
-var dbname = "honk.db"
-var blobdbname = "blob.db"
 var stmtConfig *sql.Stmt
 
 func initdb() {
-	schema, err := ioutil.ReadFile("schema.sql")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = os.Stat(dbname)
+	dbname := dataDir + "/honk.db"
+	_, err := os.Stat(dbname)
 	if err == nil {
 		log.Fatalf("%s already exists", dbname)
 	}
@@ -103,7 +98,7 @@ func initdb() {
 		os.Exit(1)
 	}()
 
-	for _, line := range strings.Split(string(schema), ";") {
+	for _, line := range strings.Split(sqlSchema, ";") {
 		_, err = db.Exec(line)
 		if err != nil {
 			log.Print(err)
@@ -168,6 +163,7 @@ func initdb() {
 }
 
 func initblobdb() {
+	blobdbname := dataDir + "/blob.db"
 	_, err := os.Stat(blobdbname)
 	if err == nil {
 		log.Fatalf("%s already exists", blobdbname)
@@ -337,8 +333,8 @@ func opendatabase() *sql.DB {
 	if alreadyopendb != nil {
 		return alreadyopendb
 	}
-	var err error
-	_, err = os.Stat(dbname)
+	dbname := dataDir + "/honk.db"
+	_, err := os.Stat(dbname)
 	if err != nil {
 		log.Fatalf("unable to open database: %s", err)
 	}
@@ -355,8 +351,8 @@ func opendatabase() *sql.DB {
 }
 
 func openblobdb() *sql.DB {
-	var err error
-	_, err = os.Stat(blobdbname)
+	blobdbname := dataDir + "/blob.db"
+	_, err := os.Stat(blobdbname)
 	if err != nil {
 		log.Fatalf("unable to open database: %s", err)
 	}

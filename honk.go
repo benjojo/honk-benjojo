@@ -17,6 +17,7 @@ package main
 
 import (
 	"crypto/rsa"
+	"flag"
 	"fmt"
 	"html/template"
 	"log"
@@ -26,6 +27,8 @@ import (
 	"strings"
 	"time"
 )
+
+var honkVersion = "honk 0.8.1"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -43,7 +46,8 @@ type WhatAbout struct {
 }
 
 type UserOptions struct {
-	SkinnyCSS bool `json:",omitempty"`
+	SkinnyCSS bool   `json:",omitempty"`
+	Avatar    string `json:",omitempty"`
 }
 
 type KeyInfo struct {
@@ -184,6 +188,8 @@ const (
 )
 
 var serverName string
+var dataDir = "."
+var viewDir = "."
 var iconName = "icon.png"
 var serverMsg template.HTML
 var aboutMsg template.HTML
@@ -193,15 +199,22 @@ func ElaborateUnitTests() {
 }
 
 func main() {
+	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
+	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
+	flag.Parse()
+	args := flag.Args()
 	cmd := "run"
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if len(args) > 0 {
+		cmd = args[0]
 	}
 	switch cmd {
 	case "init":
 		initdb()
 	case "upgrade":
 		upgradedb()
+	case "version":
+		fmt.Println(honkVersion)
+		os.Exit(0)
 	}
 	db := opendatabase()
 	dbversion := 0
@@ -220,10 +233,10 @@ func main() {
 	case "admin":
 		adminscreen()
 	case "debug":
-		if len(os.Args) != 3 {
+		if len(args) != 2 {
 			log.Fatal("need an argument: debug (on|off)")
 		}
-		switch os.Args[2] {
+		switch args[1] {
 		case "on":
 			updateconfig("debug", 1)
 		case "off":
@@ -237,17 +250,17 @@ func main() {
 		chpass()
 	case "cleanup":
 		arg := "30"
-		if len(os.Args) > 2 {
-			arg = os.Args[2]
+		if len(args) > 1 {
+			arg = args[1]
 		}
 		cleanupdb(arg)
 	case "ping":
-		if len(os.Args) < 4 {
+		if len(args) < 3 {
 			fmt.Printf("usage: honk ping from to\n")
 			return
 		}
-		name := os.Args[2]
-		targ := os.Args[3]
+		name := args[1]
+		targ := args[2]
 		user, err := butwhatabout(name)
 		if err != nil {
 			log.Printf("unknown user")

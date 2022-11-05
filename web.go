@@ -61,9 +61,9 @@ func getuserstyle(u *login.UserInfo) template.CSS {
 func getInfo(r *http.Request) map[string]interface{} {
 	u := login.GetUserInfo(r)
 	templinfo := make(map[string]interface{})
-	templinfo["StyleParam"] = getassetparam("views/style.css")
-	templinfo["LocalStyleParam"] = getassetparam("views/local.css")
-	templinfo["JSParam"] = getassetparam("views/honkpage.js")
+	templinfo["StyleParam"] = getassetparam(viewDir + "/views/style.css")
+	templinfo["LocalStyleParam"] = getassetparam(viewDir + "/views/local.css")
+	templinfo["JSParam"] = getassetparam(viewDir + "/views/honkpage.js")
 	templinfo["UserStyle"] = getuserstyle(u)
 	templinfo["ServerName"] = serverName
 	templinfo["IconName"] = iconName
@@ -127,7 +127,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 func showfunzone(w http.ResponseWriter, r *http.Request) {
 	var emunames, memenames []string
-	dir, err := os.Open("emus")
+	dir, err := os.Open(dataDir + "/emus")
 	if err == nil {
 		emunames, _ = dir.Readdirnames(0)
 		dir.Close()
@@ -137,7 +137,7 @@ func showfunzone(w http.ResponseWriter, r *http.Request) {
 			emunames[i] = e[:len(e)-4]
 		}
 	}
-	dir, err = os.Open("memes")
+	dir, err = os.Open(dataDir + "/memes")
 	if err == nil {
 		memenames, _ = dir.Readdirnames(0)
 		dir.Close()
@@ -305,9 +305,19 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(os.Stdout, "\n")
 		return
 	}
+
 	if crappola(j) {
 		return
 	}
+	what, _ := j.GetString("type")
+	if what == "Like" {
+		return
+	}
+	who, _ := j.GetString("actor")
+	if rejectactor(user.ID, who) {
+		return
+	}
+
 	keyname, err := httpsig.VerifyRequest(r, payload, zaggy)
 	if err != nil {
 		log.Printf("inbox message failed signature for %s from %s", keyname, r.Header.Get("X-Forwarded-For"))
@@ -320,19 +330,12 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "what did you call me?", http.StatusTeapot)
 		return
 	}
-	what, _ := j.GetString("type")
-	if what == "Like" {
-		return
-	}
-	who, _ := j.GetString("actor")
 	origin := keymatch(keyname, who)
 	if origin == "" {
 		log.Printf("keyname actor mismatch: %s <> %s", keyname, who)
 		return
 	}
-	if rejectactor(user.ID, who) {
-		return
-	}
+
 	switch what {
 	case "Ping":
 		obj, _ := j.GetString("id")
@@ -776,8 +779,8 @@ func showontology(w http.ResponseWriter, r *http.Request) {
 	}
 	honks := gethonksbyontology(userid, "#"+name, 0)
 	if friendorfoe(r.Header.Get("Accept")) {
-		if len(honks) > 20 {
-			honks = honks[0:20]
+		if len(honks) > 40 {
+			honks = honks[0:40]
 		}
 
 		var xids []string
@@ -1784,18 +1787,23 @@ func avatate(w http.ResponseWriter, r *http.Request) {
 
 func serveasset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "max-age=7776000")
-	http.ServeFile(w, r, "views"+r.URL.Path)
+	dir := viewDir
+	if r.URL.Path == "/local.css" {
+		dir = dataDir
+	}
+	http.ServeFile(w, r, dir+"/views"+r.URL.Path)
 }
 func servehelp(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	w.Header().Set("Cache-Control", "max-age=3600")
-	http.ServeFile(w, r, "docs/"+name)
+	http.ServeFile(w, r, viewDir+"/docs/"+name)
 }
 func servehtml(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	templinfo := getInfo(r)
 	templinfo["AboutMsg"] = aboutMsg
 	templinfo["LoginMsg"] = loginMsg
+	templinfo["HonkVersion"] = honkVersion
 	if u == nil {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
@@ -1807,12 +1815,12 @@ func servehtml(w http.ResponseWriter, r *http.Request) {
 func serveemu(w http.ResponseWriter, r *http.Request) {
 	xid := mux.Vars(r)["xid"]
 	w.Header().Set("Cache-Control", "max-age="+somedays())
-	http.ServeFile(w, r, "emus/"+xid)
+	http.ServeFile(w, r, dataDir+"/emus/"+xid)
 }
 func servememe(w http.ResponseWriter, r *http.Request) {
 	xid := mux.Vars(r)["xid"]
 	w.Header().Set("Cache-Control", "max-age="+somedays())
-	http.ServeFile(w, r, "memes/"+xid)
+	http.ServeFile(w, r, dataDir+"/memes/"+xid)
 }
 
 func servefile(w http.ResponseWriter, r *http.Request) {
@@ -1918,25 +1926,25 @@ func serve() {
 	debug := false
 	getconfig("debug", &debug)
 	readviews = templates.Load(debug,
-		"views/honkpage.html",
-		"views/honkfrags.html",
-		"views/honkers.html",
-		"views/hfcs.html",
-		"views/combos.html",
-		"views/honkform.html",
-		"views/honk.html",
-		"views/account.html",
-		"views/about.html",
-		"views/funzone.html",
-		"views/login.html",
-		"views/xzone.html",
-		"views/msg.html",
-		"views/header.html",
-		"views/onts.html",
-		"views/honkpage.js",
+		viewDir+"/views/honkpage.html",
+		viewDir+"/views/honkfrags.html",
+		viewDir+"/views/honkers.html",
+		viewDir+"/views/hfcs.html",
+		viewDir+"/views/combos.html",
+		viewDir+"/views/honkform.html",
+		viewDir+"/views/honk.html",
+		viewDir+"/views/account.html",
+		viewDir+"/views/about.html",
+		viewDir+"/views/funzone.html",
+		viewDir+"/views/login.html",
+		viewDir+"/views/xzone.html",
+		viewDir+"/views/msg.html",
+		viewDir+"/views/header.html",
+		viewDir+"/views/onts.html",
+		viewDir+"/views/honkpage.js",
 	)
 	if !debug {
-		assets := []string{"views/style.css", "views/local.css", "views/honkpage.js"}
+		assets := []string{viewDir + "/views/style.css", dataDir + "/views/local.css", viewDir + "/views/honkpage.js"}
 		for _, s := range assets {
 			savedassetparams[s] = getassetparam(s)
 		}

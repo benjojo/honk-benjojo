@@ -25,7 +25,7 @@
 {{ else }}
 <a href="{{ .Honker }}" rel=noreferrer>{{ .Username }}</a>
 {{ end }}
-<span class="clip"><a href="{{ .URL }}" rel=noreferrer>{{ .What }}</a> {{ .Date.Format "02 Jan 2006 15:04" }}</span>
+<span class="clip"><a href="{{ .URL }}" rel=noreferrer>{{ .What }}</a> {{ .Date.Local.Format "02 Jan 2006 15:04 -0700" }}</span>
 {{ if .Oonker }}
 <br>
 <span style="margin-left: 1em;" class="clip">
@@ -114,7 +114,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ else }}
 <button onclick="return flogit(this, 'save', '{{ .Honk.XID }}');">save</button>
 {{ end }}
+{{ if .Honk.IsUntagged }}
+<button disabled>untagged</button>
+{{ else }}
 <button onclick="return flogit(this, 'untag', '{{ .Honk.XID }}');">untag me</button>
+{{ end }}
 <button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
 </div>
 </details>

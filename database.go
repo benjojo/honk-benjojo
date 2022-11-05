@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"humungus.tedunangst.com/r/webs/cache"
@@ -217,46 +216,10 @@ func gethonksforuserfirstclass(userid int64, wanted int64) []*Honk {
 	return getsomehonks(rows, err)
 }
 
-var mehonks = make(map[int64][]*Honk)
-var melock sync.Mutex
-
-func copyhonks(honks []*Honk) []*Honk {
-	rv := make([]*Honk, len(honks))
-	for i, h := range honks {
-		dupe := new(Honk)
-		*dupe = *h
-		rv[i] = dupe
-	}
-	return rv
-}
-
 func gethonksforme(userid int64, wanted int64) []*Honk {
-	if wanted > 0 {
-		dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
-		rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
-		return getsomehonks(rows, err)
-	}
-
-	melock.Lock()
-	defer melock.Unlock()
-	honks := mehonks[userid]
-	if len(honks) == 0 {
-		dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
-		rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
-		honks = getsomehonks(rows, err)
-		mehonks[userid] = copyhonks(honks)
-		return honks
-	}
-	wanted = honks[0].ID
 	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
 	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
-	honks = getsomehonks(rows, err)
-	honks = append(honks, mehonks[userid]...)
-	if len(honks) > 250 {
-		honks = honks[:250]
-	}
-	mehonks[userid] = copyhonks(honks)
-	return honks
+	return getsomehonks(rows, err)
 }
 func getsavedhonks(userid int64, wanted int64) []*Honk {
 	rows, err := stmtHonksISaved.Query(wanted, userid)
