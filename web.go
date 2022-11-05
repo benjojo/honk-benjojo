@@ -257,12 +257,23 @@ func crappola(j junk.Junk) bool {
 }
 
 func ping(user *WhatAbout, who string) {
+	if targ := fullname(who, user.ID); targ != "" {
+		who = targ
+	}
+	if !strings.HasPrefix(who, "https:") {
+		who = gofish(who)
+	}
+	if who == "" {
+		log.Printf("nobody to ping!")
+		return
+	}
 	var box *Box
 	ok := boxofboxes.Get(who, &box)
 	if !ok {
 		log.Printf("no inbox to ping %s", who)
 		return
 	}
+	log.Printf("sending ping to %s", box.In)
 	j := junk.New()
 	j["@context"] = itiswhatitis
 	j["type"] = "Ping"
@@ -1018,10 +1029,12 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 			return
 
 		}
+		honks := []*Honk{honk}
+		donksforhonks(honks)
 		templinfo := getInfo(r)
 		templinfo["ServerMessage"] = "one honk maybe more"
 		templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
-		honkpage(w, u, []*Honk{honk}, templinfo)
+		honkpage(w, u, honks, templinfo)
 		return
 	}
 	rawhonks := gethonksbyconvoy(honk.UserID, honk.Convoy, 0)
@@ -1827,6 +1840,11 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	combos = " " + combos + " "
 	honkerid, _ := strconv.ParseInt(r.FormValue("honkerid"), 10, 0)
 
+	if name != "" && !re_plainname.MatchString(name) {
+		http.Error(w, "please use a plainer name", http.StatusInternalServerError)
+		return
+	}
+
 	var meta HonkerMeta
 	meta.Notes = strings.TrimSpace(r.FormValue("notes"))
 	mj, _ := jsonify(&meta)
@@ -1834,16 +1852,17 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	defer honkerinvalidator.Clear(u.UserID)
 
 	if honkerid > 0 {
-		goodbye := r.FormValue("goodbye")
-		if goodbye == "F" {
+		if r.FormValue("delete") == "delete" {
 			unfollowyou(user, honkerid)
+			stmtDeleteHonker.Exec(honkerid)
 			http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 			return
 		}
-		if goodbye == "X" {
+		if r.FormValue("unsub") == "unsub" {
+			unfollowyou(user, honkerid)
+		}
+		if r.FormValue("sub") == "sub" {
 			followyou(user, honkerid)
-			http.Redirect(w, r, "/honkers", http.StatusSeeOther)
-			return
 		}
 		_, err := stmtUpdateHonker.Exec(name, combos, mj, honkerid, u.UserID)
 		if err != nil {

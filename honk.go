@@ -29,7 +29,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.3"
+var softwareVersion = "0.9.5"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -340,7 +340,7 @@ func main() {
 		svalbard(name)
 	case "ping":
 		if len(args) < 3 {
-			fmt.Printf("usage: honk ping from to\n")
+			fmt.Printf("usage: honk ping (from username) (to username or url)\n")
 			return
 		}
 		name := args[1]

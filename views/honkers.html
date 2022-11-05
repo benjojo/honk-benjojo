@@ -48,12 +48,11 @@ function expandstuff() {
 <p><label for="notes">notes:</label><br>
 <textarea name="notes">{{ .Meta.Notes }}</textarea>
 <p>combos: <input type="text" name="combos" value="{{ range .Combos }}{{ . }} {{end}}">
-{{ if eq .Flavor "sub" }}
-<p>unsub: <input type="text" name="goodbye" placeholder="press F" value="" autocomplete=off>
-{{ else }}
-<p>(re)sub: <input type="text" name="goodbye" placeholder="press X" value="" autocomplete=off>
-{{ end }}
-<p><button name="save" value="save">save</button>
+<p>
+<button name="save" value="save">save</button>
+<button name="sub" value="sub">(re)sub</button>
+<button name="unsub" value="unsub">unsub</button>
+<button name="delete" value="delete">delete</button>
 </form>
 </details>
 <p>
