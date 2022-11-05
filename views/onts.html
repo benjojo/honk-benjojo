@@ -2,11 +2,12 @@
 <main>
 <div class="info">
 <p>ontologies of interest
+{{ $firstrune := .FirstRune }}
 {{ $letter := 0 }}
 <ul>
 {{ range .Onts }}
-{{ if not (eq $letter (index .Name 0)) }}
-{{ $letter = (index .Name 0) }}
+{{ if not (eq $letter (call $firstrune .Name)) }}
+{{ $letter = (call $firstrune .Name) }}
 <li><p>
 {{ end }}
 <span style="white-space: nowrap;"><a href="/o/{{ .Name }}">#{{ .Name }}</a> ({{ .Count }})</span>

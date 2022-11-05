@@ -74,8 +74,16 @@ func shrinkit(data []byte) (*image.Image, error) {
 
 var backendhooks []func()
 
+func orphancheck() {
+	var b [1]byte
+	os.Stdin.Read(b[:])
+	dlog.Printf("backend shutting down")
+	os.Exit(0)
+}
+
 func backendServer() {
 	dlog.Printf("backend server running")
+	go orphancheck()
 	shrinker := new(Shrinker)
 	srv := rpc.NewServer()
 	err := srv.Register(shrinker)
@@ -104,13 +112,21 @@ func backendServer() {
 }
 
 func runBackendServer() {
+	r, w, err := os.Pipe()
+	if err != nil {
+		elog.Panicf("can't pipe: %s", err)
+	}
 	proc := exec.Command(os.Args[0], reexecArgs("backend")...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
-	err := proc.Start()
+	proc.Stdin = r
+	err = proc.Start()
 	if err != nil {
 		elog.Panicf("can't exec backend: %s", err)
 	}
-	err = proc.Wait()
-	elog.Printf("lost the backend: %s", err)
+	go func() {
+		proc.Wait()
+		elog.Printf("lost the backend: %s", err)
+		w.Close()
+	}()
 }

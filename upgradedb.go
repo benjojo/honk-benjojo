@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-var myVersion = 40
+var myVersion = 41
 
 type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -67,9 +67,9 @@ func upgradedb() {
 			setconfig("loginmsg", "<h2>login</h2>")
 		}
 		d := -1
-		getconfig("debug", &d)
+		getconfig("devel", &d)
 		if d == -1 {
-			setconfig("debug", 0)
+			setconfig("devel", 0)
 		}
 		doordie(db, "update config set value = 27 where key = 'dbversion'")
 		fallthrough
@@ -200,6 +200,12 @@ func upgradedb() {
 		doordie(db, "update config set value = 40 where key = 'dbversion'")
 		fallthrough
 	case 40:
+		doordie(db, "PRAGMA journal_mode=WAL")
+		blobdb := openblobdb()
+		doordie(blobdb, "PRAGMA journal_mode=WAL")
+		doordie(db, "update config set value = 41 where key = 'dbversion'")
+		fallthrough
+	case 41:
 
 	default:
 		elog.Fatalf("can't upgrade unknown version %d", dbversion)

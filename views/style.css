@@ -21,10 +21,11 @@ pre, code {
 }
 blockquote {
 	margin-left: 0em;
+	margin-bottom: 0em;
 	padding-left: 0.5em;
 	border-left: 1px solid var(--fg-subtle);
 }
-blockquote cite {
+cite {
 	margin-left: 2em;
 }
 table {
@@ -73,6 +74,7 @@ header > details {
 	overflow: auto;
 	opacity: 0.7;
 	overscroll-behavior: contain;
+	z-index: 2;
 }
 header > details[open] {
 	padding: 1em 1em 0em 1em;
@@ -89,6 +91,9 @@ header > details[open] summary span {
 }
 header > details li {
 	margin: 1em 0em 1em 0em;
+}
+details summary {
+	cursor: pointer;
 }
 main {
 	max-width: 1200px;
@@ -129,6 +134,9 @@ label.button, button, select {
 }
 button a {
 	text-decoration: none;
+}
+button {
+	cursor: pointer;
 }
 form {
 	margin-top: 1em;
@@ -294,6 +302,16 @@ img.emu {
 	vertical-align: middle;
 	margin: -2px;
 	object-fit: contain;
+}
+.nophone {
+	position: fixed;
+	opacity: 0.7;
+	cursor: pointer;
+}
+@media screen and (max-width: 1360px) {
+	.nophone {
+		display: none;
+	}
 }
 @media screen and (max-width: 740px) {
 	body {

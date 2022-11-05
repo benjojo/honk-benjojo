@@ -3,8 +3,9 @@
 <div class="info">
 <p>Welcome the fun zone!
 <ul>
+{{ $m := .Emuext }}
 {{ range .Emus }}
-<li><img class="emu" src="/emu/{{ . }}.png"> :{{ . }}:
+<li><img class="emu" src="/emu/{{ . }}{{ index $m . }}"> :{{ . }}:
 {{ end }}
 </ul>
 <ul>

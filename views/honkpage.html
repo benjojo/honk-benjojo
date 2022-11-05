@@ -29,6 +29,9 @@ function playit(elem, word, wordlist, xid) {
 	})
 }
 </script>
+{{ if .LocalJSParam }}
+<script src="/local.js{{ .LocalJSParam }}"></script>
+{{ end }}
 </div>
 {{ if and .HonkCSRF (not .IsPreview) }}
 <div class="info" id="refreshbox">

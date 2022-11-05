@@ -100,6 +100,11 @@ func initdb() {
 		os.Exit(1)
 	}()
 
+	_, err = db.Exec("PRAGMA journal_mode=WAL")
+	if err != nil {
+		elog.Print(err)
+		return
+	}
 	for _, line := range strings.Split(sqlSchema, ";") {
 		_, err = db.Exec(line)
 		if err != nil {
@@ -158,7 +163,7 @@ func initdb() {
 	setconfig("servermsg", "<h2>Things happen.</h2>")
 	setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
 	setconfig("loginmsg", "<h2>login</h2>")
-	setconfig("debug", 0)
+	setconfig("devel", 0)
 
 	db.Close()
 	fmt.Printf("done.\n")
@@ -172,6 +177,11 @@ func initblobdb() {
 		elog.Fatalf("%s already exists", blobdbname)
 	}
 	blobdb, err := sql.Open("sqlite3", blobdbname)
+	if err != nil {
+		elog.Print(err)
+		return
+	}
+	_, err = blobdb.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
 		elog.Print(err)
 		return

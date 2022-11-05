@@ -17,10 +17,10 @@ package mz
 
 import (
 	"fmt"
+	"html"
 	"regexp"
 	"strings"
 
-	"golang.org/x/net/html"
 	"humungus.tedunangst.com/r/webs/synlight"
 )
 
@@ -43,10 +43,11 @@ var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
 
 type Marker struct {
 	AllowInlineHtml bool
-	HashLinker func(h string) string
-	HashTags []string
-	AtLinker func(h string) string
-	Mentions []string
+	HashLinker      func(h string) string
+	HashTags        []string
+	AtLinker        func(h string) string
+	Mentions        []string
+	Extras          []func(string) string
 }
 
 func (marker *Marker) Mark(s string) string {
@@ -87,6 +88,10 @@ func (marker *Marker) Mark(s string) string {
 	}
 	s = string(buf)
 
+	for _, extra := range marker.Extras {
+		s = extra(s)
+	}
+
 	// mark it zero
 	if strings.Contains(s, "http") {
 		s = re_link.ReplaceAllStringFunc(s, linkreplacer)
@@ -96,9 +101,11 @@ func (marker *Marker) Mark(s string) string {
 		s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
 		s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
 	}
-	s = re_quoter.ReplaceAllString(s, "<blockquote>$1<br><cite>$3</cite></blockquote><p>")
+	s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><cite>$3</cite><p>")
+	s = strings.ReplaceAll(s, "<cite></cite>", "")
 	s = re_reciter.ReplaceAllString(s, "$1$2$3")
 	s = strings.Replace(s, "\n---\n", "<hr><p>", -1)
+	s = strings.ReplaceAll(s, "</blockquote><p><blockquote>", "<br>")
 
 	s = re_lister.ReplaceAllStringFunc(s, func(m string) string {
 		m = strings.Trim(m, "\n")
@@ -200,11 +207,9 @@ func (marker *Marker) Mark(s string) string {
 			}
 			return "<pre><code>" + lighter.HighlightString(m[2], m[1]) + "</code></pre><p>"
 		}
-		code = html.EscapeString(code)
-		return code
+		code = html.EscapeString(code[1 : len(code)-1])
+		return "<code>" + code + "</code>"
 	})
-
-	s = re_coder.ReplaceAllString(s, "<code>$1</code>")
 
 	// some final fixups
 	s = strings.Replace(s, "<br><blockquote>", "<blockquote>", -1)

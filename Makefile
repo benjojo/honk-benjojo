@@ -1,10 +1,7 @@
 
 all: honk
 
-schema.go: schema.sql
-	sh ./genschemago.sh
-
-honk: .preflightcheck schema.go *.go go.mod
+honk: .preflightcheck schema.sql *.go go.mod
 	go build -mod=`ls -d vendor 2> /dev/null` -o honk
 
 .preflightcheck: preflight.sh

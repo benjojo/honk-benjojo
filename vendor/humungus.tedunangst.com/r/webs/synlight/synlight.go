@@ -154,6 +154,7 @@ func New(options Options) *Lighter {
 	hl.aliases["patch"] = "diff"
 	hl.aliases["python"] = "py"
 	hl.aliases["rust"] = "rs"
+	hl.aliases["xml"] = "html"
 
 	return hl
 }
@@ -180,7 +181,7 @@ func (hl *Lighter) Highlight(data []byte, filename string, w io.Writer) {
 
 	dataloc := 0
 	state := 0
-	pairidx := 0
+	pairidx := uint(0)
 	for dataloc < len(data) {
 	restart:
 		for _, tok := range tokens {
@@ -192,11 +193,11 @@ func (hl *Lighter) Highlight(data []byte, filename string, w io.Writer) {
 				state = tok.nextstate
 				name := tok.name
 				if name == "pair" {
-					name = pairnames[pairidx%len(pairnames)]
+					name = pairnames[pairidx%uint(len(pairnames))]
 					pairidx += 1
 				} else if name == "unpair" {
 					pairidx -= 1
-					name = pairnames[pairidx%len(pairnames)]
+					name = pairnames[pairidx%uint(len(pairnames))]
 				}
 				mk := markers[name]
 				if mk != nil {

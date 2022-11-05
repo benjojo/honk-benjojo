@@ -19,6 +19,8 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	golog "log"
+	"log/syslog"
 	notrand "math/rand"
 	"os"
 	"strconv"
@@ -26,9 +28,10 @@ import (
 	"time"
 
 	"humungus.tedunangst.com/r/webs/httpsig"
+	"humungus.tedunangst.com/r/webs/log"
 )
 
-var softwareVersion = "0.9.7"
+var softwareVersion = "0.9.8"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -53,6 +56,7 @@ type UserOptions struct {
 	Avahex     bool   `json:",omitempty"`
 	MentionAll bool   `json:",omitempty"`
 	Avatar     string `json:",omitempty"`
+	Banner     string `json:",omitempty"`
 	MapLink    string `json:",omitempty"`
 	Reaction   string `json:",omitempty"`
 	MeCount    int64
@@ -100,7 +104,7 @@ type Honk struct {
 	Mentions []Mention
 	Badonks  []Badonk
 	Wonkles  string
-	Guesses template.HTML
+	Guesses  template.HTML
 }
 
 type Badonk struct {
@@ -130,6 +134,15 @@ type Chatter struct {
 type Mention struct {
 	Who   string
 	Where string
+}
+
+func (mention *Mention) IsPresent(noise string) bool {
+	nick := strings.TrimLeft(mention.Who, "@")
+	idx := strings.IndexByte(nick, '@')
+	if idx != -1 {
+		nick = nick[:idx]
+	}
+	return strings.Contains(noise, ">@"+nick) || strings.Contains(noise, "@<span>"+nick)
 }
 
 type OldRevision struct {
@@ -268,22 +281,22 @@ func unplugserver(hostname string) {
 
 func reexecArgs(cmd string) []string {
 	args := []string{"-datadir", dataDir}
-	args = append(args, loggingArgs()...)
+	args = append(args, log.Args()...)
 	args = append(args, cmd)
 	return args
 }
+
+var elog, ilog, dlog *golog.Logger
 
 func main() {
 	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
 	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
 	flag.Parse()
 
-	if alllogname != "stderr" {
-		elogname = alllogname
-		ilogname = alllogname
-		dlogname = alllogname
-	}
-	initLogging(elogname, ilogname, dlogname)
+	log.Init(log.Options{Progname: "honk", Facility: syslog.LOG_UUCP})
+	elog = log.E
+	ilog = log.I
+	dlog = log.D
 
 	args := flag.Args()
 	cmd := "run"
@@ -316,7 +329,10 @@ func main() {
 	serverPrefix = fmt.Sprintf("https://%s/", serverName)
 	getconfig("usersep", &userSep)
 	getconfig("honksep", &honkSep)
-	getconfig("debug", &debugMode)
+	getconfig("devel", &develMode)
+	getconfig("fasttimeout", &fastTimeout)
+	getconfig("slowtimeout", &slowTimeout)
+	getconfig("signgets", &signGets)
 	prepareStatements(db)
 	switch cmd {
 	case "admin":
@@ -326,18 +342,28 @@ func main() {
 			elog.Fatal("import username mastodon|twitter srcdir")
 		}
 		importMain(args[1], args[2], args[3])
-	case "debug":
+	case "devel":
 		if len(args) != 2 {
-			elog.Fatal("need an argument: debug (on|off)")
+			elog.Fatal("need an argument: devel (on|off)")
 		}
 		switch args[1] {
 		case "on":
-			setconfig("debug", 1)
+			setconfig("devel", 1)
 		case "off":
-			setconfig("debug", 0)
+			setconfig("devel", 0)
 		default:
 			elog.Fatal("argument must be on or off")
 		}
+	case "setconfig":
+		if len(args) != 3 {
+			elog.Fatal("need an argument: setconfig key val")
+		}
+		var val interface{}
+		var err error
+		if val, err = strconv.Atoi(args[2]); err != nil {
+			val = args[2]
+		}
+		setconfig(args[1], val)
 	case "adduser":
 		adduser()
 	case "deluser":

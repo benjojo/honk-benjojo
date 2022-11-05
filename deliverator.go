@@ -47,8 +47,8 @@ func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 		return
 	}
 	drift += time.Duration(notrand.Int63n(int64(drift / 10)))
-	when := time.Now().UTC().Add(drift)
-	_, err := stmtAddDoover.Exec(when.Format(dbtimeformat), goarounds, userid, rcpt, msg)
+	when := time.Now().Add(drift)
+	_, err := stmtAddDoover.Exec(when.UTC().Format(dbtimeformat), goarounds, userid, rcpt, msg)
 	if err != nil {
 		elog.Printf("error saving doover: %s", err)
 	}
@@ -131,7 +131,7 @@ func getdoovers() []Doover {
 }
 
 func redeliverator() {
-	sleeper := time.NewTimer(0)
+	sleeper := time.NewTimer(5 * time.Second)
 	for {
 		select {
 		case <-pokechan:
@@ -144,7 +144,7 @@ func redeliverator() {
 
 		doovers := getdoovers()
 
-		now := time.Now().UTC()
+		now := time.Now()
 		nexttime := now.Add(24 * time.Hour)
 		for _, d := range doovers {
 			if d.When.Before(now) {
@@ -168,7 +168,11 @@ func redeliverator() {
 				nexttime = d.When
 			}
 		}
-		dur := nexttime.Sub(now).Round(time.Second) + 5*time.Second
+		now = time.Now()
+		dur := 5 * time.Second
+		if now.Before(nexttime) {
+			dur += nexttime.Sub(now).Round(time.Second)
+		}
 		sleeper.Reset(dur)
 	}
 }

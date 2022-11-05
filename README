@@ -20,7 +20,7 @@ This does not imply the goal is to be what you want.
 -- build
 
 It should be sufficient to type make after unpacking a release.
-You'll need a go compiler version 1.13 or later. And libsqlite3.
+You'll need a go compiler version 1.16 or later. And libsqlite3.
 
 Even on a fast machine, building from source can take several seconds.
 
@@ -42,7 +42,7 @@ Then run honk.
 
 -- upgrade
 
-cp honk.db backup.db
+old-honk backup `date +backup-%F`
 ./honk upgrade
 ./honk
 

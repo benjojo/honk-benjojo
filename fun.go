@@ -73,6 +73,9 @@ func reverbolate(userid int64, honks []*Honk) {
 		if !h.Public {
 			h.Style += " limited"
 		}
+		if h.Whofore == 1 {
+			h.Style += " atme"
+		}
 		translate(h)
 		local := false
 		if h.Whofore == 2 || h.Whofore == 3 {
@@ -120,6 +123,11 @@ func reverbolate(userid int64, honks []*Honk) {
 		h.Precis = demoji(h.Precis)
 		h.Noise = demoji(h.Noise)
 		h.Open = "open"
+		for _, m := range h.Mentions {
+			if !m.IsPresent(h.Noise) {
+				h.Noise = "(" + m.Who + ")" + h.Noise
+			}
+		}
 
 		zap := make(map[string]bool)
 		{
@@ -375,18 +383,23 @@ func bunchofgrapes(m []string) []Mention {
 type Emu struct {
 	ID   string
 	Name string
+	Type string
 }
 
 var re_emus = regexp.MustCompile(`:[[:alnum:]_-]+:`)
 
 var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
 	fname := ename[1 : len(ename)-1]
-	_, err := os.Stat(dataDir + "/emus/" + fname + ".png")
-	if err != nil {
-		return Emu{Name: ename, ID: ""}, true
+	exts := []string{".png", ".gif"}
+	for _, ext := range exts {
+		_, err := os.Stat(dataDir + "/emus/" + fname + ext)
+		if err != nil {
+			continue
+		}
+		url := fmt.Sprintf("https://%s/emu/%s%s", serverName, fname, ext)
+		return Emu{ID: url, Name: ename, Type: "image/" + ext[1:]}, true
 	}
-	url := fmt.Sprintf("https://%s/emu/%s.png", serverName, fname)
-	return Emu{ID: url, Name: ename}, true
+	return Emu{Name: ename, ID: "", Type: "image/png"}, true
 }, Duration: 10 * time.Second})
 
 func herdofemus(noise string) []Emu {
@@ -406,6 +419,7 @@ func herdofemus(noise string) []Emu {
 
 var re_memes = regexp.MustCompile("meme: ?([^\n]+)")
 var re_avatar = regexp.MustCompile("avatar: ?([^\n]+)")
+var re_banner = regexp.MustCompile("banner: ?([^\n]+)")
 
 func memetize(honk *Honk) {
 	repl := func(x string) string {
@@ -627,14 +641,13 @@ func ziggy(userid int64) *KeyInfo {
 var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.PublicKey, bool) {
 	data := getxonker(keyname, "pubkey")
 	if data == "" {
-		var key httpsig.PublicKey
 		dlog.Printf("hitting the webs for missing pubkey: %s", keyname)
-		j, err := GetJunk(keyname)
+		j, err := GetJunk(serverUID, keyname)
 		if err != nil {
 			ilog.Printf("error getting %s pubkey: %s", keyname, err)
 			when := time.Now().UTC().Format(dbtimeformat)
 			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
-			return key, true
+			return httpsig.PublicKey{}, true
 		}
 		allinjest(originate(keyname), j)
 		data = getxonker(keyname, "pubkey")
@@ -642,8 +655,12 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.Publ
 			ilog.Printf("key not found after ingesting")
 			when := time.Now().UTC().Format(dbtimeformat)
 			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
-			return key, true
+			return httpsig.PublicKey{}, true
 		}
+	}
+	if data == "failed" {
+		ilog.Printf("lookup previously failed key %s", keyname)
+		return httpsig.PublicKey{}, true
 	}
 	_, key, err := httpsig.DecodeKey(data)
 	if err != nil {
@@ -653,14 +670,14 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.Publ
 	return key, true
 }, Limit: 512})
 
-func zaggy(keyname string) httpsig.PublicKey {
+func zaggy(keyname string) (httpsig.PublicKey, error) {
 	var key httpsig.PublicKey
 	zaggies.Get(keyname, &key)
-	return key
+	return key, nil
 }
 
 func savingthrow(keyname string) {
-	when := time.Now().UTC().Add(-30 * time.Minute).Format(dbtimeformat)
+	when := time.Now().Add(-30 * time.Minute).UTC().Format(dbtimeformat)
 	stmtDeleteXonker.Exec(keyname, "pubkey", when)
 	zaggies.Clear(keyname)
 }

@@ -195,8 +195,9 @@ func getconfig(db *sql.DB, key string, value interface{}) error {
 }
 
 type InitArgs struct {
-	Db     *sql.DB
-	Logger *log.Logger
+	Db       *sql.DB
+	Logger   *log.Logger
+	Insecure bool
 }
 
 // Init. Must be called with the database.
@@ -239,9 +240,7 @@ func Init(args InitArgs) {
 	if err != nil {
 		logger.Panic(err)
 	}
-	debug := false
-	getconfig(db, "debug", &debug)
-	securecookies = !debug
+	securecookies = !args.Insecure
 	getconfig(db, "csrfkey", &csrfkey)
 }
 

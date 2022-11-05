@@ -102,12 +102,16 @@ Image and video files are supported.
 Add custom emus (emoji) to the
 .Pa emus
 data directory.
-PNG files are supported.
+PNG and GIF files are supported.
 .Pp
 Site CSS may be overridden by creating a
 .Pa views/local.css
 file in the data directory.
+Site JS may similarly be included by creating
+.Pa views/local.js .
 A restart is required after changes.
+A site icon.png and favicon.ico will be served from the views directory
+in the data directory, if present.
 .Pp
 Custom HTML messages may be added to select pages by using the
 .Ic admin
@@ -150,6 +154,12 @@ Backups may be performed by running
 .Ic backup dirname .
 Backups only include the minimal necessary information, such as user posts
 and follower information, but not external posts.
+.Pp
+Sometimes servers simply disappear, resulting in many errors trying to deliver
+undeliverable messages.
+Running
+.Ic unplug Ar hostname
+will delete all subscriptions and pending deliveries.
 .Ss Upgrade
 Stop the old honk process.
 Backup the database.
@@ -161,30 +171,23 @@ Restart.
 The current version of the honk binary may be printed with the
 .Ic version
 command.
-.Ss unplug
-Sometimes servers simply disappear, resulting in many errors trying to deliver
-undeliverable messages.
-Running
-.Ic unplug Ar hostname
-will delete all subscriptions and pending deliveries.
 .Ss Security
 .Nm
 is not currently hardened against SSRF, server side request forgery.
 Be mindful of what other services may be exposed via localhost or the
 local network.
-.Ss Debug
-Debug mode may be enabled or disabled by running
-.Ic debug Ar on|off .
-In debug mode, secure cookies are disabled and templates are reloaded
-every request.
-Debug mode is really more useful for development, not debugging production.
+.Ss Development
+Development mode may be enabled or disabled by running
+.Ic devel Ar on|off .
+In devel mode, secure cookies are disabled, TLS certs are not verified,
+and templates are reloaded every request.
 .Ss Import
 Data may be imported and converted from other services using the
 .Ic import
 command.
-Posts are imported and backdated to appear as old honks.
-No other information is imported.
 Currently supports Mastodon and Twitter exported data.
+Posts are imported and backdated to appear as old honks.
+The Mastodon following list is imported, but must be refollowed.
 .Pp
 To prepare a Mastodon data archive, extract the archive-longhash.tar.gz file.
 .Dl ./honk import username mastodon source-directory
@@ -194,9 +197,15 @@ After unzipping the data archive, navigate to the tweet_media directory
 and unzip any zip files contained within.
 .Dl ./honk import username twitter source-directory
 .Ss Advanced Options
+Advanced configuration values may be set by running the
+.Ic setconfig Ar key value
+command.
+For example, to increase the fast timeout value from 5 seconds to 10:
+.Dl ./honk setconfig fasttimeout 10
+.Pp
 To support separate mentions without a subdomain,
 e.g. @user@example.com and https://honk.example.com/u/user,
-add a ('masqname', 'example.com') row to the config table of the database.
+set config key 'masqname' to 'example.com'.
 Route
 .Pa /.well-known/webfinger
 from the top domain to honk.
@@ -220,6 +229,8 @@ Media and attachment storage.
 Custom emoji.
 .It Pa memes
 Stickers and such.
+.It Pa views/local.js
+Locally customized JS.
 .It Pa views/local.css
 Locally customized CSS.
 .El

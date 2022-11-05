@@ -9,14 +9,19 @@ function encode(hash) {
 function post(url, data) {
 	var x = new XMLHttpRequest()
 	x.open("POST", url)
+	x.timeout = 30 * 1000
 	x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded")
 	x.send(data)
 }
-function get(url, whendone) {
+function get(url, whendone, whentimedout) {
 	var x = new XMLHttpRequest()
 	x.open("GET", url)
+	x.timeout = 15 * 1000
 	x.responseType = "json"
 	x.onload = function() { whendone(x) }
+	if (whentimedout) {
+		x.ontimeout = function(e) { whentimedout(x, e) }
+	}
 	x.send()
 }
 function bonk(el, xid) {
@@ -143,6 +148,8 @@ function hydrargs() {
 		args["c"] = arg
 	} else if (name == "honker") {
 		args["xid"] = arg
+	} else if (name == "user") {
+		args["uname"] = arg
 	}
 	return args
 }
@@ -160,10 +167,18 @@ function refreshhonks(btn) {
 	var stash = curpagestate.name + ":" + curpagestate.arg
 	args["tophid"] = tophid[stash]
 	get("/hydra?" + encode(args), function(xhr) {
-		var lenhonks = fillinhonks(xhr, true)
 		btn.innerHTML = "refresh"
 		btn.disabled = false
-		refreshupdate(" " + lenhonks + " new")
+		if (xhr.status == 200) {
+			var lenhonks = fillinhonks(xhr, true)
+			refreshupdate(" " + lenhonks + " new")
+		} else {
+			refreshupdate(" status: " + xhr.status)
+		}
+	}, function(xhr, e) {
+		btn.innerHTML = "refresh"
+		btn.disabled = false
+		refreshupdate(" timed out")
 	})
 }
 function statechanger(evt) {
@@ -203,7 +218,15 @@ function switchtopage(name, arg) {
 		// or create one and fill it
 		honksonpage.prepend(document.createElement("div"))
 		var args = hydrargs()
-		get("/hydra?" + encode(args), function(xhr) { fillinhonks(xhr, false) })
+		get("/hydra?" + encode(args), function(xhr) {
+			if (xhr.status == 200) {
+				var lenhonks = fillinhonks(xhr, false)
+			} else {
+				refreshupdate(" status: " + xhr.status)
+			}
+		}, function(xhr, e) {
+			refreshupdate(" timed out")
+		})
 	}
 	refreshupdate("")
 }

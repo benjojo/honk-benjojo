@@ -1,5 +1,35 @@
 changelog
 
+=== 0.9.8 Tentative Tentacle
+
++ Switch database to WAL mode.
+
+- go version 1.16 required.
+
++ Specify banner: image in profile.
+
++ Update activity compatibility with mastodon.
+
+- Signed fetch.
+
++ Better unicode hashtags.
+
++ Some more configuration options.
+
++ Some UI improvements to web interface.
+
++ Add atme class to mentions
+
++ Improvements to the mastodon importer.
+
++ More hydration capable pages.
+
++ Support for local.js.
+
++ Better error messages for timeouts.
+
++ Some improved html and markdown.
+
 === 0.9.7 Witless Weekender
 
 +++ Word guessing game. Wonk wonk!

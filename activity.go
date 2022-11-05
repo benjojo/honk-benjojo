@@ -46,6 +46,9 @@ var falsenames = []string{
 var itiswhatitis = "https://www.w3.org/ns/activitystreams"
 var thewholeworld = "https://www.w3.org/ns/activitystreams#Public"
 
+var fastTimeout time.Duration = 5
+var slowTimeout time.Duration = 30
+
 func friendorfoe(ct string) bool {
 	ct = strings.ToLower(ct)
 	for _, at := range falsenames {
@@ -56,7 +59,7 @@ func friendorfoe(ct string) bool {
 	return false
 }
 
-var debugClient = &http.Client{
+var develClient = &http.Client{
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -70,8 +73,8 @@ func PostJunk(keyname string, key httpsig.PrivateKey, url string, j junk.Junk) e
 
 func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) error {
 	client := http.DefaultClient
-	if debugMode {
-		client = debugClient
+	if develMode {
+		client = develClient
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(msg))
 	if err != nil {
@@ -80,7 +83,7 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	req.Header.Set("User-Agent", "honksnonk/5.0; "+serverName)
 	req.Header.Set("Content-Type", theonetruename)
 	httpsig.SignRequest(keyname, key, req, msg)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*slowTimeout*time.Second)
 	defer cancel()
 	req = req.WithContext(ctx)
 	resp, err := client.Do(req)
@@ -99,22 +102,22 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	return nil
 }
 
-func GetJunk(url string) (junk.Junk, error) {
-	return GetJunkTimeout(url, 30*time.Second)
+func GetJunk(userid int64, url string) (junk.Junk, error) {
+	return GetJunkTimeout(userid, url, slowTimeout*time.Second)
 }
 
-func GetJunkFast(url string) (junk.Junk, error) {
-	return GetJunkTimeout(url, 5*time.Second)
+func GetJunkFast(userid int64, url string) (junk.Junk, error) {
+	return GetJunkTimeout(userid, url, fastTimeout*time.Second)
 }
 
-func GetJunkHardMode(url string) (junk.Junk, error) {
-	j, err := GetJunk(url)
+func GetJunkHardMode(userid int64, url string) (junk.Junk, error) {
+	j, err := GetJunk(userid, url)
 	if err != nil {
 		emsg := err.Error()
 		if emsg == "http get status: 502" || strings.Contains(emsg, "timeout") {
 			ilog.Printf("trying again after error: %s", emsg)
 			time.Sleep(time.Duration(60+notrand.Int63n(60)) * time.Second)
-			j, err = GetJunk(url)
+			j, err = GetJunk(userid, url)
 			if err != nil {
 				ilog.Printf("still couldn't get it")
 			} else {
@@ -127,17 +130,58 @@ func GetJunkHardMode(url string) (junk.Junk, error) {
 
 var flightdeck = gate.NewSerializer()
 
-func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
+var signGets = true
+
+func junkGet(userid int64, url string, args junk.GetArgs) (junk.Junk, error) {
 	client := http.DefaultClient
-	if debugMode {
-		client = debugClient
+	if args.Client != nil {
+		client = args.Client
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if args.Accept != "" {
+		req.Header.Set("Accept", args.Accept)
+	}
+	if args.Agent != "" {
+		req.Header.Set("User-Agent", args.Agent)
+	}
+	if signGets {
+		var ki *KeyInfo
+		ok := ziggies.Get(userid, &ki)
+		if ok {
+			httpsig.SignRequest(ki.keyname, ki.seckey, req, nil)
+		}
+	}
+	if args.Timeout != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), args.Timeout)
+		defer cancel()
+		req = req.WithContext(ctx)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("http get status: %d", resp.StatusCode)
+	}
+	return junk.Read(resp.Body)
+}
+
+func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk, error) {
+	client := http.DefaultClient
+	if develMode {
+		client = develClient
 	}
 	fn := func() (interface{}, error) {
 		at := thefakename
 		if strings.Contains(url, ".well-known/webfinger?resource") {
 			at = "application/jrd+json"
 		}
-		j, err := junk.Get(url, junk.GetArgs{
+		j, err := junkGet(userid, url, junk.GetArgs{
 			Accept:  at,
 			Agent:   "honksnonk/5.0; " + serverName,
 			Timeout: timeout,
@@ -156,8 +200,8 @@ func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
 
 func fetchsome(url string) ([]byte, error) {
 	client := http.DefaultClient
-	if debugMode {
-		client = debugClient
+	if develMode {
+		client = develClient
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -327,7 +371,7 @@ var boxofboxes = cache.New(cache.Options{Filler: func(ident string) (*Box, bool)
 	if err != nil {
 		dlog.Printf("need to get boxes for %s", ident)
 		var j junk.Junk
-		j, err = GetJunk(ident)
+		j, err = GetJunk(serverUID, ident)
 		if err != nil {
 			dlog.Printf("error getting boxes: %s", err)
 			return nil, false
@@ -346,7 +390,7 @@ var boxofboxes = cache.New(cache.Options{Filler: func(ident string) (*Box, bool)
 
 func gimmexonks(user *WhatAbout, outbox string) {
 	dlog.Printf("getting outbox: %s", outbox)
-	j, err := GetJunk(outbox)
+	j, err := GetJunk(user.ID, outbox)
 	if err != nil {
 		ilog.Printf("error getting outbox: %s", err)
 		return
@@ -365,7 +409,7 @@ func gimmexonks(user *WhatAbout, outbox string) {
 			} else {
 				page1, ok := j.GetString("first")
 				if ok {
-					j, err = GetJunk(page1)
+					j, err = GetJunk(user.ID, page1)
 					if err != nil {
 						ilog.Printf("error gettings page1: %s", err)
 						return
@@ -391,7 +435,7 @@ func gimmexonks(user *WhatAbout, outbox string) {
 				if !needxonkid(user, xid) {
 					continue
 				}
-				obj, err = GetJunk(xid)
+				obj, err = GetJunk(user.ID, xid)
 				if err != nil {
 					ilog.Printf("error getting item: %s", err)
 					continue
@@ -475,7 +519,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			ilog.Printf("in too deep")
 			return
 		}
-		obj, err := GetJunkHardMode(xid)
+		obj, err := GetJunkHardMode(user.ID, xid)
 		if err != nil {
 			ilog.Printf("error getting onemore: %s: %s", xid, err)
 			return
@@ -543,7 +587,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return nil
 			}
 			dlog.Printf("getting bonk: %s", xid)
-			obj, err = GetJunkHardMode(xid)
+			obj, err = GetJunkHardMode(user.ID, xid)
 			if err != nil {
 				ilog.Printf("error getting bonk: %s: %s", xid, err)
 			}
@@ -561,7 +605,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					ilog.Printf("out of bounds %s not from %s", xid, origin)
 					return nil
 				}
-				obj, err = GetJunkHardMode(xid)
+				obj, err = GetJunkHardMode(user.ID, xid)
 				if err != nil {
 					ilog.Printf("error getting creation: %s", err)
 				}
@@ -578,7 +622,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					dlog.Printf("don't need read obj: %s", xid)
 					return nil
 				}
-				obj, err = GetJunkHardMode(xid)
+				obj, err = GetJunkHardMode(user.ID, xid)
 				if err != nil {
 					ilog.Printf("error getting read: %s", err)
 					return nil
@@ -594,7 +638,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					dlog.Printf("don't need added obj: %s", xid)
 					return nil
 				}
-				obj, err = GetJunkHardMode(xid)
+				obj, err = GetJunkHardMode(user.ID, xid)
 				if err != nil {
 					ilog.Printf("error getting add: %s", err)
 					return nil
@@ -669,6 +713,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		}
 		xonk.Audience = append(xonk.Audience, xonk.Honker)
 		xonk.Audience = oneofakind(xonk.Audience)
+		xonk.Public = loudandproud(xonk.Audience)
 
 		var mentions []Mention
 		if obj != nil {
@@ -956,7 +1001,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 		}
 		if !isUpdate && needxonk(user, &xonk) {
-			if rid != "" {
+			if rid != "" && xonk.Public {
 				if needxonkid(user, rid) {
 					goingup++
 					saveonemore(rid)
@@ -1095,10 +1140,6 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		fallthrough
 	case "honk":
 		j["type"] = "Create"
-		if h.What == "update" {
-			j["type"] = "Update"
-		}
-
 		jo = junk.New()
 		jo["id"] = h.XID
 		jo["type"] = "Note"
@@ -1106,6 +1147,10 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			jo["type"] = "Event"
 		} else if h.What == "wonk" {
 			jo["type"] = "GuessWord"
+		}
+		if h.What == "update" {
+			j["type"] = "Update"
+			jo["updated"] = dt
 		}
 		jo["published"] = dt
 		jo["url"] = h.XID
@@ -1165,7 +1210,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			t["name"] = e.Name
 			i := junk.New()
 			i["type"] = "Image"
-			i["mediaType"] = "image/png"
+			i["mediaType"] = e.Type
 			i["url"] = e.ID
 			t["icon"] = i
 			tags = append(tags, t)
@@ -1338,7 +1383,7 @@ func chonkifymsg(user *WhatAbout, ch *Chonk) []byte {
 		t["name"] = e.Name
 		i := junk.New()
 		i["type"] = "Image"
-		i["mediaType"] = "image/png"
+		i["mediaType"] = e.Type
 		i["url"] = e.ID
 		t["icon"] = i
 		tags = append(tags, t)
@@ -1494,6 +1539,13 @@ func junkuser(user *WhatAbout) junk.Junk {
 			a["url"] = u
 		}
 		j["icon"] = a
+		if ban := user.Options.Banner; ban != "" {
+			a := junk.New()
+			a["type"] = "Image"
+			a["mediaType"] = "image/jpg"
+			a["url"] = ban
+			j["image"] = a
+		}
 	} else {
 		j["type"] = "Service"
 	}
@@ -1536,7 +1588,7 @@ var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) 
 		return href, true
 	}
 	dlog.Printf("fishing for %s", name)
-	j, err := GetJunkFast(fmt.Sprintf("https://%s/.well-known/webfinger?resource=acct:%s", m[1], name))
+	j, err := GetJunkFast(serverUID, fmt.Sprintf("https://%s/.well-known/webfinger?resource=acct:%s", m[1], name))
 	if err != nil {
 		ilog.Printf("failed to go fish %s: %s", name, err)
 		return "", true
@@ -1581,7 +1633,7 @@ func investigate(name string) (*SomeThing, error) {
 	if name == "" {
 		return nil, fmt.Errorf("no name")
 	}
-	obj, err := GetJunkFast(name)
+	obj, err := GetJunkFast(serverUID, name)
 	if err != nil {
 		return nil, err
 	}

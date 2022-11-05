@@ -32,6 +32,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/mux"
 	"humungus.tedunangst.com/r/webs/cache"
@@ -47,7 +48,7 @@ var readviews *templates.Template
 var userSep = "u"
 var honkSep = "h"
 
-var debugMode = false
+var develMode = false
 
 func getuserstyle(u *login.UserInfo) template.CSS {
 	if u == nil {
@@ -78,6 +79,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 	templinfo["StyleParam"] = getassetparam(viewDir + "/views/style.css")
 	templinfo["LocalStyleParam"] = getassetparam(dataDir + "/views/local.css")
 	templinfo["JSParam"] = getassetparam(viewDir + "/views/honkpage.js")
+	templinfo["LocalJSParam"] = getassetparam(dataDir + "/views/local.js")
 	templinfo["ServerName"] = serverName
 	templinfo["IconName"] = iconName
 	templinfo["UserSep"] = userSep
@@ -147,6 +149,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 
 func showfunzone(w http.ResponseWriter, r *http.Request) {
 	var emunames, memenames []string
+	emuext := make(map[string]string)
 	dir, err := os.Open(dataDir + "/emus")
 	if err == nil {
 		emunames, _ = dir.Readdirnames(0)
@@ -155,6 +158,7 @@ func showfunzone(w http.ResponseWriter, r *http.Request) {
 	for i, e := range emunames {
 		if len(e) > 4 {
 			emunames[i] = e[:len(e)-4]
+			emuext[emunames[i]] = e[len(e)-4:]
 		}
 	}
 	dir, err = os.Open(dataDir + "/memes")
@@ -166,6 +170,7 @@ func showfunzone(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(memenames)
 	templinfo := getInfo(r)
 	templinfo["Emus"] = emunames
+	templinfo["Emuext"] = emuext
 	templinfo["Memes"] = memenames
 	err = readviews.Execute(w, "funzone.html", templinfo)
 	if err != nil {
@@ -235,7 +240,7 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 			modtime = honk.Date
 		}
 	}
-	if !debugMode {
+	if !develMode {
 		w.Header().Set("Cache-Control", "max-age=300")
 		w.Header().Set("Last-Modified", modtime.Format(http.TimeFormat))
 	}
@@ -336,9 +341,8 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	j, err := junk.FromBytes(payload)
 	if err != nil {
 		ilog.Printf("bad payload: %s", err)
-		io.WriteString(os.Stdout, "bad payload\n")
-		os.Stdout.Write(payload)
-		io.WriteString(os.Stdout, "\n")
+		ilog.Writer().Write(payload)
+		ilog.Writer().Write([]byte{'\n'})
 		return
 	}
 
@@ -364,9 +368,8 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		ilog.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
 		if keyname != "" {
 			ilog.Printf("bad signature from %s", keyname)
-			io.WriteString(os.Stdout, "bad payload\n")
-			os.Stdout.Write(payload)
-			io.WriteString(os.Stdout, "\n")
+			ilog.Writer().Write(payload)
+			ilog.Writer().Write([]byte{'\n'})
 		}
 		http.Error(w, "what did you call me?", http.StatusTeapot)
 		return
@@ -455,9 +458,8 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 	j, err := junk.FromBytes(payload)
 	if err != nil {
 		ilog.Printf("bad payload: %s", err)
-		io.WriteString(os.Stdout, "bad payload\n")
-		os.Stdout.Write(payload)
-		io.WriteString(os.Stdout, "\n")
+		ilog.Writer().Write(payload)
+		ilog.Writer().Write([]byte{'\n'})
 		return
 	}
 	if crappola(j) {
@@ -472,9 +474,8 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		ilog.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
 		if keyname != "" {
 			ilog.Printf("bad signature from %s", keyname)
-			io.WriteString(os.Stdout, "bad payload\n")
-			os.Stdout.Write(payload)
-			io.WriteString(os.Stdout, "\n")
+			ilog.Writer().Write(payload)
+			ilog.Writer().Write([]byte{'\n'})
 		}
 		http.Error(w, "what did you call me?", http.StatusTeapot)
 		return
@@ -488,7 +489,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 	if rejectactor(user.ID, who) {
 		return
 	}
-	re_ont := regexp.MustCompile("https://" + serverName + "/o/([[:alnum:]]+)")
+	re_ont := regexp.MustCompile("https://" + serverName + "/o/([\\pL[:digit:]]+)")
 	what, _ := j.GetString("type")
 	dlog.Printf("server got a %s", what)
 	switch what {
@@ -550,7 +551,7 @@ func ximport(w http.ResponseWriter, r *http.Request) {
 		if p != nil {
 			xid = p.XID
 		}
-		j, err := GetJunk(xid)
+		j, err := GetJunk(u.UserID, xid)
 		if err != nil {
 			http.Error(w, "error getting external object", http.StatusInternalServerError)
 			ilog.Printf("error getting external object: %s", err)
@@ -719,6 +720,8 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	honks := gethonksbyuser(name, u != nil && u.Username == name, 0)
 	templinfo := getInfo(r)
+	templinfo["PageName"] = "user"
+	templinfo["PageArg"] = name
 	templinfo["Name"] = user.Name
 	templinfo["WhatAbout"] = user.HTAbout
 	templinfo["ServerMessage"] = ""
@@ -853,7 +856,7 @@ func thelistingoftheontologies(w http.ResponseWriter, r *http.Request) {
 			elog.Printf("error scanning ont: %s", err)
 			continue
 		}
-		if len(o.Name) > 24 {
+		if utf8.RuneCountInString(o.Name) > 24 {
 			continue
 		}
 		o.Name = o.Name[1:]
@@ -862,11 +865,12 @@ func thelistingoftheontologies(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(onts, func(i, j int) bool {
 		return onts[i].Name < onts[j].Name
 	})
-	if u == nil && !debugMode {
+	if u == nil && !develMode {
 		w.Header().Set("Cache-Control", "max-age=300")
 	}
 	templinfo := getInfo(r)
 	templinfo["Onts"] = onts
+	templinfo["FirstRune"] = func(s string) rune { r, _ := utf8.DecodeRuneInString(s); return r }
 	err = readviews.Execute(w, "onts.html", templinfo)
 	if err != nil {
 		elog.Print(err)
@@ -1085,7 +1089,7 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 			templinfo["TopHID"] = 0
 		}
 	}
-	if u == nil && !debugMode {
+	if u == nil && !develMode {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
 	err := readviews.Execute(w, "honkpage.html", templinfo)
@@ -1141,6 +1145,19 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	}
 	if ava != options.Avatar {
 		options.Avatar = ava
+		sendupdate = true
+	}
+	ban := re_banner.FindString(whatabout)
+	if ban != "" {
+		whatabout = re_banner.ReplaceAllString(whatabout, "")
+		ban = ban[7:]
+		if ban[0] == ' ' {
+			ban = ban[1:]
+		}
+		ban = fmt.Sprintf("https://%s/meme/%s", serverName, ban)
+	}
+	if ban != options.Banner {
+		options.Banner = ban
 		sendupdate = true
 	}
 	whatabout = strings.TrimSpace(whatabout)
@@ -1207,7 +1224,7 @@ func bonkit(xid string, user *WhatAbout) {
 		Convoy:   xonk.Convoy,
 		Audience: []string{thewholeworld, oonker},
 		Public:   true,
-		Format:   "html",
+		Format:   xonk.Format,
 		Place:    xonk.Place,
 		Onts:     xonk.Onts,
 		Time:     xonk.Time,
@@ -1884,7 +1901,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	combos = " " + combos + " "
 	honkerid, _ := strconv.ParseInt(r.FormValue("honkerid"), 10, 0)
 
-	re_namecheck := regexp.MustCompile("[[:alnum:]_.-]+")
+	re_namecheck := regexp.MustCompile("[\\pL[:digit:]_.-]+")
 	if name != "" && !re_namecheck.MatchString(name) {
 		http.Error(w, "please use a plainer name", http.StatusInternalServerError)
 		return
@@ -1928,53 +1945,12 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 		flavor = "peep"
 	}
 
-	if url[0] == '#' {
-		flavor = "peep"
-		if name == "" {
-			name = url[1:]
-		}
-		_, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, url, mj)
-		if err != nil {
-			elog.Print(err)
-			return
-		}
-		http.Redirect(w, r, "/honkers", http.StatusSeeOther)
-		return
-	}
-
-	info, err := investigate(url)
+	err := savehonker(user, url, name, flavor, combos, mj)
 	if err != nil {
-		http.Error(w, "error investigating: "+err.Error(), http.StatusInternalServerError)
-		ilog.Printf("failed to investigate honker: %s", err)
-		return
-	}
-	url = info.XID
-
-	if name == "" {
-		name = info.Name
-	}
-
-	var x string
-	db := opendatabase()
-	row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('sub', 'unsub', 'peep')", url, u.UserID)
-	err = row.Scan(&x)
-	if err != sql.ErrNoRows {
-		http.Error(w, "it seems you are already subscribed to them", http.StatusInternalServerError)
-		if err != nil {
-			elog.Printf("honker scan err: %s", err)
-		}
+		http.Error(w, "had some trouble with that: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	res, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, info.Owner, mj)
-	if err != nil {
-		elog.Print(err)
-		return
-	}
-	honkerid, _ = res.LastInsertId()
-	if flavor == "presub" {
-		followyou(user, honkerid)
-	}
 	http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 }
 
@@ -2054,6 +2030,9 @@ func accountpage(w http.ResponseWriter, r *http.Request) {
 	if ava := user.Options.Avatar; ava != "" {
 		about += "\n\navatar: " + ava[strings.LastIndexByte(ava, '/')+1:]
 	}
+	if ban := user.Options.Banner; ban != "" {
+		about += "\n\nbanner: " + ban[strings.LastIndexByte(ban, '/')+1:]
+	}
 	templinfo["WhatAbout"] = about
 	err := readviews.Execute(w, "account.html", templinfo)
 	if err != nil {
@@ -2125,31 +2104,34 @@ func somedays() string {
 }
 
 func avatate(w http.ResponseWriter, r *http.Request) {
-	if debugMode {
+	if develMode {
 		loadAvatarColors()
 	}
 	n := r.FormValue("a")
 	hex := r.FormValue("hex") == "1"
 	a := genAvatar(n, hex)
-	if !debugMode {
+	if !develMode {
 		w.Header().Set("Cache-Control", "max-age="+somedays())
 	}
 	w.Write(a)
 }
 
-func serveasset(w http.ResponseWriter, r *http.Request) {
-	if !debugMode {
+func serveviewasset(w http.ResponseWriter, r *http.Request) {
+	serveasset(w, r, viewDir)
+}
+func servedataasset(w http.ResponseWriter, r *http.Request) {
+	serveasset(w, r, dataDir)
+}
+
+func serveasset(w http.ResponseWriter, r *http.Request, basedir string) {
+	if !develMode {
 		w.Header().Set("Cache-Control", "max-age=7776000")
 	}
-	dir := viewDir
-	if r.URL.Path == "/local.css" {
-		dir = dataDir
-	}
-	http.ServeFile(w, r, dir+"/views"+r.URL.Path)
+	http.ServeFile(w, r, basedir+"/views"+r.URL.Path)
 }
 func servehelp(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	if !debugMode {
+	if !develMode {
 		w.Header().Set("Cache-Control", "max-age=3600")
 	}
 	http.ServeFile(w, r, viewDir+"/docs/"+name)
@@ -2163,7 +2145,7 @@ func servehtml(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/about" {
 		templinfo["Sensors"] = getSensors()
 	}
-	if u == nil && !debugMode {
+	if u == nil && !develMode {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
 	err := readviews.Execute(w, r.URL.Path[1:]+".html", templinfo)
@@ -2276,6 +2258,10 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 			</form>`, login.GetCSRF("submithonker", r), xid)
 		msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, xid, xid, miniform)
 		hydra.Srvmsg = msg
+	case "user":
+		uname := r.FormValue("uname")
+		honks = gethonksbyuser(uname, u != nil && u.Username == uname, wanted)
+		hydra.Srvmsg = templates.Sprintf("honks by user: %s", uname)
 	default:
 		http.NotFound(w, r)
 	}
@@ -2399,8 +2385,7 @@ var workinprogress = 0
 
 func enditall() {
 	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt)
-	signal.Notify(sig, syscall.SIGTERM)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	<-sig
 	ilog.Printf("stopping...")
 	for i := 0; i < workinprogress; i++ {
@@ -2416,38 +2401,34 @@ func enditall() {
 
 var preservehooks []func()
 
-func wait100ms() chan struct{} {
-	c := make(chan struct{})
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		close(c)
-	}()
-	return c
-}
-
 func bgmonitor() {
 	for {
+		when := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
+		_, err := stmtDeleteOldXonkers.Exec("pubkey", when)
+		if err != nil {
+			elog.Printf("error deleting old xonkers: %s", err)
+		}
+		zaggies.Flush()
 		time.Sleep(50 * time.Minute)
 	}
 }
 
 func serve() {
 	db := opendatabase()
-	login.Init(login.InitArgs{Db: db, Logger: ilog})
+	login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: develMode})
 
 	listener, err := openListener()
 	if err != nil {
 		elog.Fatal(err)
 	}
-	go runBackendServer()
+	runBackendServer()
 	go enditall()
 	go redeliverator()
 	go tracker()
 	go bgmonitor()
 	loadLingo()
-	w100 := wait100ms()
 
-	readviews = templates.Load(debugMode,
+	readviews = templates.Load(develMode,
 		viewDir+"/views/honkpage.html",
 		viewDir+"/views/honkfrags.html",
 		viewDir+"/views/honkers.html",
@@ -2466,14 +2447,18 @@ func serve() {
 		viewDir+"/views/onts.html",
 		viewDir+"/views/honkpage.js",
 	)
-	if !debugMode {
-		assets := []string{viewDir + "/views/style.css", dataDir + "/views/local.css", viewDir + "/views/honkpage.js"}
+	if !develMode {
+		assets := []string{
+			viewDir + "/views/style.css",
+			dataDir + "/views/local.css",
+			viewDir + "/views/honkpage.js",
+			dataDir + "/views/local.js",
+		}
 		for _, s := range assets {
 			savedassetparams[s] = getassetparam(s)
 		}
 		loadAvatarColors()
 	}
-	<-w100
 
 	for _, h := range preservehooks {
 		h()
@@ -2493,17 +2478,17 @@ func serve() {
 	getters.HandleFunc("/events", homepage)
 	getters.HandleFunc("/robots.txt", nomoroboto)
 	getters.HandleFunc("/rss", showrss)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}", showuser)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/"+honkSep+"/{xid:[[:alnum:]]+}", showonehonk)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/rss", showrss)
-	posters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/inbox", inbox)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/outbox", outbox)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/followers", emptiness)
-	getters.HandleFunc("/"+userSep+"/{name:[[:alnum:]]+}/following", emptiness)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}", showuser)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/"+honkSep+"/{xid:[\\pL[:digit:]]+}", showonehonk)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/rss", showrss)
+	posters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/inbox", inbox)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/outbox", outbox)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/followers", emptiness)
+	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/following", emptiness)
 	getters.HandleFunc("/a", avatate)
 	getters.HandleFunc("/o", thelistingoftheontologies)
 	getters.HandleFunc("/o/{name:.+}", showontology)
-	getters.HandleFunc("/d/{xid:[[:alnum:].]+}", servefile)
+	getters.HandleFunc("/d/{xid:[\\pL[:digit:].]+}", servefile)
 	getters.HandleFunc("/emu/{emu:[^.]*[^/]+}", serveemu)
 	getters.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
 	getters.HandleFunc("/.well-known/webfinger", fingerlicker)
@@ -2514,15 +2499,19 @@ func serve() {
 	posters.HandleFunc("/server/inbox", serverinbox)
 	posters.HandleFunc("/inbox", serverinbox)
 
-	getters.HandleFunc("/style.css", serveasset)
-	getters.HandleFunc("/local.css", serveasset)
-	getters.HandleFunc("/honkpage.js", serveasset)
-	getters.HandleFunc("/wonk.js", serveasset)
+	getters.HandleFunc("/style.css", serveviewasset)
+	getters.HandleFunc("/honkpage.js", serveviewasset)
+	getters.HandleFunc("/wonk.js", serveviewasset)
+	getters.HandleFunc("/local.css", servedataasset)
+	getters.HandleFunc("/local.js", servedataasset)
+	getters.HandleFunc("/icon.png", servedataasset)
+	getters.HandleFunc("/favicon.ico", servedataasset)
+
 	getters.HandleFunc("/about", servehtml)
 	getters.HandleFunc("/login", servehtml)
 	posters.HandleFunc("/dologin", login.LoginFunc)
 	getters.HandleFunc("/logout", login.LogoutFunc)
-	getters.HandleFunc("/help/{name:[[:alnum:]_.-]+}", servehelp)
+	getters.HandleFunc("/help/{name:[\\pL[:digit:]_.-]+}", servehelp)
 
 	getters.HandleFunc("/bloat/wonkles", servewonkles)
 
@@ -2548,9 +2537,9 @@ func serve() {
 	loggedin.Handle("/saveuser", login.CSRFWrap("saveuser", http.HandlerFunc(saveuser)))
 	loggedin.Handle("/ximport", login.CSRFWrap("ximport", http.HandlerFunc(ximport)))
 	loggedin.HandleFunc("/honkers", showhonkers)
-	loggedin.HandleFunc("/h/{name:[[:alnum:]_.-]+}", showhonker)
+	loggedin.HandleFunc("/h/{name:[\\pL[:digit:]_.-]+}", showhonker)
 	loggedin.HandleFunc("/h", showhonker)
-	loggedin.HandleFunc("/c/{name:[[:alnum:]_.-]+}", showcombo)
+	loggedin.HandleFunc("/c/{name:[\\pL[:digit:]_.-]+}", showcombo)
 	loggedin.HandleFunc("/c", showcombos)
 	loggedin.HandleFunc("/t", showconvoy)
 	loggedin.HandleFunc("/q", showsearch)

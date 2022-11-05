@@ -57,7 +57,7 @@ var permittedtags = map[string]bool{
 	"sub": true, "sup": true, "del": true, "tt": true, "small": true,
 	"ol": true, "ul": true, "li": true, "dl": true, "dt": true, "dd": true,
 }
-var permittedattr = map[string]bool{"colspan": true, "rowspan": true}
+var permittedattr = map[string]bool{"colspan": true, "rowspan": true, "text-align":true}
 var bannedtags = map[string]bool{"script": true, "style": true}
 
 // Returns the value for a node attribute.

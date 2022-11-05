@@ -111,11 +111,14 @@
 <p class="Pp">The funzone contains fun flair that users may add to posts and
     profiles. Add custom memes (stickers) to the <span class="Pa">memes</span>
     data directory. Image and video files are supported. Add custom emus (emoji)
-    to the <span class="Pa">emus</span> data directory. PNG files are
-  supported.</p>
+    to the <span class="Pa">emus</span> data directory. PNG and GIF files are
+    supported.</p>
 <p class="Pp">Site CSS may be overridden by creating a
-    <span class="Pa">views/local.css</span> file in the data directory. A
-    restart is required after changes.</p>
+    <span class="Pa">views/local.css</span> file in the data directory. Site JS
+    may similarly be included by creating
+    <span class="Pa">views/local.js</span>. A restart is required after changes.
+    A site icon.png and favicon.ico will be served from the views directory in
+    the data directory, if present.</p>
 <p class="Pp">Custom HTML messages may be added to select pages by using the
     <code class="Ic">admin</code> command. This interface is a little rough. A
     restart is required after changes.</p>
@@ -149,6 +152,10 @@
 <p class="Pp">Backups may be performed by running <code class="Ic">backup
     dirname</code>. Backups only include the minimal necessary information, such
     as user posts and follower information, but not external posts.</p>
+<p class="Pp">Sometimes servers simply disappear, resulting in many errors
+    trying to deliver undeliverable messages. Running
+    <code class="Ic">unplug</code> <var class="Ar">hostname</var> will delete
+    all subscriptions and pending deliveries.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Upgrade"><a class="permalink" href="#Upgrade">Upgrade</a></h2>
@@ -158,31 +165,24 @@
     <code class="Ic">version</code> command.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="unplug"><a class="permalink" href="#unplug">unplug</a></h2>
-<p class="Pp">Sometimes servers simply disappear, resulting in many errors
-    trying to deliver undeliverable messages. Running
-    <code class="Ic">unplug</code> <var class="Ar">hostname</var> will delete
-    all subscriptions and pending deliveries.</p>
-</section>
-<section class="Ss">
 <h2 class="Ss" id="Security"><a class="permalink" href="#Security">Security</a></h2>
 <p class="Pp"><code class="Nm">honk</code> is not currently hardened against
     SSRF, server side request forgery. Be mindful of what other services may be
     exposed via localhost or the local network.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="Debug"><a class="permalink" href="#Debug">Debug</a></h2>
-<p class="Pp">Debug mode may be enabled or disabled by running
-    <code class="Ic">debug</code> <var class="Ar">on|off</var>. In debug mode,
-    secure cookies are disabled and templates are reloaded every request. Debug
-    mode is really more useful for development, not debugging production.</p>
+<h2 class="Ss" id="Development"><a class="permalink" href="#Development">Development</a></h2>
+<p class="Pp">Development mode may be enabled or disabled by running
+    <code class="Ic">devel</code> <var class="Ar">on|off</var>. In devel mode,
+    secure cookies are disabled, TLS certs are not verified, and templates are
+    reloaded every request.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Import"><a class="permalink" href="#Import">Import</a></h2>
 <p class="Pp">Data may be imported and converted from other services using the
-    <code class="Ic">import</code> command. Posts are imported and backdated to
-    appear as old honks. No other information is imported. Currently supports
-    Mastodon and Twitter exported data.</p>
+    <code class="Ic">import</code> command. Currently supports Mastodon and
+    Twitter exported data. Posts are imported and backdated to appear as old
+    honks. The Mastodon following list is imported, but must be refollowed.</p>
 <p class="Pp">To prepare a Mastodon data archive, extract the
     archive-longhash.tar.gz file.</p>
 <div class="Bd Bd-indent"><code class="Li">./honk import username mastodon
@@ -196,9 +196,14 @@
 <section class="Ss">
 <h2 class="Ss" id="Advanced_Options"><a class="permalink" href="#Advanced_Options">Advanced
   Options</a></h2>
+<p class="Pp">Advanced configuration values may be set by running the
+    <code class="Ic">setconfig</code> <var class="Ar">key value</var> command.
+    For example, to increase the fast timeout value from 5 seconds to 10:</p>
+<div class="Bd Bd-indent"><code class="Li">./honk setconfig fasttimeout
+  10</code></div>
 <p class="Pp">To support separate mentions without a subdomain, e.g.
-    @user@example.com and https://honk.example.com/u/user, add a ('masqname',
-    'example.com') row to the config table of the database. Route
+    @user@example.com and https://honk.example.com/u/user, set config key
+    'masqname' to 'example.com'. Route
     <span class="Pa">/.well-known/webfinger</span> from the top domain to
   honk.</p>
 <p class="Pp">Custom URL seperators (not &quot;u&quot; and &quot;h&quot;) may be
@@ -222,6 +227,8 @@
   <dd>Custom emoji.</dd>
   <dt><span class="Pa">memes</span></dt>
   <dd>Stickers and such.</dd>
+  <dt><span class="Pa">views/local.js</span></dt>
+  <dd>Locally customized JS.</dd>
   <dt><span class="Pa">views/local.css</span></dt>
   <dd>Locally customized CSS.</dd>
 </dl>
@@ -280,8 +287,8 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">February 12, 2022</td>
-    <td class="foot-os">OpenBSD 7.0</td>
+    <td class="foot-date">May 31, 2022</td>
+    <td class="foot-os">OpenBSD 7.1</td>
   </tr>
 </table>
 </body>

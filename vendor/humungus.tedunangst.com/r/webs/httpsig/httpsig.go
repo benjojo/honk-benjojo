@@ -27,7 +27,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -76,7 +75,7 @@ func (privkey PrivateKey) Sign(msg []byte) []byte {
 	case RSA:
 		sig, err := rsa.SignPKCS1v15(rand.Reader, privkey.Key.(*rsa.PrivateKey), crypto.SHA256, msg)
 		if err != nil {
-			log.Panic("error signing msg: %s", err)
+			panic(fmt.Errorf("error signing msg: %s", err))
 		}
 		return sig
 	case Ed25519:
@@ -156,7 +155,7 @@ var re_sighdrval = regexp.MustCompile(`(.*)="(.*)"`)
 // The request body should be provided separately.
 // The lookupPubkey function takes a keyname and returns a public key.
 // Returns keyname if known, and/or error.
-func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) PublicKey) (string, error) {
+func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) (PublicKey, error)) (string, error) {
 	sighdr := req.Header.Get("Signature")
 	if sighdr == "" {
 		return "", fmt.Errorf("no signature header")
@@ -185,7 +184,10 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 		return "", fmt.Errorf("missing a sig value")
 	}
 
-	key := lookupPubkey(keyname)
+	key, err := lookupPubkey(keyname)
+	if err != nil {
+		return keyname, err
+	}
 	if key.Type == None {
 		return keyname, fmt.Errorf("no key for %s", keyname)
 	}
@@ -204,7 +206,7 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 		case "host":
 			s = req.Host
 			if s == "" {
-				log.Printf("warning: no host header value")
+				return "", fmt.Errorf("httpsig: no host header value")
 			}
 		case "digest":
 			s = req.Header.Get(h)
@@ -239,7 +241,7 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 	h := sha256.New()
 	h.Write([]byte(strings.Join(stuff, "\n")))
 	sig := b64s(bsig)
-	err := key.Verify(h.Sum(nil), sig)
+	err = key.Verify(h.Sum(nil), sig)
 	if err != nil {
 		return keyname, err
 	}
@@ -329,16 +331,16 @@ var cachedKeys = make(map[string]PublicKey)
 var cachedKeysLock sync.Mutex
 
 // Get a key as typically used with ActivityPub
-func ActivityPubKeyGetter(keyname string) (key PublicKey) {
+func ActivityPubKeyGetter(keyname string) (key PublicKey, err error) {
 	cachedKeysLock.Lock()
 	key = cachedKeys[keyname]
 	cachedKeysLock.Unlock()
 	if key.Type != None {
-		return key
+		return
 	}
-	j, err := junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 15 * time.Second})
+	var j junk.Junk
+	j, err = junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 15 * time.Second})
 	if err != nil {
-		log.Printf("error getting %s pubkey: %s", keyname, err)
 		return
 	}
 	keyobj, ok := j.GetMap("publicKey")
@@ -347,17 +349,17 @@ func ActivityPubKeyGetter(keyname string) (key PublicKey) {
 	}
 	data, ok := j.GetString("publicKeyPem")
 	if !ok {
-		log.Printf("error finding %s pubkey", keyname)
+		err = fmt.Errorf("error finding %s pubkey", keyname)
 		return
 	}
 	_, ok = j.GetString("owner")
 	if !ok {
-		log.Printf("error finding %s pubkey owner", keyname)
+		err = fmt.Errorf("error finding %s pubkey owner", keyname)
 		return
 	}
 	_, key, err = DecodeKey(data)
 	if err != nil {
-		log.Printf("error decoding %s pubkey: %s", keyname, err)
+		err = fmt.Errorf("error decoding %s pubkey: %s", keyname, err)
 		return
 	}
 	cachedKeysLock.Lock()

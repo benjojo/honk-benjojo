@@ -107,17 +107,7 @@ func (g *Serializer) Call(key interface{}, fn func() (interface{}, error)) (inte
 	return g.CallWithContext(key, context.Background(), ctxfn)
 }
 
-func (g *Serializer) CallWithContext(key interface{}, ctx context.Context, fn func(context.Context) (interface{}, error)) (interface{}, error) {
-	g.lock.Lock()
-	inflight, ok := g.gates[key]
-	if ok {
-		c := make(chan result)
-		g.gates[key] = append(inflight, c)
-		g.lock.Unlock()
-		r := <-c
-		return r.res, r.err
-	}
-	g.gates[key] = inflight
+func (g *Serializer) makethecall(key interface{}, ctx context.Context, fn func(context.Context) (interface{}, error)) {
 	var dead bool
 	g.serials[key] = &dead
 	ctx, cancel := context.WithCancel(ctx)
@@ -127,49 +117,56 @@ func (g *Serializer) CallWithContext(key interface{}, ctx context.Context, fn fu
 	res, err := fn(ctx)
 
 	g.lock.Lock()
+	defer g.lock.Unlock()
 	cancel()
 	// serial check, we may not know why ctx is cancelled
 	if dead {
-		return nil, Cancelled
+		return
 	}
 	// we won, clear space for next call and send results
-	inflight = g.gates[key]
+	inflight := g.gates[key]
 	delete(g.gates, key)
 	delete(g.serials, key)
 	delete(g.cancels, key)
 	sendresults(res, err, inflight)
-	g.lock.Unlock()
-	return res, err
+}
+
+func (g *Serializer) CallWithContext(key interface{}, ctx context.Context, fn func(context.Context) (interface{}, error)) (interface{}, error) {
+	g.lock.Lock()
+	inflight, ok := g.gates[key]
+	c := make(chan result)
+	g.gates[key] = append(inflight, c)
+	if !ok {
+		// nobody going, start one
+		go g.makethecall(key, ctx, fn)
+	} else {
+		g.lock.Unlock()
+	}
+	r := <-c
+	return r.res, r.err
 }
 
 func sendresults(res interface{}, err error, chans []chan<- result) {
-	if len(chans) > 0 {
-		r := result{res: res, err: err}
-		go func() {
-			for _, c := range chans {
-				c <- r
-				close(c)
-			}
-		}()
+	r := result{res: res, err: err}
+	for _, c := range chans {
+		c <- r
+		close(c)
 	}
 }
 
 func (g *Serializer) cancel(key interface{}) {
 	dead, ok := g.serials[key]
-	if ok {
-		*dead = true
-		delete(g.serials, key)
-	} else {
+	if !ok {
 		return
 	}
-	if cancel := g.cancels[key]; cancel != nil {
-		cancel()
-		delete(g.cancels, key)
-	}
-	if inflight := g.gates[key]; inflight != nil {
-		sendresults(nil, Cancelled, inflight)
-		delete(g.gates, key)
-	}
+	*dead = true
+	delete(g.serials, key)
+	cancel := g.cancels[key]
+	cancel()
+	delete(g.cancels, key)
+	inflight := g.gates[key]
+	sendresults(nil, Cancelled, inflight)
+	delete(g.gates, key)
 }
 
 // Cancel any operations in progress.

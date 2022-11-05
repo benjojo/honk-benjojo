@@ -20,7 +20,6 @@ import (
 	"errors"
 	"html/template"
 	"io"
-	"log"
 )
 
 // Wrapper around html/template supporting hot reloads.
@@ -78,7 +77,7 @@ func Load(reload bool, filenames ...string) *Template {
 	t.reload = reload
 	templates, err := loadtemplates(filenames...)
 	if err != nil {
-		log.Panic(err)
+		panic(err)
 	}
 	if !reload {
 		t.templates = templates

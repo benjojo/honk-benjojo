@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -33,6 +34,9 @@ import (
 	"humungus.tedunangst.com/r/webs/login"
 	"humungus.tedunangst.com/r/webs/mz"
 )
+
+//go:embed schema.sql
+var sqlSchema string
 
 func userfromrow(row *sql.Row) (*WhatAbout, error) {
 	user := new(WhatAbout)
@@ -56,11 +60,6 @@ func userfromrow(row *sql.Row) (*WhatAbout, error) {
 	if user.Options.Reaction == "" {
 		user.Options.Reaction = "none"
 	}
-	var marker mz.Marker
-	marker.HashLinker = ontoreplacer
-	marker.AtLinker = attoreplacer
-	user.HTAbout = template.HTML(marker.Mark(user.About))
-	user.Onts = marker.HashTags
 
 	return user, nil
 }
@@ -71,6 +70,11 @@ var somenamedusers = cache.New(cache.Options{Filler: func(name string) (*WhatAbo
 	if err != nil {
 		return nil, false
 	}
+	var marker mz.Marker
+	marker.HashLinker = ontoreplacer
+	marker.AtLinker = attoreplacer
+	user.HTAbout = template.HTML(marker.Mark(user.About))
+	user.Onts = marker.HashTags
 	return user, true
 }})
 
@@ -80,6 +84,8 @@ var somenumberedusers = cache.New(cache.Options{Filler: func(userid int64) (*Wha
 	if err != nil {
 		return nil, false
 	}
+	// don't touch attoreplacer, which introduces a loop
+	// finger -> getjunk -> keys -> users
 	return user, true
 }})
 
@@ -180,7 +186,7 @@ func getbonk(userid int64, xid string) *Honk {
 }
 
 func getpublichonks() []*Honk {
-	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	rows, err := stmtPublicHonks.Query(dt, 100)
 	return getsomehonks(rows, err)
 }
@@ -216,7 +222,7 @@ func geteventhonks(userid int64) []*Honk {
 	return honks
 }
 func gethonksbyuser(name string, includeprivate bool, wanted int64) []*Honk {
-	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	limit := 50
 	whofore := 2
 	if includeprivate {
@@ -226,29 +232,29 @@ func gethonksbyuser(name string, includeprivate bool, wanted int64) []*Honk {
 	return getsomehonks(rows, err)
 }
 func gethonksforuser(userid int64, wanted int64) []*Honk {
-	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUser.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
 func gethonksforuserfirstclass(userid int64, wanted int64) []*Honk {
-	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUserFirstClass.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
 
 func gethonksforme(userid int64, wanted int64) []*Honk {
-	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
 	return getsomehonks(rows, err)
 }
 func gethonksfromlongago(userid int64, wanted int64) []*Honk {
-	now := time.Now().UTC()
+	now := time.Now()
 	var honks []*Honk
 	for i := 1; i <= 3; i++ {
 		dt := time.Date(now.Year()-i, now.Month(), now.Day(), now.Hour(), now.Minute(),
 			now.Second(), 0, now.Location())
-		dt1 := dt.Add(-36 * time.Hour).Format(dbtimeformat)
-		dt2 := dt.Add(12 * time.Hour).Format(dbtimeformat)
+		dt1 := dt.Add(-36 * time.Hour).UTC().Format(dbtimeformat)
+		dt2 := dt.Add(12 * time.Hour).UTC().Format(dbtimeformat)
 		rows, err := stmtHonksFromLongAgo.Query(wanted, userid, dt1, dt2, userid)
 		honks = append(honks, getsomehonks(rows, err)...)
 	}
@@ -972,6 +978,52 @@ func savexonker(what, value, flav, when string) {
 	stmtSaveXonker.Exec(what, value, flav, when)
 }
 
+func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) error {
+	var owner string
+	if url[0] == '#' {
+		flavor = "peep"
+		if name == "" {
+			name = url[1:]
+		}
+		owner = url
+	} else {
+		info, err := investigate(url)
+		if err != nil {
+			ilog.Printf("failed to investigate honker: %s", err)
+			return err
+		}
+		url = info.XID
+		if name == "" {
+			name = info.Name
+		}
+		owner = info.Owner
+	}
+
+	var x string
+	db := opendatabase()
+	row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('sub', 'unsub', 'peep')", url, user.ID)
+	err := row.Scan(&x)
+	if err != sql.ErrNoRows {
+		if err != nil {
+			elog.Printf("honker scan err: %s", err)
+		} else {
+			err = fmt.Errorf("it seems you are already subscribed to them")
+		}
+		return err
+	}
+
+	res, err := stmtSaveHonker.Exec(user.ID, name, url, flavor, combos, owner, mj)
+	if err != nil {
+		elog.Print(err)
+		return err
+	}
+	honkerid, _ := res.LastInsertId()
+	if flavor == "presub" {
+		followyou(user, honkerid)
+	}
+	return nil
+}
+
 func cleanupdb(arg string) {
 	db := opendatabase()
 	days, err := strconv.Atoi(arg)
@@ -979,12 +1031,12 @@ func cleanupdb(arg string) {
 	var where string
 	if err != nil {
 		honker := arg
-		expdate := time.Now().UTC().Add(-3 * 24 * time.Hour).Format(dbtimeformat)
+		expdate := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
 		where = "dt < ? and honker = ?"
 		sqlargs = append(sqlargs, expdate)
 		sqlargs = append(sqlargs, honker)
 	} else {
-		expdate := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).Format(dbtimeformat)
+		expdate := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC().Format(dbtimeformat)
 		where = "dt < ? and convoy not in (select convoy from honks where flags & 4 or whofore = 2 or whofore = 3)"
 		sqlargs = append(sqlargs, expdate)
 	}
@@ -1050,7 +1102,7 @@ var stmtFindFile, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
 var stmtCheckFileData *sql.Stmt
 var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker *sql.Stmt
 var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonker *sql.Stmt
-var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker *sql.Stmt
+var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker, stmtDeleteOldXonkers *sql.Stmt
 var stmtAllOnts, stmtSaveOnt, stmtUpdateFlags, stmtClearFlags *sql.Stmt
 var stmtHonksForUserFirstClass *sql.Stmt
 var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteOneMeta, stmtDeleteSomeMeta, stmtUpdateHonk *sql.Stmt
@@ -1130,6 +1182,7 @@ func prepareStatements(db *sql.DB) {
 	stmtGetXonker = preparetodie(db, "select info from xonkers where name = ? and flavor = ?")
 	stmtSaveXonker = preparetodie(db, "insert into xonkers (name, info, flavor, dt) values (?, ?, ?, ?)")
 	stmtDeleteXonker = preparetodie(db, "delete from xonkers where name = ? and flavor = ? and dt < ?")
+	stmtDeleteOldXonkers = preparetodie(db, "delete from xonkers where flavor = ? and dt < ?")
 	stmtRecentHonkers = preparetodie(db, "select distinct(honker) from honks where userid = ? and honker not in (select xid from honkers where userid = ? and flavor = 'sub') order by honkid desc limit 100")
 	stmtUpdateFlags = preparetodie(db, "update honks set flags = flags | ? where honkid = ?")
 	stmtClearFlags = preparetodie(db, "update honks set flags = flags & ~ ? where honkid = ?")

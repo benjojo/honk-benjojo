@@ -16,6 +16,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -69,6 +70,20 @@ func importMastodon(username, source string) {
 	if err != nil {
 		elog.Fatal(err)
 	}
+
+	if _, err := os.Stat(source + "/outbox.json"); err == nil {
+		importMastotoots(user, source)
+	} else {
+		ilog.Printf("skipping outbox.json!")
+	}
+	if _, err := os.Stat(source + "/following_accounts.csv"); err == nil {
+		importMastotooters(user, source)
+	} else {
+		ilog.Printf("skipping following_accounts.csv!")
+	}
+}
+
+func importMastotoots(user *WhatAbout, source string) {
 	type Toot struct {
 		Id     string
 		Type   string
@@ -79,6 +94,7 @@ func importMastodon(username, source string) {
 	var outbox struct {
 		OrderedItems []Toot
 	}
+	ilog.Println("Importing honks...")
 	fd, err := os.Open(source + "/outbox.json")
 	if err != nil {
 		elog.Fatal(err)
@@ -105,6 +121,9 @@ func importMastodon(username, source string) {
 		toot := item
 		if toot.Type != "Create" {
 			continue
+		}
+		if strings.HasSuffix(toot.Id, "/activity") {
+			toot.Id = strings.TrimSuffix(toot.Id, "/activity")
 		}
 		tootid := re_tootid.FindString(toot.Id)
 		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, tootid)
@@ -163,6 +182,37 @@ func importMastodon(username, source string) {
 			}
 		}
 		savehonk(&honk)
+	}
+}
+
+func importMastotooters(user *WhatAbout, source string) {
+	ilog.Println("Importing honkers...")
+	fd, err := os.Open(source + "/following_accounts.csv")
+	if err != nil {
+		elog.Fatal(err)
+	}
+	r := csv.NewReader(fd)
+	data, err := r.ReadAll()
+	if err != nil {
+		elog.Fatal(err)
+	}
+	fd.Close()
+
+	var meta HonkerMeta
+	mj, _ := jsonify(&meta)
+
+	for i, d := range data {
+		if i == 0 {
+			continue
+		}
+		url := "@" + d[0]
+		name := ""
+		flavor := "peep"
+		combos := ""
+		err := savehonker(user, url, name, flavor, combos, mj)
+		if err != nil {
+			elog.Printf("trouble with a honker: %s", err)
+		}
 	}
 }
 

@@ -43,9 +43,10 @@ var lexer_go = "" +
 	""
 var lexer_html = "" +
 	"builtin:0:1 <[/a-zA-Z]*\n" +
-	"keyword:1:1 [^>\"]+\n" +
+	"keyword:1:1 [^=/>\"]+\n" +
 	"string:1:1 \"[^\"]*\"\n" +
-	"builtin:1:0 >\n" +
+	"text:1:1 [\\s=]+\n" +
+	"builtin:1:0 /?>\n" +
 	"comment:0:0 {{(?s:.*?)}}\n" +
 	"text:0:0 [^<{]+\n" +
 	""
