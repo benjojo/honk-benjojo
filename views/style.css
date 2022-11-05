@@ -1,0 +1,217 @@
+body {
+	background: #305;
+	color: #dde;
+	font-size: 1em;
+	word-wrap: break-word;
+	font-family: sans-serif, "Noto Color Emoji";
+}
+pre, code {
+	white-space: pre-wrap;
+}
+blockquote {
+	margin-left: 0em;
+	padding-left: 0.5em;
+	border-left: 1px solid #aab;
+}
+table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+}
+a {
+	color: #dde;
+}
+form, input, textarea {
+	font-family: monospace, "Noto Color Emoji";
+}
+p {
+	margin-top 1em;
+	margin-bottom: 1em;
+}
+input {
+	background: #305;
+	color: #dde;
+	font-size: 1.0em;
+	line-height: 1.2em;
+	padding: 0.5em;
+}
+body > header {
+	max-width: 1200px;
+	margin: 1em auto;
+	font-size: 1.5em;
+	text-align: right;
+}
+body > header span {
+	margin-right: 2em;
+}
+header details {
+	display: inline;
+}
+header details[open] summary {
+	display: none;
+}
+main {
+	max-width: 1200px;
+	margin: auto;
+	font-size: 1.5em;
+}
+.info {
+	background: #002;
+	border: 1px solid #dde;
+	margin-bottom: 1em;
+	padding: 0em 1em 0em 1em;
+}
+.info div {
+	margin-top 1em;
+	margin-bottom: 1em;
+}
+label, button, form input[type=submit], select {
+	font-size: 16px;
+	font-family: monospace;
+	color: #dde;
+	background: #305;
+	border: 1px solid #dde;
+	padding: 0.5em;
+}
+button a {
+	text-decoration: none;
+}
+form {
+	margin-top: 1em;
+}
+textarea {
+	padding: 0.5em;
+	font-size: 1em;
+	background: #305;
+	color: #dde;
+	width: 600px;
+	height: 8em;
+	margin-bottom: 0.5em;
+	box-sizing: border-box;
+	max-width: 100%;
+}
+input[type="checkbox"] {
+	position: fixed;
+	top: -9999px;
+}
+input[type="checkbox"] + span:after {
+	content: "no";
+}
+input[type="checkbox"]:checked + span:after {
+	content: "yes";
+}
+input[type="checkbox"]:focus + span:after {
+	outline: 1px solid #dde;
+}
+input[type=file] {
+	display: none;
+}
+
+.honk {
+	width: 90%;
+	margin: auto;
+	background: #002;
+	border: 1px solid #dde;
+	border-radius: 1em;
+	margin-bottom: 1em;
+	padding-left: 1em;
+	padding-right: 1em;
+	padding-top: 0;
+	overflow: hidden;
+}
+.honk #honkform {
+	padding: 1em;
+	border: 1px solid #dde;
+}
+
+.honk a {
+	color: #dde;
+}
+.honk header .clip a {
+	color: #88a;
+}
+.honk header {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 0.8em;
+	margin-top: 1em;
+	height: 64px;
+}
+.honk header img {
+	float: left;
+	margin-right: 1em;
+	width: 64px;
+	height: 64px;
+}
+.honk header p {
+	margin-top: 0px;
+}
+.honk button {
+	margin-left: 4em;
+}
+.subtle {
+}
+.subtle .noise {
+	color: #aab;
+	font-size: 0.8em;
+}
+.subtle .noise a {
+	color: #aab;
+}
+.limited {
+	border: 1px solid #a79;
+	color: #a79;
+}
+.limited .noise {
+	color: #a79;
+}
+.limited .noise a {
+	color: #a79;
+}
+details.noise[open] summary {
+	display: none;
+}
+.inlineform {
+	display: inline;
+}
+.inlineform select {
+}
+.honk details.actions summary {
+	color: #aab;
+}
+.limited details.actions summary {
+	color: #a79;
+}
+h1, h2 {
+	font-size: 1.2em;
+}
+h3, h4 {
+	font-size: 1.1em;
+}
+
+img:not(.emu) {
+	background: #305;
+}
+img, video {
+	max-width: 100%
+}
+img.emu {
+	width: 2em;
+	height: 2em;
+	vertical-align: middle;
+	margin: -2px;
+	object-fit: contain;
+}
+@media screen and (max-width: 740px) {
+	body {
+		font-size: 12px;
+	}
+	.honk header {
+		height: 52px;
+	}
+	.honk header img {
+		width: 48px;
+		height: 48px;
+	}
+}

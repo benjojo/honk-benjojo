@@ -1,0 +1,48 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>
+<form action="/savehonker" method="POST">
+<span class="title">add new honker</span>
+<input type="hidden" name="CSRF" value="{{ .HonkerCSRF }}">
+<p><input tabindex=1 type="text" name="name" value="" autocomplete=off> - name
+<p><input tabindex=1 type="text" name="url" value="" autocomplete=off> - url
+<p><span><label for="peep">just peeping:</label>
+<input tabindex=1 type="checkbox" id="peep" name="peep" value="peep"><span></span></span>
+<p><input tabindex=1 type="submit" name="add honker" value="add honker">
+</form>
+</div>
+{{ $honkercsrf := .HonkerCSRF }}
+<div class="info">
+<script>
+function expandstuff() {
+	var els = document.querySelectorAll(".honk details")
+	for (var i = 0; i < els.length; i++) {
+		els[i].open = true
+	}
+}
+</script>
+<p><button onclick="expandstuff()">expand</button>
+</div>
+{{ range .Honkers }}
+<section class="honk">
+<header>
+<img alt="avatar" src="/a?a={{ .XID }}">
+<p style="font-size: 1.8em"><a href="/h/{{ .Name }}">{{ .Name }}<a>
+</header>
+<p>
+<details>
+<p>url: <a href="{{ .XID }}" rel=noreferrer>{{ .XID }}</a>
+<p>flavor: {{ .Flavor }}
+<form action="/savehonker" method="POST">
+<input type="hidden" name="CSRF" value="{{ $honkercsrf }}">
+<input type="hidden" name="honkerid" value="{{ .ID }}">
+<p>combos: <input type="text" name="combos" value="{{ range .Combos }}{{ . }} {{end}}">
+<p>depart: <input type="text" name="goodbye" placeholder="press F" value="" autocomplete=off>
+<p><input type="submit" name="save" value="save">
+</form>
+</details>
+<p>
+</section>
+{{ end }}
+</main>

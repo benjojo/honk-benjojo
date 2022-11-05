@@ -1,0 +1,91 @@
+changelog
+
+-- 0.7.7
+
++ Add another retry to workaround pixelfed's general unreliability.
+
++ Attached images are not lost when previewing.
+
+- Remove sensitivity to spicy peppers.
+
++ Keep reply to setting during preview.
+
++ Increase max thread retrieval depth to 10.
+
+-- 0.7.6
+
++ Fix a bug where upgrades would not complete in one step.
+
+-- 0.7.5
+
++ Fix a bug (introdcued 0.7.4) preventing new user creation from working.
+
++ Semi flexible URL patterns to allow transition from other software.
+
++ Improved ActivityPub parsing conformance for better compat with others.
+
++ Add server name to user agent.
+
++ What may be considered UI improvements.
+
+-- 0.7.4
+
++ Ever more bug fixes.
+
++ Collapse posts based on custom regex match.
+
++ Tonks are now honk backs.
+
++ Show both avatars for bonks. Other minor refinements to UI.
+
++ Minimal support for Video activity and PeerTube compat.
+
++ Support for some user selectable styling. Currently, skinny column mode.
+
++ webp image transcoding.
+
+-- 0.7.3
+
++ Better fedicompat so bonks are visible to pleroma followers.
+
+-- 0.7.2
+
++ Add the funzone. Minor other UI tweaks.
+
+-- 0.7.1
+
++ Fix bug preventing unfollow from working.
+
+-- 0.7.0
+
++++ Auto fetching and inlining of hoots.
+
+++ A new xzone to view and import data not otherwise visible.
+
+++ Preview before honking.
+
+++ Some extra commands for better database retention management.
+
+++ A changelog.
+
++ Default robots.txt.
+
++ Misc UI touchups.
+
++ Read only support for qonks.
+
++ About page.
+
++ More reliable (retries) meta messages such as follow requests.
+
++ Better thread support for missing context.
+
++ Upgrade image library for cleaner screenshots.
+
++ Not all summaries need labels.
+
++ Add max-width for video tag.
+
+-- 0.6.0 and prior
+
+All records from this time of primitive development have been lost.

@@ -1,0 +1,16 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<form action="/ximport" method="POST">
+<input type="hidden" name="CSRF" value="{{ .XCSRF }}">
+<p><span class="title">import</span>
+<p><input tabindex=1 type="text" name="xid" autocomplete=off> - xid
+<p><input tabindex=1 type="submit" name="fetch" value="fetch">
+</form>
+</div>
+{{ range .Honkers }}
+<section class="honk">
+<p><a href="/h?xid={{ . }}">honks</a> by {{ . }}
+</section>
+{{ end }}
+</main>

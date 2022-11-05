@@ -1,0 +1,16 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>Welcome the fun zone!
+<ul>
+{{ range .Emus }}
+<li><img class="emu" src="/emu/{{ . }}.png"> :{{ . }}:
+{{ end }}
+</ul>
+<ul>
+{{ range .Memes }}
+<li>meme: <a href="/meme/{{ . }}">{{ . }}</a>
+{{ end }}
+</ul>
+</div>
+</main>

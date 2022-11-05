@@ -1,0 +1,85 @@
+<article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}">
+{{ $bonkcsrf := .BonkCSRF }}
+{{ with .Honk }}
+<header>
+<img alt="avatar" src="/a?a={{ .Honker}}">
+{{ if .Oonker }}
+<img alt="avatar" src="/a?a={{ .Oonker}}">
+{{ end }}
+<p>
+{{ if $bonkcsrf }}
+<a href="/h?xid={{ .Honker }}" rel=noreferrer>{{ .Username }}</a>
+{{ else }}
+<a href="{{ .Honker }}" rel=noreferrer>{{ .Username }}</a>
+{{ end }}
+<span class="clip"><a href="{{ .URL }}" rel=noreferrer>{{ .What }}</a> {{ .Date.Format "02 Jan 2006 15:04" }}</span>
+{{ if .Oonker }}
+<br>
+<span style="margin-left: 1em;" class="clip">
+{{ if $bonkcsrf }}
+original: <a href="/h?xid={{ .Oonker }}" rel=noreferrer>{{ .Oondle }}</a>
+{{ else }}
+original: <a href="{{ .Oonker }}" rel=noreferrer>{{ .Oondle }}</a>
+{{ end }}
+</span>
+{{ else }}
+{{ if .RID }}
+<br>
+<span style="margin-left: 1em;" class="clip">
+in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
+</span>
+{{ end }}
+{{ end }}
+<br>
+{{ if $bonkcsrf }}
+<span style="margin-left: 1em;" class="clip">convoy: <a href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
+{{ else }}
+<span style="margin-left: 1em;" class="clip">convoy: {{ .Convoy }}</span>
+{{ end }}
+</header>
+<p>
+<details class="noise" {{ .Open }} >
+<summary>{{ .Precis }}</summary>
+<p>{{ .Precis }}
+<p>{{ .HTML }}
+{{ range .Donks }}
+{{ if .Local }}
+{{ if eq .Media "text/plain" }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>
+{{ else }}
+<p><a href="/d/{{ .XID }}"><img src="/d/{{ .XID }}" title="{{ .URL }}"></a>
+{{ end }}
+{{ else }}
+{{ if .XID }}
+<p><a href="{{ .URL }}">External Attachment: {{ .Name }}</a>
+{{ else }}
+{{ if eq .Media "video/mp4" }}
+<p><a href="{{ .URL }}"><video controls src="{{ .URL }}">{{ .Name }}</video></a>
+{{ else }}
+<p><a href="{{ .URL }}"><img src="{{ .URL }}" title="{{ .Name }}"></a>
+{{ end }}
+{{ end }}
+{{ end }}
+{{ end }}
+</details>
+{{ end }}
+{{ if $bonkcsrf }}
+<p>
+<details class="actions">
+<summary>Actions
+</summary>
+<div>
+<p>
+{{ if .Honk.Public }}
+<button onclick="bonk(this, '{{ .Honk.XID }}');">bonk</button>
+{{ else }}
+<button disabled>nope</button>
+{{ end }}
+<button onclick="showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handle }}');">honk back</button>
+<button onclick="muteit(this, '{{ .Honk.Convoy }}');">mute</button>
+<button onclick="zonkit(this, '{{ .Honk.XID }}');">zonk</button>
+</div>
+</details>
+<p>
+{{ end }}
+</article>

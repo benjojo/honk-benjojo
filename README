@@ -1,0 +1,72 @@
+honk
+
+-- features
+
+Take control of your honks.
+Join the federation in the fight against the evil empire.
+
+Send honks. Receive honks. And not just honks.
+Bonk, donk, zonk, all your favorite activities are here.
+
+Public RSS.
+
+Custom emus. Memes too.
+
+Purple color scheme.
+
+No attention mining.
+No likes, no faves, no polls, no stars, no claps, no counts.
+
+The button to submit a new honk says "it's gonna be honked".
+
+Avatars assigned by the NSA.
+
+Automatic image attachment debloating.
+
+Minimal setup and configuration.
+
+Written in gotesque, an especially grotesque dialect of golang.
+
+-- build
+
+It should be sufficient to type make after unpacking a release.
+You'll need a go compiler version 1.11 or later.
+
+Even on a fast machine, building from source can take several seconds.
+
+-- requirements
+
+libsqlite3 (you probably already have it)
+
+go 1.11+
+
+Internet connection not included.
+
+-- setup
+
+honk expects to be fronted by a TLS terminating reverse proxy.
+
+First, create the database. This will ask four questions.
+
+./honk init
+
+username: (the username you want)
+password: (the password you want)
+listenaddr: (tcp or unix: localhost:31337, /var/www/honk.sock, etc.)
+servername: (public DNS name: honk.example.com)
+
+Then run honk.
+
+./honk
+
+Refer also to the docs directory, in particular manual.txt.
+
+Busy honk instances may use megabytes of memory.
+
+-- upgrade
+
+cp honk.db backup.db
+
+./honk upgrade
+
+./honk

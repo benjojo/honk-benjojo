@@ -1,0 +1,13 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>combos
+</div>
+{{ range .Combos }}
+<section class="honk">
+<header>
+<p style="font-size: 1.8em"><a href="/c/{{ . }}">{{ . }}</a>
+</header>
+</section>
+{{ end }}
+</main>

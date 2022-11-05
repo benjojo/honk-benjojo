@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<title>honk</title>
+<link href="/style.css{{ .StyleParam }}" rel="stylesheet">
+{{ if .LocalStyleParam }}
+<link href="/local.css{{ .LocalStyleParam }}" rel="stylesheet">
+{{ end }}
+<style>
+{{ .UserStyle }}
+</style>
+<link href="/icon.png" rel="icon">
+<meta name="viewport" content="width=device-width">
+</head>
+<body>
+<header>
+<span><a href="/">honk</a></span>
+{{ if .UserInfo }}
+<span><a href="/atme">@me</a></span>
+<span><a href="/{{ .UserSep }}/{{ .UserInfo.Username }}">{{ .UserInfo.Username }}</a></span>
+<span><a href="/honkers">honkers</a></span>
+<span><a href="/c">combos</a></span>
+<details>
+<summary>more</summary>
+<span><a href="/about">about</a></span>
+<span><a href="/front">front</a></span>
+<span><a href="/xzone">xzone</a></span>
+<span><a href="/zonkzone">zonkzone</a></span>
+<span><a href="/funzone">funzone</a></span>
+<span><a href="/account">account</a></span>
+</details>
+{{ else }}
+<span><a href="/about">about</a></span>
+{{ if .ShowRSS }}
+<span><a href="/rss">rss</a></span>
+{{ end }}
+<span><a href="/login">login</a></span>
+{{ end }}
+</header>

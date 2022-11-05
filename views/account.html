@@ -1,0 +1,25 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>account
+<p><a href="/logout?CSRF={{ .LogoutCSRF }}">logout</a></p>
+<div>
+<form id="aboutform" action="/saveuser" method="POST">
+<p>about
+<input type="hidden" name="CSRF" value="{{ .UserCSRF }}">
+<p><textarea name="whatabout">{{ .User.About }}</textarea>
+<p><span><label for="skinny">skinny layout:</label>
+<input tabindex=1 type="checkbox" id="skinny" name="skinny" value="skinny" {{ if .User.SkinnyCSS }}checked{{ end }}><span></span></span>
+<p><input type="submit" value="update">
+</form>
+</div>
+<div>
+<form action="/chpass" method="POST">
+<input type="hidden" name="CSRF" value="{{ .LogoutCSRF }}">
+<p>change password
+<p><input tabindex=1 type="password" name="oldpass"> - oldpass
+<p><input tabindex=1 type="password" name="newpass"> - newpass
+<p><input type="submit" value="update">
+</form>
+</div>
+</main>

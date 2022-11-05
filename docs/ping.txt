@@ -1,0 +1,86 @@
+
+A Ping extension for ActivityPub
+
+This is merely a draft.
+
+-- rationale
+
+Diagnosing communication failures between federated servers often requires
+sending test messages. There is no dedicated activity type for this purpose,
+however, and thus many operators use normal notes. This creates unnecessary
+noise. It would be better to have a side effect free message that can be
+triggered and sent on demand.
+
+The proposed Ping and corresponding Pong activities are similar to the ICMP
+echo request and echo reply messages. (c.f. the familiar ping tool.)
+
+Other online social contexts often use the term ping to refer to a variety
+of activities. The activity here is unrelated to any user visible activity or
+action.
+
+-- message format
+
+The ping message has a type of Ping. Here, user pinger on server
+h1.example.com is sending a Ping to testrcpt on h2.example.com.
+
+{
+	"@context": "https://www.w3.org/ns/activitystreams",
+	"type": "Ping",
+	"id": "https://h1.example.com/u/pinger/ping/r4nd0m1d",
+	"actor": "https://h1.example.com/u/pinger",
+	"to": "https://h2.example.com/u/testrcpt"
+}
+
+The Pong message is similar, but includes an object field quoting the Ping id
+field.
+
+{
+	"@context": "https://www.w3.org/ns/activitystreams",
+	"type": "Pong",
+	"id": "https://h2.example.com/u/testrcpt/pong/0pp0s1t3",
+	"actor": "https://h2.example.com/u/testrcpt",
+	"to": "https://h1.example.com/u/pinger",
+	"object": "https://h1.example.com/u/pinger/ping/r4nd0m1d"
+}
+
+Ping and Pong id fields look like URLs, but need not be fetchable. They are
+only intended as transient messages.
+
+-- semantics
+
+The Ping message should be sent from one actor to another, delivered to their
+inbox. Upon receipt of a Ping message, a server should reply with a Pong
+message. The Pong reply should quote the id of the Ping (just the id, not the
+whole message) in the object field.
+
+Random ids may used. They should be probabilistically unique.
+
+The usual access and verification checks performed for other messages should
+be performed for Ping and Pong as well. (If HTTP signatures are in use,
+messages should be signed by senders and verified by receivers.)
+
+Ping and Pong messages should be queued using the normal facilities. (Don't
+fast track.) Messages should not be retried. After one failure, drop the
+message.
+
+As these messages are intended as administrator aids, they should not be
+displayed to end users. They should not cause any lasting change in the state
+of either the sending or receiving server.
+
+Rate limiting and abuse controls apply as usual. Servers may choose to impose
+length restrictions on maximum id length. A minimum of 256 bytes should be
+supported.
+
+Servers which do not understand the Ping activity will hopefully ignore it.
+
+-- usage
+
+It is unspecified how one initiates a ping, but it is expected to be a manual
+operation performed by a system administrator. This will generate traffic,
+which may then be logged. The admin reads the logs and solves the problem.
+Specific problem solving instructions are not provided here.
+
+-- future
+
+It may be helpful to have a variant of Ping that does perform retries to test
+recovery after disconnect.
