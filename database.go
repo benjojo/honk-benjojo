@@ -493,7 +493,7 @@ func updatehonk(h *Honk) error {
 
 	err = deleteextras(tx, h.ID)
 	if err == nil {
-		_, err = tx.Stmt(stmtUpdateHonk).Exec(h.Precis, h.Noise, h.Format, dt, h.ID)
+		_, err = tx.Stmt(stmtUpdateHonk).Exec(h.Precis, h.Noise, h.Format, h.Whofore, dt, h.ID)
 	}
 	if err == nil {
 		err = saveextras(tx, h)
@@ -693,6 +693,7 @@ var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDelete
 var stmtAllOnts, stmtSaveOnt, stmtUpdateFlags, stmtClearFlags *sql.Stmt
 var stmtHonksForUserFirstClass, stmtSaveMeta, stmtDeleteMeta, stmtUpdateHonk *sql.Stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
+var stmtGetTracks *sql.Stmt
 
 func preparetodie(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
@@ -737,7 +738,7 @@ func prepareStatements(db *sql.DB) {
 	stmtDeleteMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus <> ?")
 	stmtSaveHonk = preparetodie(db, "insert into honks (userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	stmtDeleteHonk = preparetodie(db, "delete from honks where honkid = ?")
-	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, dt = ? where honkid = ?")
+	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ? where honkid = ?")
 	stmtSaveOnt = preparetodie(db, "insert into onts (ontology, honkid) values (?, ?)")
 	stmtDeleteOnts = preparetodie(db, "delete from onts where honkid = ?")
 	stmtSaveDonk = preparetodie(db, "insert into donks (honkid, fileid) values (?, ?)")
@@ -760,8 +761,8 @@ func prepareStatements(db *sql.DB) {
 	stmtGetZonkers = preparetodie(db, "select zonkerid, name, wherefore from zonkers where userid = ? and wherefore <> 'zonk'")
 	stmtSaveZonker = preparetodie(db, "insert into zonkers (userid, name, wherefore) values (?, ?, ?)")
 	stmtGetXonker = preparetodie(db, "select info from xonkers where name = ? and flavor = ?")
-	stmtSaveXonker = preparetodie(db, "insert into xonkers (name, info, flavor) values (?, ?, ?)")
-	stmtDeleteXonker = preparetodie(db, "delete from xonkers where name = ? and flavor = ?")
+	stmtSaveXonker = preparetodie(db, "insert into xonkers (name, info, flavor, dt) values (?, ?, ?, ?)")
+	stmtDeleteXonker = preparetodie(db, "delete from xonkers where name = ? and flavor = ? and dt < ?")
 	stmtRecentHonkers = preparetodie(db, "select distinct(honker) from honks where userid = ? and honker not in (select xid from honkers where userid = ? and flavor = 'sub') order by honkid desc limit 100")
 	stmtUpdateFlags = preparetodie(db, "update honks set flags = flags | ? where honkid = ?")
 	stmtClearFlags = preparetodie(db, "update honks set flags = flags & ~ ? where honkid = ?")
@@ -769,4 +770,5 @@ func prepareStatements(db *sql.DB) {
 	stmtGetFilters = preparetodie(db, "select hfcsid, json from hfcs where userid = ?")
 	stmtSaveFilter = preparetodie(db, "insert into hfcs (userid, json) values (?, ?)")
 	stmtDeleteFilter = preparetodie(db, "delete from hfcs where userid = ? and hfcsid = ?")
+	stmtGetTracks = preparetodie(db, "select fetches from tracks where xid = ?")
 }

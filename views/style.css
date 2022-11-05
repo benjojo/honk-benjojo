@@ -13,6 +13,7 @@ body {
 	word-wrap: break-word;
 	font-family: sans-serif, "Noto Color Emoji";
 	line-height: 1.2;
+	overscroll-behavior-y: contain;
 }
 pre, code {
 	white-space: pre-wrap;
@@ -21,6 +22,9 @@ blockquote {
 	margin-left: 0em;
 	padding-left: 0.5em;
 	border-left: 1px solid var(--fg-subtle);
+}
+blockquote cite {
+	margin-left: 2em;
 }
 table {
 	display: block;
@@ -67,6 +71,7 @@ header > details {
 	max-height: calc(100% - 1em);
 	overflow: auto;
 	opacity: 0.7;
+	overscroll-behavior: contain;
 }
 header > details[open] {
 	padding: 1em 1em 0em 1em;
@@ -283,5 +288,17 @@ img.emu {
 	.honk header img {
 		width: 48px;
 		height: 48px;
+	}
+}
+@media print {
+	#topmenu, #topspacer, #infobox, #refreshbox, .actions {
+		display: none;
+	}
+	html {
+		--bg-page: white;
+		--bg-dark: white;
+		--fg: black;
+		--fg-subtle: black;
+		--fg-limited: #a79;
 	}
 }

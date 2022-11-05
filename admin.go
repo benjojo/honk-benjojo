@@ -26,6 +26,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 )
 
 func adminscreen() {
@@ -73,9 +74,7 @@ func adminscreen() {
 	clearscreen := func() {
 		stdout.WriteString(esc + "[2J")
 	}
-	clearline := func() {
-		stdout.WriteString(esc + "[2K")
-	}
+	//clearline := func() { stdout.WriteString(esc + "[2K") }
 	colorfn := func(code int) func(string) string {
 		return func(s string) string {
 			return fmt.Sprintf(esc+"[%dm"+"%s"+esc+"[0m", code, s)
@@ -120,8 +119,36 @@ func adminscreen() {
 		stdout.Flush()
 	}
 
+	editing := false
+
+	linecount := func(s string) int {
+		lines := 1
+		for i := range s {
+			if s[i] == '\n' {
+				lines++
+			}
+		}
+		return lines
+	}
+
 	msglineno := func(idx int) int {
-		return 4 + idx*2
+		off := 2
+		if idx == -1 {
+			return off
+		}
+		for i, m := range messages {
+			off += 2
+			if i == idx {
+				return off
+			}
+			off += linecount(m.text)
+		}
+		off += 2
+		return off
+	}
+
+	forscreen := func(s string) string {
+		return strings.Replace(s, "\n", "\n   ", -1)
 	}
 
 	drawmessage := func(idx int) {
@@ -130,8 +157,12 @@ func adminscreen() {
 		label := messages[idx].label
 		if idx == cursel {
 			label = reverse(label)
+			if editing {
+				label = magenta(label)
+			}
 		}
-		stdout.WriteString(fmt.Sprintf("%s %s", label, messages[idx].text))
+		text := forscreen(messages[idx].text)
+		stdout.WriteString(fmt.Sprintf("%s\n   %s", label, text))
 	}
 
 	drawscreen := func() {
@@ -139,55 +170,75 @@ func adminscreen() {
 		movecursor(4, msglineno(-1))
 		stdout.WriteString(magenta(serverName + " admin panel"))
 		for i := range messages {
-			drawmessage(i)
+			if !editing || i != cursel {
+				drawmessage(i)
+			}
 		}
 		movecursor(4, msglineno(len(messages)))
-		stdout.WriteString(magenta("j/k to move - q to quit - enter to edit"))
+		dir := "j/k to move - q to quit - enter to edit"
+		if editing {
+			dir = "esc to end"
+		}
+		stdout.WriteString(magenta(dir))
+		if editing {
+			drawmessage(cursel)
+		}
 		stdout.Flush()
 	}
 
 	selectnext := func() {
 		if cursel < len(messages)-1 {
+			movecursor(4, msglineno(cursel))
+			stdout.WriteString(messages[cursel].label)
 			cursel++
+			movecursor(4, msglineno(cursel))
+			stdout.WriteString(reverse(messages[cursel].label))
+			stdout.Flush()
 		}
-		drawscreen()
 	}
 	selectprev := func() {
 		if cursel > 0 {
+			movecursor(4, msglineno(cursel))
+			stdout.WriteString(messages[cursel].label)
 			cursel--
+			movecursor(4, msglineno(cursel))
+			stdout.WriteString(reverse(messages[cursel].label))
+			stdout.Flush()
 		}
-		drawscreen()
 	}
 	editsel := func() {
-		movecursor(4, msglineno(cursel))
-		clearline()
-		m := messages[cursel]
-		stdout.WriteString(reverse(magenta(m.label)))
-		text := m.text
-		stdout.WriteString(" ")
-		stdout.WriteString(text)
+		editing = true
 		showcursor()
-		stdout.Flush()
+		drawscreen()
+		m := messages[cursel]
 	loop:
 		for {
 			c := readchar()
 			switch c {
-			case '\n':
+			case '\x1b':
 				break loop
+			case '\n':
+				m.text += "\n"
+				drawscreen()
 			case 127:
-				if len(text) > 0 {
-					moveleft()
-					stdout.WriteString(" ")
-					moveleft()
-					text = text[:len(text)-1]
+				if len(m.text) > 0 {
+					last := m.text[len(m.text)-1]
+					m.text = m.text[:len(m.text)-1]
+					if last == '\n' {
+						drawscreen()
+					} else {
+						moveleft()
+						stdout.WriteString(" ")
+						moveleft()
+					}
 				}
 			default:
-				text = text + string(c)
+				m.text += string(c)
 				stdout.WriteString(string(c))
 			}
 			stdout.Flush()
 		}
-		m.text = text
+		editing = false
 		updateconfig(m.name, m.text)
 		hidecursor()
 		drawscreen()

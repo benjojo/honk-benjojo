@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var softwareVersion = "0.8.4"
+var softwareVersion = "0.8.5"
 
 func init() {
 	notrand.Seed(time.Now().Unix())

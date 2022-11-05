@@ -330,6 +330,10 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	keyname, err := httpsig.VerifyRequest(r, payload, zaggy)
+	if err != nil && keyname != "" {
+		savingthrow(keyname)
+		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
+	}
 	if err != nil {
 		log.Printf("inbox message failed signature for %s from %s", keyname, r.Header.Get("X-Forwarded-For"))
 		if keyname != "" {
@@ -460,6 +464,10 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	keyname, err := httpsig.VerifyRequest(r, payload, zaggy)
+	if err != nil && keyname != "" {
+		savingthrow(keyname)
+		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
+	}
 	if err != nil {
 		log.Printf("inbox message failed signature for %s from %s", keyname, r.Header.Get("X-Forwarded-For"))
 		if keyname != "" {
@@ -882,6 +890,33 @@ type Track struct {
 	who string
 }
 
+func getbacktracks(xid string) []string {
+	c := make(chan bool)
+	dumptracks <- c
+	<-c
+	row := stmtGetTracks.QueryRow(xid)
+	var rawtracks string
+	err := row.Scan(&rawtracks)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Printf("error scanning tracks: %s", err)
+		}
+		return nil
+	}
+	var rcpts []string
+	for _, f := range strings.Split(rawtracks, " ") {
+		idx := strings.LastIndexByte(f, '#')
+		if idx != -1 {
+			f = f[:idx]
+		}
+		if !strings.HasPrefix(f, "https://") {
+			f = fmt.Sprintf("%%https://%s/inbox", f)
+		}
+		rcpts = append(rcpts, f)
+	}
+	return rcpts
+}
+
 func savetracks(tracks map[string][]string) {
 	db := opendatabase()
 	tx, err := db.Begin()
@@ -932,6 +967,7 @@ func savetracks(tracks map[string][]string) {
 }
 
 var trackchan = make(chan Track)
+var dumptracks = make(chan chan bool)
 
 func tracker() {
 	timeout := 4 * time.Minute
@@ -947,6 +983,11 @@ func tracker() {
 				tracks = make(map[string][]string)
 			}
 			sleeper.Reset(timeout)
+		case c := <-dumptracks:
+			if len(tracks) > 0 {
+				savetracks(tracks)
+			}
+			c <- true
 		case <-endoftheworld:
 			if len(tracks) > 0 {
 				savetracks(tracks)
@@ -1061,17 +1102,35 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 	}
 }
 
+var re_avatar = regexp.MustCompile("avatar: ?([[:alnum:]_.-]+)")
+
 func saveuser(w http.ResponseWriter, r *http.Request) {
 	whatabout := r.FormValue("whatabout")
 	u := login.GetUserInfo(r)
+	user, _ := butwhatabout(u.Username)
 	db := opendatabase()
-	var options UserOptions
+	options := user.Options
 	if r.FormValue("skinny") == "skinny" {
 		options.SkinnyCSS = true
+	} else {
+		options.SkinnyCSS = false
 	}
 	if r.FormValue("maps") == "apple" {
 		options.MapLink = "apple"
+	} else {
+		options.MapLink = ""
 	}
+	if ava := re_avatar.FindString(whatabout); ava != "" {
+		whatabout = re_avatar.ReplaceAllString(whatabout, "")
+		ava = ava[7:]
+		if ava[0] == ' ' {
+			ava = ava[1:]
+		}
+		options.Avatar = fmt.Sprintf("https://%s/meme/%s", serverName, ava)
+	} else {
+		options.Avatar = ""
+	}
+	whatabout = strings.TrimSpace(whatabout)
 	j, err := jsonify(options)
 	if err == nil {
 		_, err = db.Exec("update users set about = ?, options = ? where username = ?", whatabout, j, u.Username)
@@ -1401,6 +1460,12 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 			}
 		}
 		honk.RID = rid
+		if xonk.Precis != "" && honk.Precis == "" {
+			honk.Precis = xonk.Precis
+			if !(strings.HasPrefix(honk.Precis, "DZ:") || strings.HasPrefix(honk.Precis, "re: re: re: ")) {
+				honk.Precis = "re: " + honk.Precis
+			}
+		}
 	} else {
 		honk.Audience = []string{thewholeworld}
 	}
@@ -1848,6 +1913,11 @@ func accountpage(w http.ResponseWriter, r *http.Request) {
 	templinfo["UserCSRF"] = login.GetCSRF("saveuser", r)
 	templinfo["LogoutCSRF"] = login.GetCSRF("logout", r)
 	templinfo["User"] = user
+	about := user.About
+	if ava := user.Options.Avatar; ava != "" {
+		about += "\n\navatar: " + ava[strings.LastIndexByte(ava, '/')+1:]
+	}
+	templinfo["WhatAbout"] = about
 	err := readviews.Execute(w, "account.html", templinfo)
 	if err != nil {
 		log.Print(err)

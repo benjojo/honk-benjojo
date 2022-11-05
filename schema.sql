@@ -3,7 +3,7 @@ create table honks (honkid integer primary key, userid integer, what text, honke
 create table donks (honkid integer, fileid integer);
 create table filemeta (fileid integer primary key, xid text, name text, description text, url text, media text, local integer);
 create table honkers (honkerid integer primary key, userid integer, name text, xid text, flavor text, combos text, owner text);
-create table xonkers (xonkerid integer primary key, name text, info text, flavor text);
+create table xonkers (xonkerid integer primary key, name text, info text, flavor text, dt text);
 create table zonkers (zonkerid integer primary key, userid integer, name text, wherefore text);
 create table doovers(dooverid integer primary key, dt text, tries integer, userid integer, rcpt text, msg blob);
 create table onts (ontology text, honkid integer);

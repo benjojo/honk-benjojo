@@ -66,15 +66,15 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ range .Donks }}
 {{ if .Local }}
 {{ if eq .Media "text/plain" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a> {{ .Desc }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else if eq .Media "application/pdf" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a> {{ .Desc }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
 <p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
 {{ end }}
 {{ else }}
 {{ if .XID }}
-<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>
+<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
 {{ if eq .Media "video/mp4" }}
 <p><video controls src="{{ .URL }}">{{ .Name }}</video>

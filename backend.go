@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 
+	"humungus.tedunangst.com/r/webs/gate"
 	"humungus.tedunangst.com/r/webs/image"
 )
 
@@ -38,7 +39,11 @@ type ShrinkerResult struct {
 	Image *image.Image
 }
 
+var shrinkgate = gate.NewLimiter(4)
+
 func (s *Shrinker) Shrink(args *ShrinkerArgs, res *ShrinkerResult) error {
+	shrinkgate.Start()
+	defer shrinkgate.Finish()
 	img, err := image.Vacuum(bytes.NewReader(args.Buf), args.Params)
 	if err != nil {
 		return err

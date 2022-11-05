@@ -28,7 +28,8 @@ var re_bolder = regexp.MustCompile(`(^|\W)\*\*((?s:.*?))\*\*($|\W)`)
 var re_italicer = regexp.MustCompile(`(^|\W)\*((?s:.*?))\*($|\W)`)
 var re_bigcoder = regexp.MustCompile("```(.*)\n?((?s:.*?))\n?```\n?")
 var re_coder = regexp.MustCompile("`([^`]*)`")
-var re_quoter = regexp.MustCompile(`(?m:^&gt; (.*)\n?)`)
+var re_quoter = regexp.MustCompile(`(?m:^&gt; (.*)(\n- ?(.*))?\n?)`)
+var re_reciter = regexp.MustCompile(`(<cite><a href=".*?">)https://twitter.com/([^/]+)/.*?(</a></cite>)`)
 var re_link = regexp.MustCompile(`.?.?https?://[^\s"]+[\w/)!]`)
 var re_zerolink = regexp.MustCompile(`\[([^]]*)\]\(([^)]*\)?)\)`)
 var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
@@ -77,7 +78,8 @@ func markitzero(s string) string {
 	s = re_zerolink.ReplaceAllString(s, `<a href="$2">$1</a>`)
 	s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
 	s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
-	s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><p>")
+	s = re_quoter.ReplaceAllString(s, "<blockquote>$1<br><cite>$3</cite></blockquote><p>")
+	s = re_reciter.ReplaceAllString(s, "$1$2$3")
 	s = strings.Replace(s, "\n---\n", "<hr><p>", -1)
 
 	s = re_lister.ReplaceAllStringFunc(s, func(m string) string {
@@ -117,6 +119,7 @@ func markitzero(s string) string {
 	// some final fixups
 	s = strings.Replace(s, "\n", "<br>", -1)
 	s = strings.Replace(s, "<br><blockquote>", "<blockquote>", -1)
+	s = strings.Replace(s, "<br><cite></cite>", "", -1)
 	s = strings.Replace(s, "<br><pre>", "<pre>", -1)
 	s = strings.Replace(s, "<br><ul>", "<ul>", -1)
 	s = strings.Replace(s, "<p><br>", "<p>", -1)

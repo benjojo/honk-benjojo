@@ -7,7 +7,7 @@
 <form id="aboutform" action="/saveuser" method="POST">
 <input type="hidden" name="CSRF" value="{{ .UserCSRF }}">
 <p>about me:
-<p><textarea name="whatabout">{{ .User.About }}</textarea>
+<p><textarea name="whatabout">{{ .WhatAbout }}</textarea>
 <p><label class="button" for="skinny">skinny layout:</label>
 <input tabindex=1 type="checkbox" id="skinny" name="skinny" value="skinny" {{ if .User.Options.SkinnyCSS }}checked{{ end }}><span></span>
 <p><label class="button" for="maps">apple map links:</label>

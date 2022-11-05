@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -141,6 +142,22 @@ func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
 	return j, nil
 }
 
+func fetchsome(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("error fetching %s: %s", url, err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, errors.New("not 200")
+	}
+	var buf bytes.Buffer
+	limiter := io.LimitReader(resp.Body, 10*1024*1024)
+	io.Copy(&buf, limiter)
+	return buf.Bytes(), nil
+}
+
 func savedonk(url string, name, desc, media string, localize bool) *Donk {
 	if url == "" {
 		return nil
@@ -154,22 +171,16 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 	xid := xfiltrate()
 	data := []byte{}
 	if localize {
-		resp, err := http.Get(url)
+		fn := func() (interface{}, error) {
+			return fetchsome(url)
+		}
+		ii, err := flightdeck.Call(url, fn)
 		if err != nil {
-			log.Printf("error fetching %s: %s", url, err)
 			localize = false
 			goto saveit
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			localize = false
-			goto saveit
-		}
-		var buf bytes.Buffer
-		limiter := io.LimitReader(resp.Body, 10*1024*1024)
-		io.Copy(&buf, limiter)
+		data = ii.([]byte)
 
-		data = buf.Bytes()
 		if len(data) == 10*1024*1024 {
 			log.Printf("truncation likely")
 		}
@@ -188,6 +199,12 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 				format = "jpg"
 			}
 			xid = xid + "." + format
+		} else if media == "application/pdf" {
+			if len(data) > 1000000 {
+				log.Printf("not saving large pdf")
+				localize = false
+				data = []byte{}
+			}
 		} else if len(data) > 100000 {
 			log.Printf("not saving large attachment")
 			localize = false
@@ -277,7 +294,8 @@ var boxofboxes = cache.New(cache.Options{Filler: func(ident string) (*Box, bool)
 	err := row.Scan(&info)
 	if err != nil {
 		log.Printf("need to get boxes for %s", ident)
-		j, err := GetJunk(ident)
+		var j junk.Junk
+		j, err = GetJunk(ident)
 		if err != nil {
 			log.Printf("error getting boxes: %s", err)
 			return nil, false
@@ -697,7 +715,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				} else if at == "Document" || at == "Image" {
 					mt = strings.ToLower(mt)
 					log.Printf("attachment: %s %s", mt, u)
-					if mt == "text/plain" || strings.HasPrefix(mt, "image") {
+					if mt == "text/plain" || mt == "application/pdf" ||
+						strings.HasPrefix(mt, "image") {
 						localize = true
 					}
 				} else {
@@ -853,6 +872,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				prev.Donks = xonk.Donks
 				prev.Onts = xonk.Onts
 				prev.Place = xonk.Place
+				prev.Whofore = xonk.Whofore
 				updatehonk(prev)
 			}
 		}
@@ -1010,7 +1030,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		translate(h, true)
 		jo["summary"] = html.EscapeString(h.Precis)
 		jo["content"] = h.Noise
-		if strings.HasPrefix(h.Precis, "DZ:") {
+		if h.Precis != "" {
 			jo["sensitive"] = true
 		}
 
@@ -1197,6 +1217,9 @@ func honkworldwide(user *WhatAbout, honk *Honk) {
 				rcpts[h.XID] = true
 			}
 		}
+		for _, f := range getbacktracks(honk.XID) {
+			rcpts[f] = true
+		}
 	}
 	for a := range rcpts {
 		go deliverate(0, user.ID, a, msg)
@@ -1316,7 +1339,8 @@ var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) 
 		rel, _ := l.GetString("rel")
 		t, _ := l.GetString("type")
 		if rel == "self" && friendorfoe(t) {
-			_, err := stmtSaveXonker.Exec(name, href, "fishname")
+			when := time.Now().UTC().Format(dbtimeformat)
+			_, err := stmtSaveXonker.Exec(name, href, "fishname", when)
 			if err != nil {
 				log.Printf("error saving fishname: %s", err)
 			}
@@ -1429,7 +1453,8 @@ func ingestpubkey(origin string, obj junk.Junk) {
 		log.Printf("error decoding %s pubkey: %s", keyname, err)
 		return
 	}
-	_, err = stmtSaveXonker.Exec(keyname, data, "pubkey")
+	when := time.Now().UTC().Format(dbtimeformat)
+	_, err = stmtSaveXonker.Exec(keyname, data, "pubkey", when)
 	if err != nil {
 		log.Printf("error saving key: %s", err)
 	}
@@ -1454,8 +1479,9 @@ func ingestboxes(origin string, obj junk.Junk) {
 	outbox, _ := obj.GetString("outbox")
 	sbox, _ := obj.GetString("endpoints", "sharedInbox")
 	if inbox != "" {
+		when := time.Now().UTC().Format(dbtimeformat)
 		m := strings.Join([]string{inbox, outbox, sbox}, " ")
-		_, err = stmtSaveXonker.Exec(ident, m, "boxes")
+		_, err = stmtSaveXonker.Exec(ident, m, "boxes", when)
 		if err != nil {
 			log.Printf("error saving boxes: %s", err)
 		}
@@ -1478,7 +1504,8 @@ func ingesthandle(origin string, obj junk.Junk) {
 	}
 	handle, _ = obj.GetString("preferredUsername")
 	if handle != "" {
-		_, err = stmtSaveXonker.Exec(xid, handle, "handle")
+		when := time.Now().UTC().Format(dbtimeformat)
+		_, err = stmtSaveXonker.Exec(xid, handle, "handle", when)
 		if err != nil {
 			log.Printf("error saving handle: %s", err)
 		}
