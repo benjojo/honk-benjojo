@@ -20,6 +20,7 @@ package htfilter
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"net/url"
 	"regexp"
 	"strings"
@@ -39,6 +40,7 @@ type Filter struct {
 	SpanClasses map[string]bool
 	BaseURL     *url.URL
 	WithLinks   bool
+	FilterText  func(io.Writer, string)
 }
 
 var permittedtags = map[string]bool{
@@ -143,8 +145,15 @@ func getclasses(node *html.Node, allowed map[string]bool) string {
 	return fmt.Sprintf(` class="%s"`, strings.Join(toprint, " "))
 }
 
-// no need to escape quotes here
-func writeText(w writer, text string) {
+// A very basic escaper
+func EscapeText(text string) string {
+	var buf strings.Builder
+	WriteText(&buf, text)
+	return buf.String()
+}
+
+func WriteText(w io.Writer, text string) {
+	// no need to escape quotes here
 	last := 0
 	for i, c := range text {
 		var html string
@@ -160,11 +169,11 @@ func writeText(w writer, text string) {
 		default:
 			continue
 		}
-		w.WriteString(text[last:i])
-		w.WriteString(html)
+		io.WriteString(w, text[last:i])
+		io.WriteString(w, html)
 		last = i + 1
 	}
-	w.WriteString(text[last:])
+	io.WriteString(w, text[last:])
 }
 
 func (filt *Filter) render(w writer, node *html.Node) {
@@ -217,7 +226,11 @@ func (filt *Filter) render(w writer, node *html.Node) {
 			return
 		}
 	} else if node.Type == html.TextNode {
-		writeText(w, node.Data)
+		if filt.FilterText != nil {
+			filt.FilterText(w, node.Data)
+		} else {
+			WriteText(w, node.Data)
+		}
 	}
 
 	for c := node.FirstChild; c != nil; c = c.NextSibling {

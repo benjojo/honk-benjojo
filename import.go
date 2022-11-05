@@ -133,7 +133,7 @@ func importMastodon(username, source string) {
 				name := att.Name
 				desc := name
 				newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
-				fileid, err := savefile(u, name, desc, newurl, att.MediaType, true, data)
+				fileid, err := savefile(name, desc, newurl, att.MediaType, true, data)
 				if err != nil {
 					log.Printf("error saving media: %s", fname)
 					continue
@@ -264,7 +264,7 @@ func importTwitter(username, source string) {
 			}
 			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
 
-			fileid, err := savefile(u, u, u, newurl, "image/jpg", true, data)
+			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
 			if err != nil {
 				log.Printf("error saving media: %s", fname)
 				continue

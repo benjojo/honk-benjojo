@@ -314,6 +314,9 @@ img.emu {
 		width: 48px;
 		height: 48px;
 	}
+	details summary {
+		outline: none;
+	}
 }
 @media print {
 	#topmenu, #topspacer, #infobox, #refreshbox, .actions {

@@ -43,7 +43,8 @@
 <h2 class="Ss" id="Setup"><a class="permalink" href="#Setup">Setup</a></h2>
 <p class="Pp">Set up a TLS reverse proxy. <code class="Nm">honk</code> can
     listen on TCP or unix sockets, but will not terminate TLS. https is a
-    required component for federation.</p>
+    required component for federation. Also, http signature verification
+    requires accurate time keeping.</p>
 <p class="Pp">Make sure to pass the Host header, if necessary (as for
   nginx).</p>
 <div class="Bd Pp Bd-indent">
@@ -54,8 +55,8 @@ proxy_set_header Host $http_host;
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Build"><a class="permalink" href="#Build">Build</a></h2>
-<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler and
-    libsqlite. On <span class="Ux">OpenBSD</span> this is the go and sqlite3
+<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler 1.13
+    and libsqlite. On <span class="Ux">OpenBSD</span> this is the go and sqlite3
     packages. Other platforms may require additional development libraries or
     headers to be installed. Run make. Please be patient. Even on fast machines,
     building from source can take several seconds.</p>
@@ -123,13 +124,13 @@ proxy_set_header Host $http_host;
     <code class="Ic">cleanup</code> [<var class="Ar">days</var>] command exists
     to purge old data, by default 30 days. This removes unreferenced, unsaved
     posts and attachments. It does not remove any original content.</p>
+<p class="Pp">Backups may be performed by running <code class="Ic">backup
+    dirname</code>. Backups only include the minimal necessary information.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Upgrade"><a class="permalink" href="#Upgrade">Upgrade</a></h2>
 <p class="Pp">Stop the old honk process. Backup the database. Perform the
     upgrade with the <code class="Ic">upgrade</code> command. Restart.</p>
-<p class="Pp">There's also a <span class="Pa">blob.db</span> file which is
-    important to backup and restore.</p>
 <p class="Pp">The current version of the honk binary may be printed with the
     <code class="Ic">version</code> command.</p>
 </section>
@@ -262,7 +263,7 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">July 6, 2020</td>
+    <td class="foot-date">November 10, 2020</td>
     <td class="foot-os">OpenBSD 6.7</td>
   </tr>
 </table>

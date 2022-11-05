@@ -149,6 +149,13 @@ func (j Junk) GetString(keys ...interface{}) (string, bool) {
 	return s, ok
 }
 
+// Find and return a float value (and true for success).
+// keys may be strings or integers used to walk through the object.
+func (j Junk) GetNumber(keys ...interface{}) (float64, bool) {
+	s, ok := jsonfindinterface(j, keys).(float64)
+	return s, ok
+}
+
 // Find and return an array (and true for success).
 // keys may be strings or integers used to walk through the object.
 func (j Junk) GetArray(keys ...interface{}) ([]interface{}, bool) {

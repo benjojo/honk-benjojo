@@ -29,7 +29,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.2"
+var softwareVersion = "0.9.3"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -40,6 +40,8 @@ type WhatAbout struct {
 	Name    string
 	Display string
 	About   string
+	HTAbout template.HTML
+	Onts    []string
 	Key     string
 	URL     string
 	Options UserOptions
@@ -52,6 +54,7 @@ type UserOptions struct {
 	Avatar     string `json:",omitempty"`
 	MapLink    string `json:",omitempty"`
 	Reaction   string `json:",omitempty"`
+	MentionAll bool
 }
 
 type KeyInfo struct {
@@ -68,6 +71,7 @@ type Honk struct {
 	What     string
 	Honker   string
 	Handle   string
+	Handles  string
 	Oonker   string
 	Oondle   string
 	XID      string
@@ -152,13 +156,14 @@ func (honk *Honk) IsReacted() bool {
 }
 
 type Donk struct {
-	FileID int64
-	XID    string
-	Name   string
-	Desc   string
-	URL    string
-	Media  string
-	Local  bool
+	FileID   int64
+	XID      string
+	Name     string
+	Desc     string
+	URL      string
+	Media    string
+	Local    bool
+	External bool
 }
 
 type Place struct {
@@ -227,6 +232,7 @@ const (
 )
 
 var serverName string
+var serverPrefix string
 var masqName string
 var dataDir = "."
 var viewDir = "."
@@ -277,6 +283,7 @@ func main() {
 	if masqName == "" {
 		masqName = serverName
 	}
+	serverPrefix = fmt.Sprintf("https://%s/", serverName)
 	getconfig("usersep", &userSep)
 	getconfig("honksep", &honkSep)
 	getconfig("debug", &debugMode)
@@ -324,6 +331,13 @@ func main() {
 		}
 		name := args[1]
 		unplugserver(name)
+	case "backup":
+		if len(args) < 2 {
+			fmt.Printf("usage: honk backup dirname\n")
+			return
+		}
+		name := args[1]
+		svalbard(name)
 	case "ping":
 		if len(args) < 3 {
 			fmt.Printf("usage: honk ping from to\n")

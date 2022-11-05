@@ -32,6 +32,7 @@ Set up a TLS reverse proxy.
 .Nm
 can listen on TCP or unix sockets, but will not terminate TLS.
 https is a required component for federation.
+Also, http signature verification requires accurate time keeping.
 .Pp
 Make sure to pass the Host header, if necessary (as for nginx).
 .Bd -literal -offset indent
@@ -40,7 +41,7 @@ proxy_set_header Host $http_host;
 .Ss Build
 Building
 .Nm
-requires a go compiler and libsqlite.
+requires a go compiler 1.13 and libsqlite.
 On
 .Ox
 this is the go and sqlite3 packages.
@@ -124,6 +125,10 @@ The
 command exists to purge old data, by default 30 days.
 This removes unreferenced, unsaved posts and attachments.
 It does not remove any original content.
+.Pp
+Backups may be performed by running
+.Ic backup dirname .
+Backups only include the minimal necessary information.
 .Ss Upgrade
 Stop the old honk process.
 Backup the database.
@@ -131,10 +136,6 @@ Perform the upgrade with the
 .Ic upgrade
 command.
 Restart.
-.Pp
-There's also a
-.Pa blob.db
-file which is important to backup and restore.
 .Pp
 The current version of the honk binary may be printed with the
 .Ic version

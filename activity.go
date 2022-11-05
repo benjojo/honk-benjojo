@@ -158,11 +158,15 @@ func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
 
 func fetchsome(url string) ([]byte, error) {
 	client := http.DefaultClient
+	if debugMode {
+		client = debugClient
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Printf("error fetching %s: %s", url, err)
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "honksnonk/5.0; "+serverName)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	req = req.WithContext(ctx)
@@ -172,8 +176,12 @@ func fetchsome(url string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("not 200: %d %s", resp.StatusCode, url)
+	switch resp.StatusCode {
+	case 200:
+	case 201:
+	case 202:
+	default:
+		return nil, fmt.Errorf("http get not 200: %d %s", resp.StatusCode, url)
 	}
 	var buf bytes.Buffer
 	limiter := io.LimitReader(resp.Body, 10*1024*1024)
@@ -189,7 +197,6 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 		return donk
 	}
 	log.Printf("saving donk: %s", url)
-	xid := xfiltrate()
 	data := []byte{}
 	if localize {
 		fn := func() (interface{}, error) {
@@ -215,12 +222,7 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 				goto saveit
 			}
 			data = img.Data
-			format := img.Format
-			media = "image/" + format
-			if format == "jpeg" {
-				format = "jpg"
-			}
-			xid = xid + "." + format
+			media = "image/" + img.Format
 		} else if media == "application/pdf" {
 			if len(data) > 1000000 {
 				log.Printf("not saving large pdf")
@@ -234,14 +236,13 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 		}
 	}
 saveit:
-	fileid, err := savefile(xid, name, desc, url, media, localize, data)
+	fileid, err := savefile(name, desc, url, media, localize, data)
 	if err != nil {
 		log.Printf("error saving file %s: %s", url, err)
 		return nil
 	}
 	donk := new(Donk)
 	donk.FileID = fileid
-	donk.XID = xid
 	return donk
 }
 
@@ -826,8 +827,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				if tt == "Place" {
 					p := new(Place)
 					p.Name = name
-					p.Latitude, _ = tag["latitude"].(float64)
-					p.Longitude, _ = tag["longitude"].(float64)
+					p.Latitude, _ = tag.GetNumber("latitude")
+					p.Longitude, _ = tag.GetNumber("longitude")
 					p.Url, _ = tag.GetString("url")
 					xonk.Place = p
 				}
@@ -857,8 +858,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				if tt, _ := loca.GetString("type"); tt == "Place" {
 					p := new(Place)
 					p.Name, _ = loca.GetString("name")
-					p.Latitude, _ = loca["latitude"].(float64)
-					p.Longitude, _ = loca["longitude"].(float64)
+					p.Latitude, _ = loca.GetNumber("latitude")
+					p.Longitude, _ = loca.GetNumber("longitude")
 					p.Url, _ = loca.GetString("url")
 					xonk.Place = p
 				}
@@ -979,54 +980,53 @@ func dumpactivity(item junk.Junk) {
 }
 
 func rubadubdub(user *WhatAbout, req junk.Junk) {
-	xid, _ := req.GetString("id")
 	actor, _ := req.GetString("actor")
 	j := junk.New()
 	j["@context"] = itiswhatitis
-	j["id"] = user.URL + "/dub/" + url.QueryEscape(xid)
+	j["id"] = user.URL + "/dub/" + xfiltrate()
 	j["type"] = "Accept"
 	j["actor"] = user.URL
 	j["to"] = actor
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 	j["object"] = req
 
-	deliverate(0, user.ID, actor, j.ToBytes())
+	deliverate(0, user.ID, actor, j.ToBytes(), true)
 }
 
-func itakeitallback(user *WhatAbout, xid string) {
+func itakeitallback(user *WhatAbout, xid string, owner string, folxid string) {
 	j := junk.New()
 	j["@context"] = itiswhatitis
-	j["id"] = user.URL + "/unsub/" + url.QueryEscape(xid)
+	j["id"] = user.URL + "/unsub/" + folxid
 	j["type"] = "Undo"
 	j["actor"] = user.URL
-	j["to"] = xid
+	j["to"] = owner
 	f := junk.New()
-	f["id"] = user.URL + "/sub/" + url.QueryEscape(xid)
+	f["id"] = user.URL + "/sub/" + folxid
 	f["type"] = "Follow"
 	f["actor"] = user.URL
-	f["to"] = xid
+	f["to"] = owner
 	f["object"] = xid
 	j["object"] = f
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 
-	deliverate(0, user.ID, xid, j.ToBytes())
+	deliverate(0, user.ID, owner, j.ToBytes(), true)
 }
 
-func subsub(user *WhatAbout, xid string, owner string) {
+func subsub(user *WhatAbout, xid string, owner string, folxid string) {
 	if xid == "" {
 		log.Printf("can't subscribe to empty")
 		return
 	}
 	j := junk.New()
 	j["@context"] = itiswhatitis
-	j["id"] = user.URL + "/sub/" + url.QueryEscape(xid)
+	j["id"] = user.URL + "/sub/" + folxid
 	j["type"] = "Follow"
 	j["actor"] = user.URL
 	j["to"] = owner
 	j["object"] = xid
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 
-	deliverate(0, user.ID, owner, j.ToBytes())
+	deliverate(0, user.ID, owner, j.ToBytes(), true)
 }
 
 func activatedonks(donks []*Donk) []junk.Junk {
@@ -1054,11 +1054,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 	j["id"] = user.URL + "/" + h.What + "/" + shortxid(h.XID)
 	j["actor"] = user.URL
 	j["published"] = dt
-	if h.Public {
-		j["to"] = []string{h.Audience[0], user.URL + "/followers"}
-	} else {
-		j["to"] = h.Audience[0]
-	}
+	j["to"] = h.Audience[0]
 	if len(h.Audience) > 1 {
 		j["cc"] = h.Audience[1:]
 	}
@@ -1099,12 +1095,6 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		if !h.Public {
 			jo["directMessage"] = true
 		}
-		var mentions []Mention
-		if len(h.Mentions) > 0 {
-			mentions = h.Mentions
-		} else {
-			mentions = bunchofgrapes(h.Noise)
-		}
 		translate(h)
 		redoimages(h)
 		if h.Precis != "" {
@@ -1124,7 +1114,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		}
 
 		var tags []junk.Junk
-		for _, m := range mentions {
+		for _, m := range h.Mentions {
 			t := junk.New()
 			t["type"] = "Mention"
 			t["name"] = m.Who
@@ -1151,7 +1141,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			t["icon"] = i
 			tags = append(tags, t)
 		}
-		for _, e := range bloat_fixupflags(h) {
+		for _, e := range fixupflags(h) {
 			t := junk.New()
 			t["id"] = e.ID
 			t["type"] = "Emoji"
@@ -1308,6 +1298,22 @@ func chonkifymsg(user *WhatAbout, ch *Chonk) []byte {
 	if len(atts) > 0 {
 		jo["attachment"] = atts
 	}
+	var tags []junk.Junk
+	for _, e := range herdofemus(ch.Noise) {
+		t := junk.New()
+		t["id"] = e.ID
+		t["type"] = "Emoji"
+		t["name"] = e.Name
+		i := junk.New()
+		i["type"] = "Image"
+		i["mediaType"] = "image/png"
+		i["url"] = e.ID
+		t["icon"] = i
+		tags = append(tags, t)
+	}
+	if len(tags) > 0 {
+		jo["tag"] = tags
+	}
 
 	j := junk.New()
 	j["@context"] = itiswhatitis
@@ -1327,7 +1333,7 @@ func sendchonk(user *WhatAbout, ch *Chonk) {
 	rcpts := make(map[string]bool)
 	rcpts[ch.Target] = true
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg)
+		go deliverate(0, user.ID, a, msg, true)
 	}
 }
 
@@ -1352,15 +1358,33 @@ func honkworldwide(user *WhatAbout, honk *Honk) {
 			}
 		}
 		for _, f := range getbacktracks(honk.XID) {
-			rcpts[f] = true
+			var box *Box
+			ok := boxofboxes.Get(f, &box)
+			if ok && box.Shared != "" {
+				rcpts["%"+box.Shared] = true
+			} else {
+				rcpts[f] = true
+			}
 		}
 	}
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg)
+		go deliverate(0, user.ID, a, msg, doesitmatter(honk.What))
 	}
 	if honk.Public && len(honk.Onts) > 0 {
 		collectiveaction(honk)
 	}
+}
+
+func doesitmatter(what string) bool {
+	switch what {
+	case "ack":
+		return false
+	case "react":
+		return false
+	case "deack":
+		return false
+	}
+	return true
 }
 
 func collectiveaction(honk *Honk) {
@@ -1389,14 +1413,12 @@ func collectiveaction(honk *Honk) {
 		}
 		msg := j.ToBytes()
 		for a := range rcpts {
-			go deliverate(0, user.ID, a, msg)
+			go deliverate(0, user.ID, a, msg, false)
 		}
 	}
 }
 
 func junkuser(user *WhatAbout) junk.Junk {
-	about := markitzero(user.About)
-
 	j := junk.New()
 	j["@context"] = itiswhatitis
 	j["id"] = user.URL
@@ -1404,7 +1426,20 @@ func junkuser(user *WhatAbout) junk.Junk {
 	j["outbox"] = user.URL + "/outbox"
 	j["name"] = user.Display
 	j["preferredUsername"] = user.Name
-	j["summary"] = about
+	j["summary"] = user.HTAbout
+	var tags []junk.Junk
+	for _, o := range user.Onts {
+		t := junk.New()
+		t["type"] = "Hashtag"
+		o = strings.ToLower(o)
+		t["href"] = fmt.Sprintf("https://%s/o/%s", serverName, o[1:])
+		t["name"] = o
+		tags = append(tags, t)
+	}
+	if len(tags) > 0 {
+		j["tag"] = tags
+	}
+
 	if user.ID > 0 {
 		j["type"] = "Person"
 		j["url"] = user.URL
@@ -1658,7 +1693,7 @@ func updateMe(username string) {
 	j["id"] = fmt.Sprintf("%s/upme/%s/%d", user.URL, user.Name, time.Now().Unix())
 	j["actor"] = user.URL
 	j["published"] = dt
-	j["to"] = []string{thewholeworld, user.URL + "/followers"}
+	j["to"] = thewholeworld
 	j["type"] = "Update"
 	j["object"] = junkuser(user)
 
@@ -1678,6 +1713,131 @@ func updateMe(username string) {
 		}
 	}
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg)
+		go deliverate(0, user.ID, a, msg, false)
+	}
+}
+
+func followme(user *WhatAbout, who string, name string, j junk.Junk) {
+	folxid, _ := j.GetString("id")
+
+	log.Printf("updating honker follow: %s %s", who, folxid)
+
+	var x string
+	db := opendatabase()
+	row := db.QueryRow("select xid from honkers where name = ? and xid = ? and userid = ? and flavor in ('dub', 'undub')", name, who, user.ID)
+	err := row.Scan(&x)
+	if err != sql.ErrNoRows {
+		log.Printf("duplicate follow request: %s", who)
+		_, err = stmtUpdateFlavor.Exec("dub", folxid, user.ID, name, who, "undub")
+		if err != nil {
+			log.Printf("error updating honker: %s", err)
+		}
+	} else {
+		stmtSaveDub.Exec(user.ID, name, who, "dub", folxid)
+	}
+	go rubadubdub(user, j)
+}
+
+func unfollowme(user *WhatAbout, who string, name string, j junk.Junk) {
+	var folxid string
+	if who == "" {
+		folxid, _ = j.GetString("object")
+
+		db := opendatabase()
+		row := db.QueryRow("select xid, name from honkers where userid = ? and folxid = ? and flavor in ('dub', 'undub')", user.ID, folxid)
+		err := row.Scan(&who, &name)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				log.Printf("error scanning honker: %s", err)
+			}
+			return
+		}
+	}
+
+	log.Printf("updating honker undo: %s %s", who, folxid)
+	_, err := stmtUpdateFlavor.Exec("undub", folxid, user.ID, name, who, "dub")
+	if err != nil {
+		log.Printf("error updating honker: %s", err)
+		return
+	}
+}
+
+func followyou(user *WhatAbout, honkerid int64) {
+	var url, owner string
+	db := opendatabase()
+	row := db.QueryRow("select xid, owner from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep', 'presub', 'sub')",
+		honkerid, user.ID)
+	err := row.Scan(&url, &owner)
+	if err != nil {
+		log.Printf("can't get honker xid: %s", err)
+		return
+	}
+	folxid := xfiltrate()
+	log.Printf("subscribing to %s", url)
+	_, err = db.Exec("update honkers set flavor = ?, folxid = ? where honkerid = ?", "presub", folxid, honkerid)
+	if err != nil {
+		log.Printf("error updating honker: %s", err)
+		return
+	}
+	go subsub(user, url, owner, folxid)
+
+}
+func unfollowyou(user *WhatAbout, honkerid int64) {
+	db := opendatabase()
+	row := db.QueryRow("select xid, owner, folxid from honkers where honkerid = ? and userid = ? and flavor in ('sub')",
+		honkerid, user.ID)
+	var url, owner, folxid string
+	err := row.Scan(&url, &owner, &folxid)
+	if err != nil {
+		log.Printf("can't get honker xid: %s", err)
+		return
+	}
+	log.Printf("unsubscribing from %s", url)
+	_, err = db.Exec("update honkers set flavor = ? where honkerid = ?", "unsub", honkerid)
+	if err != nil {
+		log.Printf("error updating honker: %s", err)
+		return
+	}
+	go itakeitallback(user, url, owner, folxid)
+}
+
+func followyou2(user *WhatAbout, j junk.Junk) {
+	who, _ := j.GetString("actor")
+
+	log.Printf("updating honker accept: %s", who)
+	db := opendatabase()
+	row := db.QueryRow("select name, folxid from honkers where userid = ? and xid = ? and flavor in ('presub')",
+		user.ID, who)
+	var name, folxid string
+	err := row.Scan(&name, &folxid)
+	if err != nil {
+		log.Printf("can't get honker name: %s", err)
+		return
+	}
+	_, err = stmtUpdateFlavor.Exec("sub", folxid, user.ID, name, who, "presub")
+	if err != nil {
+		log.Printf("error updating honker: %s", err)
+		return
+	}
+}
+
+func nofollowyou2(user *WhatAbout, j junk.Junk) {
+	who, _ := j.GetString("actor")
+
+	log.Printf("updating honker reject: %s", who)
+	db := opendatabase()
+	row := db.QueryRow("select name, folxid from honkers where userid = ? and xid = ? and flavor in ('presub', 'sub')",
+		user.ID, who)
+	var name, folxid string
+	err := row.Scan(&name, &folxid)
+	if err != nil {
+		log.Printf("can't get honker name: %s", err)
+		return
+	}
+	_, err = stmtUpdateFlavor.Exec("unsub", folxid, user.ID, name, who, "presub")
+	_, err = stmtUpdateFlavor.Exec("unsub", folxid, user.ID, name, who, "sub")
+	if err != nil {
+		log.Printf("error updating honker: %s", err)
+		return
 	}
 }

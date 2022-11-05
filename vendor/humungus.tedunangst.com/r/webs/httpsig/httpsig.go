@@ -338,7 +338,7 @@ func ActivityPubKeyGetter(keyname string) (key PublicKey) {
 	if key.Type != None {
 		return key
 	}
-	j, err := junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 5 * time.Second})
+	j, err := junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 15 * time.Second})
 	if err != nil {
 		log.Printf("error getting %s pubkey: %s", keyname, err)
 		return

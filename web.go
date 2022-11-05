@@ -117,6 +117,11 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 			templinfo["PageName"] = "atme"
 			honks = gethonksforme(userid, 0)
 			honks = osmosis(honks, userid, false)
+		case "/longago":
+			templinfo["ServerMessage"] = "long ago and far away!"
+			templinfo["PageName"] = "longago"
+			honks = gethonksfromlongago(userid, 0)
+			honks = osmosis(honks, userid, false)
 		case "/events":
 			templinfo["ServerMessage"] = "some recent and upcoming events"
 			templinfo["PageName"] = "events"
@@ -344,7 +349,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
 	}
 	if err != nil {
-		log.Printf("inbox message failed signature for %s from %s", keyname, r.Header.Get("X-Forwarded-For"))
+		log.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
 		if keyname != "" {
 			log.Printf("bad signature from %s", keyname)
 			io.WriteString(os.Stdout, "bad payload\n")
@@ -372,38 +377,11 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 			log.Printf("can't follow %s", obj)
 			return
 		}
-		log.Printf("updating honker follow: %s", who)
-
-		var x string
-		db := opendatabase()
-		row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('dub', 'undub')", who, user.ID)
-		err = row.Scan(&x)
-		if err != sql.ErrNoRows {
-			log.Printf("duplicate follow request: %s", who)
-			_, err = stmtUpdateFlavor.Exec("dub", user.ID, who, who, "undub")
-			if err != nil {
-				log.Printf("error updating honker: %s", err)
-			}
-		} else {
-			stmtSaveDub.Exec(user.ID, who, who, "dub")
-		}
-		go rubadubdub(user, j)
+		followme(user, who, who, j)
 	case "Accept":
-		log.Printf("updating honker accept: %s", who)
-		var name string
-		db := opendatabase()
-		row := db.QueryRow("select name from honkers where userid = ? and xid = ? and flavor in ('presub')",
-			user.ID, who)
-		err := row.Scan(&name)
-		if err != nil {
-			log.Printf("can't get honker name: %s", err)
-			return
-		}
-		_, err = stmtUpdateFlavor.Exec("sub", user.ID, who, name, "presub")
-		if err != nil {
-			log.Printf("error updating honker: %s", err)
-			return
-		}
+		followyou2(user, j)
+	case "Reject":
+		nofollowyou2(user, j)
 	case "Update":
 		obj, ok := j.GetMap("object")
 		if ok {
@@ -423,18 +401,16 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	case "Undo":
 		obj, ok := j.GetMap("object")
 		if !ok {
-			log.Printf("unknown undo no object")
+			folxid, ok := j.GetString("object")
+			if ok && originate(folxid) == origin {
+				unfollowme(user, "", "", j)
+			}
 			return
 		}
 		what, _ := obj.GetString("type")
 		switch what {
 		case "Follow":
-			log.Printf("updating honker undo: %s", who)
-			_, err = stmtUpdateFlavor.Exec("undub", user.ID, who, who, "dub")
-			if err != nil {
-				log.Printf("error updating honker: %s", err)
-				return
-			}
+			unfollowme(user, who, who, j)
 		case "Announce":
 			xid, _ := obj.GetString("object")
 			log.Printf("undo announce: %s", xid)
@@ -473,7 +449,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
 	}
 	if err != nil {
-		log.Printf("inbox message failed signature for %s from %s", keyname, r.Header.Get("X-Forwarded-For"))
+		log.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
 		if keyname != "" {
 			log.Printf("bad signature from %s", keyname)
 			io.WriteString(os.Stdout, "bad payload\n")
@@ -508,21 +484,8 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ont := "#" + m[1]
-		log.Printf("%s wants to follow %s", who, ont)
-		var x string
-		db := opendatabase()
-		row := db.QueryRow("select xid from honkers where name = ? and xid = ? and userid = ? and flavor in ('dub', 'undub')", ont, who, user.ID)
-		err = row.Scan(&x)
-		if err != sql.ErrNoRows {
-			log.Printf("duplicate follow request: %s", who)
-			_, err = stmtUpdateFlavor.Exec("dub", user.ID, who, ont, "undub")
-			if err != nil {
-				log.Printf("error updating honker: %s", err)
-			}
-		} else {
-			stmtSaveDub.Exec(user.ID, ont, who, "dub")
-		}
-		go rubadubdub(user, j)
+
+		followme(user, who, ont, j)
 	case "Undo":
 		obj, ok := j.GetMap("object")
 		if !ok {
@@ -532,6 +495,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		what, _ := obj.GetString("type")
 		if what != "Follow" {
 			log.Printf("unknown undo: %s", what)
+			return
 		}
 		targ, _ := obj.GetString("object")
 		m := re_ont.FindStringSubmatch(targ)
@@ -540,12 +504,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ont := "#" + m[1]
-		log.Printf("updating honker undo: %s %s", who, ont)
-		_, err = stmtUpdateFlavor.Exec("undub", user.ID, who, ont, "dub")
-		if err != nil {
-			log.Printf("error updating honker: %s", err)
-			return
-		}
+		unfollowme(user, who, ont, j)
 	default:
 		log.Printf("unhandled server activity: %s", what)
 		dumpactivity(j)
@@ -741,9 +700,7 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	honks := gethonksbyuser(name, u != nil && u.Username == name, 0)
 	templinfo := getInfo(r)
 	templinfo["Name"] = user.Name
-	whatabout := user.About
-	whatabout = markitzero(user.About)
-	templinfo["WhatAbout"] = template.HTML(whatabout)
+	templinfo["WhatAbout"] = user.HTAbout
 	templinfo["ServerMessage"] = ""
 	templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
 	honkpage(w, u, honks, templinfo)
@@ -1128,6 +1085,11 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		options.OmitImages = false
 	}
+	if r.FormValue("mentionall") == "mentionall" {
+		options.MentionAll = true
+	} else {
+		options.MentionAll = false
+	}
 	if r.FormValue("maps") == "apple" {
 		options.MapLink = "apple"
 	} else {
@@ -1456,19 +1418,22 @@ func canedithonk(user *WhatAbout, honk *Honk) bool {
 }
 
 func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
+		return nil, nil
+	}
 	file, filehdr, err := r.FormFile("donk")
 	if err != nil {
-		if err != http.ErrMissingFile {
-			log.Printf("error reading donk: %s", err)
-			http.Error(w, "error reading donk", http.StatusUnsupportedMediaType)
+		if err == http.ErrMissingFile {
+			return nil, nil
 		}
+		log.Printf("error reading donk: %s", err)
+		http.Error(w, "error reading donk", http.StatusUnsupportedMediaType)
 		return nil, err
 	}
 	var buf bytes.Buffer
 	io.Copy(&buf, file)
 	file.Close()
 	data := buf.Bytes()
-	xid := xfiltrate()
 	var media, name string
 	img, err := shrinkit(data)
 	if err == nil {
@@ -1478,8 +1443,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 		if format == "jpeg" {
 			format = "jpg"
 		}
-		name = xid + "." + format
-		xid = name
+		name = xfiltrate() + "." + format
 	} else {
 		ct := http.DetectContentType(data)
 		switch ct {
@@ -1491,10 +1455,9 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 				return nil, err
 			}
 			media = ct
-			xid += ".pdf"
 			name = filehdr.Filename
 			if name == "" {
-				name = xid
+				name = xfiltrate() + ".pdf"
 			}
 		default:
 			maxsize := 100000
@@ -1511,10 +1474,9 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 				}
 			}
 			media = "text/plain"
-			xid += ".txt"
 			name = filehdr.Filename
 			if name == "" {
-				name = xid
+				name = xfiltrate() + ".txt"
 			}
 		}
 	}
@@ -1522,8 +1484,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 	if desc == "" {
 		desc = name
 	}
-	url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
-	fileid, err := savefile(xid, name, desc, url, media, true, data)
+	fileid, xid, err := savefileandxid(name, desc, "", media, true, data)
 	if err != nil {
 		log.Printf("unable to save image: %s", err)
 		http.Error(w, "failed to save attachment", http.StatusUnsupportedMediaType)
@@ -1533,7 +1494,6 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 		FileID: fileid,
 		XID:    xid,
 		Desc:   desc,
-		URL:    url,
 		Local:  true,
 	}
 	return d, nil
@@ -1595,7 +1555,6 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	noise = strings.Replace(noise, "\r", "", -1)
 	noise = quickrename(noise, userinfo.UserID)
 	noise = hooterize(noise)
-	honk.Mentions = bunchofgrapes(noise)
 	honk.Noise = noise
 	translate(honk)
 
@@ -1627,9 +1586,9 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		honk.Audience = []string{thewholeworld}
 	}
 	if honk.Noise != "" && honk.Noise[0] == '@' {
-		honk.Audience = append(grapevine(bunchofgrapes(honk.Noise)), honk.Audience...)
+		honk.Audience = append(grapevine(honk.Mentions), honk.Audience...)
 	} else {
-		honk.Audience = append(honk.Audience, grapevine(bunchofgrapes(honk.Noise))...)
+		honk.Audience = append(honk.Audience, grapevine(honk.Mentions)...)
 	}
 
 	if convoy == "" {
@@ -1821,7 +1780,7 @@ func submitchonk(w http.ResponseWriter, r *http.Request) {
 		ch.Donks = append(ch.Donks, d)
 	}
 
-	filterchonk(&ch)
+	translatechonk(&ch)
 	savechonk(&ch)
 	// reload for consistency
 	ch.Donks = nil
@@ -1860,6 +1819,7 @@ func showcombos(w http.ResponseWriter, r *http.Request) {
 
 func submithonker(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
+	user, _ := butwhatabout(u.Username)
 	name := strings.TrimSpace(r.FormValue("name"))
 	url := strings.TrimSpace(r.FormValue("url"))
 	peep := r.FormValue("peep")
@@ -1876,48 +1836,12 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	if honkerid > 0 {
 		goodbye := r.FormValue("goodbye")
 		if goodbye == "F" {
-			db := opendatabase()
-			row := db.QueryRow("select xid from honkers where honkerid = ? and userid = ? and flavor in ('sub')",
-				honkerid, u.UserID)
-			err := row.Scan(&url)
-			if err != nil {
-				log.Printf("can't get honker xid: %s", err)
-				return
-			}
-			log.Printf("unsubscribing from %s", url)
-			user, _ := butwhatabout(u.Username)
-			_, err = stmtUpdateFlavor.Exec("unsub", u.UserID, url, name, "sub")
-			if err != nil {
-				log.Printf("error updating honker: %s", err)
-				return
-			}
-			go itakeitallback(user, url)
-
+			unfollowyou(user, honkerid)
 			http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 			return
 		}
 		if goodbye == "X" {
-			var owner string
-			db := opendatabase()
-			row := db.QueryRow("select xid, owner from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep', 'presub', 'sub')",
-				honkerid, u.UserID)
-			err := row.Scan(&url, &owner)
-			if err != nil {
-				log.Printf("can't get honker xid: %s", err)
-				return
-			}
-			log.Printf("resubscribing to %s", url)
-			user, _ := butwhatabout(u.Username)
-			_, err = stmtUpdateFlavor.Exec("presub", u.UserID, url, name, "unsub")
-			if err == nil {
-				_, err = stmtUpdateFlavor.Exec("presub", u.UserID, url, name, "peep")
-			}
-			if err != nil {
-				log.Printf("error updating honker: %s", err)
-				return
-			}
-			go subsub(user, url, owner)
-
+			followyou(user, honkerid)
 			http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 			return
 		}
@@ -1962,6 +1886,10 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	}
 	url = info.XID
 
+	if name == "" {
+		name = info.Name
+	}
+
 	var x string
 	db := opendatabase()
 	row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('sub', 'unsub', 'peep')", url, u.UserID)
@@ -1974,17 +1902,14 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if name == "" {
-		name = info.Name
-	}
-	_, err = stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, info.Owner, mj)
+	res, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, info.Owner, mj)
 	if err != nil {
 		log.Print(err)
 		return
 	}
+	honkerid, _ = res.LastInsertId()
 	if flavor == "presub" {
-		user, _ := butwhatabout(u.Username)
-		go subsub(user, url, info.Owner)
+		followyou(user, honkerid)
 	}
 	http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 }
@@ -2236,6 +2161,10 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 		honks = gethonksforme(userid, wanted)
 		honks = osmosis(honks, userid, false)
 		templinfo["ServerMessage"] = "at me!"
+	case "longago":
+		honks = gethonksfromlongago(userid, wanted)
+		honks = osmosis(honks, userid, false)
+		templinfo["ServerMessage"] = "from long ago"
 	case "home":
 		honks = gethonksforuser(userid, wanted)
 		honks = osmosis(honks, userid, true)
@@ -2311,9 +2240,11 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 	case "donk":
 		d, err := submitdonk(w, r)
 		if err != nil {
-			if err == http.ErrMissingFile {
-				http.Error(w, "missing donk", http.StatusBadRequest)
-			}
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if d == nil {
+			http.Error(w, "missing donk", http.StatusBadRequest)
 			return
 		}
 		w.Write([]byte(d.XID))
@@ -2328,6 +2259,9 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 		switch page {
 		case "atme":
 			honks = gethonksforme(userid, wanted)
+			honks = osmosis(honks, userid, false)
+		case "longago":
+			honks = gethonksfromlongago(userid, wanted)
 			honks = osmosis(honks, userid, false)
 		case "home":
 			honks = gethonksforuser(userid, wanted)
@@ -2355,7 +2289,7 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 		rcpts := boxuprcpts(user, r.Form["rcpt"], public)
 		msg := []byte(r.FormValue("msg"))
 		for rcpt := range rcpts {
-			go deliverate(0, userid, rcpt, msg)
+			go deliverate(0, userid, rcpt, msg, true)
 		}
 	default:
 		http.Error(w, "unknown action", http.StatusNotFound)
@@ -2414,6 +2348,7 @@ func serve() {
 	go redeliverator()
 	go tracker()
 	go bgmonitor()
+	loadLingo()
 	w100 := wait100ms()
 
 	readviews = templates.Load(debugMode,
@@ -2477,7 +2412,7 @@ func serve() {
 	getters.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
 	getters.HandleFunc("/.well-known/webfinger", fingerlicker)
 
-	getters.HandleFunc("/flag/{code:.+}", bloat_showflag)
+	getters.HandleFunc("/flag/{code:.+}", showflag)
 
 	getters.HandleFunc("/server", serveractor)
 	posters.HandleFunc("/server/inbox", serverinbox)
@@ -2502,6 +2437,7 @@ func serve() {
 	loggedin.HandleFunc("/funzone", showfunzone)
 	loggedin.HandleFunc("/chpass", dochpass)
 	loggedin.HandleFunc("/atme", homepage)
+	loggedin.HandleFunc("/longago", homepage)
 	loggedin.HandleFunc("/hfcs", hfcspage)
 	loggedin.HandleFunc("/xzone", xzone)
 	loggedin.HandleFunc("/newhonk", newhonkpage)

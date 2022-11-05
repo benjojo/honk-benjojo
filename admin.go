@@ -43,12 +43,16 @@ func adminscreen() {
 
 	var avatarColors string
 	getconfig("avatarcolors", &avatarColors)
+	loadLingo()
 
-	messages := []*struct {
-		name  string
-		label string
-		text  string
-	}{
+	type adminfield struct {
+		name    string
+		label   string
+		text    string
+		oneline bool
+	}
+
+	messages := []*adminfield{
 		{
 			name:  "servermsg",
 			label: "server",
@@ -65,10 +69,19 @@ func adminscreen() {
 			text:  string(loginMsg),
 		},
 		{
-			name:  "avatarcolors",
-			label: "avatar colors (4 RGBA hex numbers)",
-			text:  string(avatarColors),
+			name:    "avatarcolors",
+			label:   "avatar colors (4 RGBA hex numbers)",
+			text:    string(avatarColors),
+			oneline: true,
 		},
+	}
+	for _, l := range []string{"honked", "bonked", "honked back", "qonked", "evented"} {
+		messages = append(messages, &adminfield{
+			name:    "lingo-" + strings.ReplaceAll(l, " ", ""),
+			label:   "lingo for " + l,
+			text:    relingo[l],
+			oneline: true,
+		})
 	}
 	cursel := 0
 
@@ -145,16 +158,19 @@ func adminscreen() {
 	}
 
 	msglineno := func(idx int) int {
-		off := 2
+		off := 1
 		if idx == -1 {
 			return off
 		}
 		for i, m := range messages {
-			off += 2
+			off += 1
 			if i == idx {
 				return off
 			}
-			off += linecount(m.text)
+			if !m.oneline {
+				off += 1
+				off += linecount(m.text)
+			}
 		}
 		off += 2
 		return off
@@ -170,12 +186,14 @@ func adminscreen() {
 		label := messages[idx].label
 		if idx == cursel {
 			label = reverse(label)
-			if editing {
-				label = magenta(label)
-			}
 		}
+		label = magenta(label)
 		text := forscreen(messages[idx].text)
-		stdout.WriteString(fmt.Sprintf("%s\n   %s", label, text))
+		if messages[idx].oneline {
+			stdout.WriteString(fmt.Sprintf("%s\t   %s", label, text))
+		} else {
+			stdout.WriteString(fmt.Sprintf("%s\n   %s", label, text))
+		}
 	}
 
 	drawscreen := func() {
@@ -202,20 +220,20 @@ func adminscreen() {
 	selectnext := func() {
 		if cursel < len(messages)-1 {
 			movecursor(4, msglineno(cursel))
-			stdout.WriteString(messages[cursel].label)
+			stdout.WriteString(magenta(messages[cursel].label))
 			cursel++
 			movecursor(4, msglineno(cursel))
-			stdout.WriteString(reverse(messages[cursel].label))
+			stdout.WriteString(reverse(magenta(messages[cursel].label)))
 			stdout.Flush()
 		}
 	}
 	selectprev := func() {
 		if cursel > 0 {
 			movecursor(4, msglineno(cursel))
-			stdout.WriteString(messages[cursel].label)
+			stdout.WriteString(magenta(messages[cursel].label))
 			cursel--
 			movecursor(4, msglineno(cursel))
-			stdout.WriteString(reverse(messages[cursel].label))
+			stdout.WriteString(reverse(magenta(messages[cursel].label)))
 			stdout.Flush()
 		}
 	}
@@ -231,6 +249,9 @@ func adminscreen() {
 			case '\x1b':
 				break loop
 			case '\n':
+				if m.oneline {
+					break loop
+				}
 				m.text += "\n"
 				drawscreen()
 			case 127:

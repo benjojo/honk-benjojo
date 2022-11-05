@@ -33,6 +33,7 @@ import (
 	"humungus.tedunangst.com/r/webs/cache"
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
+	"humungus.tedunangst.com/r/webs/mz"
 	"humungus.tedunangst.com/r/webs/templates"
 )
 
@@ -50,7 +51,20 @@ func init() {
 	allowedclasses["dl"] = true
 }
 
+var relingo = make(map[string]string)
+
+func loadLingo() {
+	for _, l := range []string{"honked", "bonked", "honked back", "qonked", "evented"} {
+		v := l
+		k := "lingo-" + strings.ReplaceAll(l, " ", "")
+		getconfig(k, &v)
+		relingo[l] = v
+	}
+}
+
 func reverbolate(userid int64, honks []*Honk) {
+	var user *WhatAbout
+	somenumberedusers.Get(userid, &user)
 	for _, h := range honks {
 		h.What += "ed"
 		if h.What == "tonked" {
@@ -67,8 +81,6 @@ func reverbolate(userid int64, honks []*Honk) {
 		}
 		if local && h.What != "bonked" {
 			h.Noise = re_memes.ReplaceAllString(h.Noise, "")
-			h.Noise = mentionize(h.Noise)
-			h.Noise = ontologize(h.Noise)
 		}
 		h.Username, h.Handle = handles(h.Honker)
 		if !local {
@@ -80,6 +92,24 @@ func reverbolate(userid int64, honks []*Honk) {
 				if len(h.Username) > 20 {
 					h.Username = h.Username[:20] + ".."
 				}
+			}
+		}
+		if user != nil {
+			if user.Options.MentionAll {
+				hset := []string{"@" + h.Handle}
+				for _, a := range h.Audience {
+					if a == h.Honker || a == user.URL {
+						continue
+					}
+					_, hand := handles(a)
+					if hand != "" {
+						hand = "@" + hand
+						hset = append(hset, hand)
+					}
+				}
+				h.Handles = strings.Join(hset, " ")
+			} else if h.Honker != user.URL {
+				h.Handles = "@" + h.Handle
 			}
 		}
 		if h.URL == "" {
@@ -98,6 +128,29 @@ func reverbolate(userid int64, honks []*Honk) {
 			htf.Imager = replaceimgsand(zap, false)
 			htf.SpanClasses = allowedclasses
 			htf.BaseURL, _ = url.Parse(h.XID)
+			emuxifier := func(e string) string {
+				for _, d := range h.Donks {
+					if d.Name == e {
+						zap[d.XID] = true
+						if d.Local {
+							return fmt.Sprintf(`<img class="emu" title="%s" src="/d/%s">`, d.Name, d.XID)
+						}
+					}
+				}
+				if local && h.What != "bonked" {
+					var emu Emu
+					emucache.Get(e, &emu)
+					if emu.ID != "" {
+						return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
+					}
+				}
+				return e
+			}
+			htf.FilterText = func(w io.Writer, data string) {
+				data = htfilter.EscapeText(data)
+				data = re_emus.ReplaceAllStringFunc(data, emuxifier)
+				io.WriteString(w, data)
+			}
 			p, _ := htf.String(h.Precis)
 			n, _ := htf.String(h.Noise)
 			h.Precis = string(p)
@@ -116,44 +169,11 @@ func reverbolate(userid int64, honks []*Honk) {
 	unsee(honks, userid)
 
 	for _, h := range honks {
-		local := false
-		if h.Whofore == 2 || h.Whofore == 3 {
-			local = true
-		}
-		zap := make(map[string]bool)
-		emuxifier := func(e string) string {
-			for _, d := range h.Donks {
-				if d.Name == e {
-					zap[d.XID] = true
-					if d.Local {
-						return fmt.Sprintf(`<img class="emu" title="%s" src="/d/%s">`, d.Name, d.XID)
-					}
-				}
-			}
-			if local && h.What != "bonked" {
-				var emu Emu
-				emucache.Get(e, &emu)
-				if emu.ID != "" {
-					return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
-				}
-			}
-			return e
-		}
-		bloat_renderflags(h)
-		h.Precis = re_emus.ReplaceAllStringFunc(h.Precis, emuxifier)
-		h.Noise = re_emus.ReplaceAllStringFunc(h.Noise, emuxifier)
-
-		j := 0
-		for i := 0; i < len(h.Donks); i++ {
-			if !zap[h.Donks[i].XID] {
-				h.Donks[j] = h.Donks[i]
-				j++
-			}
-		}
-		h.Donks = h.Donks[:j]
+		renderflags(h)
 
 		h.HTPrecis = template.HTML(h.Precis)
 		h.HTML = template.HTML(h.Noise)
+		h.What = relingo[h.What]
 	}
 }
 
@@ -178,19 +198,57 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 	}
 }
 
-func filterchonk(ch *Chonk) {
-	var htf htfilter.Filter
-	htf.SpanClasses = allowedclasses
-	htf.BaseURL, _ = url.Parse(ch.XID)
+func translatechonk(ch *Chonk) {
 	noise := ch.Noise
 	if ch.Format == "markdown" {
 		noise = markitzero(noise)
 	}
+	var htf htfilter.Filter
+	htf.SpanClasses = allowedclasses
+	htf.BaseURL, _ = url.Parse(ch.XID)
 	ch.HTML, _ = htf.String(noise)
-	n := string(ch.HTML)
-	if strings.HasPrefix(n, "<p>") {
-		ch.HTML = template.HTML(n[3:])
+}
+
+func filterchonk(ch *Chonk) {
+	translatechonk(ch)
+
+	noise := string(ch.HTML)
+
+	local := originate(ch.XID) == serverName
+
+	zap := make(map[string]bool)
+	emuxifier := func(e string) string {
+		for _, d := range ch.Donks {
+			if d.Name == e {
+				zap[d.XID] = true
+				if d.Local {
+					return fmt.Sprintf(`<img class="emu" title="%s" src="/d/%s">`, d.Name, d.XID)
+				}
+			}
+		}
+		if local {
+			var emu Emu
+			emucache.Get(e, &emu)
+			if emu.ID != "" {
+				return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
+			}
+		}
+		return e
 	}
+	noise = re_emus.ReplaceAllStringFunc(noise, emuxifier)
+	j := 0
+	for i := 0; i < len(ch.Donks); i++ {
+		if !zap[ch.Donks[i].XID] {
+			ch.Donks[j] = ch.Donks[i]
+			j++
+		}
+	}
+	ch.Donks = ch.Donks[:j]
+
+	if strings.HasPrefix(noise, "<p>") {
+		noise = noise[3:]
+	}
+	ch.HTML = template.HTML(noise)
 	if short := shortname(ch.UserID, ch.Who); short != "" {
 		ch.Handle = short
 	} else {
@@ -236,10 +294,14 @@ func translate(honk *Honk) {
 	}
 	honk.Precis = markitzero(strings.TrimSpace(honk.Precis))
 
+	var marker mz.Marker
+	marker.HashLinker = ontoreplacer
+	marker.AtLinker = attoreplacer
 	noise = strings.TrimSpace(noise)
-	noise = markitzero(noise)
+	noise = marker.Mark(noise)
 	honk.Noise = noise
-	honk.Onts = oneofakind(ontologies(honk.Noise))
+	honk.Onts = oneofakind(marker.HashTags)
+	honk.Mentions = bunchofgrapes(marker.Mentions)
 }
 
 func redoimages(honk *Honk) {
@@ -263,7 +325,6 @@ func redoimages(honk *Honk) {
 	honk.Donks = honk.Donks[:j]
 
 	honk.Noise = re_memes.ReplaceAllString(honk.Noise, "")
-	honk.Noise = ontologize(mentionize(honk.Noise))
 	honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
 }
 
@@ -288,27 +349,6 @@ func xfiltrate() string {
 	return xcelerate(b[:])
 }
 
-var re_hashes = regexp.MustCompile(`(?:^| |>)#[[:alnum:]]*[[:alpha:]][[:alnum:]_-]*`)
-
-func ontologies(s string) []string {
-	m := re_hashes.FindAllString(s, -1)
-	j := 0
-	for _, h := range m {
-		if h[0] == '&' {
-			continue
-		}
-		if h[0] != '#' {
-			h = h[1:]
-		}
-		m[j] = h
-		j++
-	}
-	return m[:j]
-}
-
-var re_mentions = regexp.MustCompile(`@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]`)
-var re_urltions = regexp.MustCompile(`@https://\S+`)
-
 func grapevine(mentions []Mention) []string {
 	var s []string
 	for _, m := range mentions {
@@ -317,18 +357,13 @@ func grapevine(mentions []Mention) []string {
 	return s
 }
 
-func bunchofgrapes(s string) []Mention {
-	m := re_mentions.FindAllString(s, -1)
+func bunchofgrapes(m []string) []Mention {
 	var mentions []Mention
 	for i := range m {
 		where := gofish(m[i])
 		if where != "" {
 			mentions = append(mentions, Mention{Who: m[i], Where: where})
 		}
-	}
-	m = re_urltions.FindAllString(s, -1)
-	for i := range m {
-		mentions = append(mentions, Mention{Who: m[i][1:], Where: m[i][1:]})
 	}
 	return mentions
 }
@@ -385,14 +420,13 @@ func memetize(honk *Honk) {
 		fd.Close()
 
 		url := fmt.Sprintf("https://%s/meme/%s", serverName, name)
-		fileid, err := savefile("", name, name, url, ct, false, nil)
+		fileid, err := savefile(name, name, url, ct, false, nil)
 		if err != nil {
 			log.Printf("error saving meme: %s", err)
 			return x
 		}
 		d := &Donk{
 			FileID: fileid,
-			XID:    "",
 			Name:   name,
 			Media:  ct,
 			URL:    url,
@@ -475,41 +509,23 @@ func fullname(name string, userid int64) string {
 	return ""
 }
 
-func mentionize(s string) string {
+func attoreplacer(m string) string {
 	fill := `<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`
-	s = re_mentions.ReplaceAllStringFunc(s, func(m string) string {
-		where := gofish(m)
-		if where == "" {
-			return m
-		}
-		who := m[0 : 1+strings.IndexByte(m[1:], '@')]
-		return fmt.Sprintf(fill, html.EscapeString(where), html.EscapeString(who))
-	})
-	s = re_urltions.ReplaceAllStringFunc(s, func(m string) string {
-		return fmt.Sprintf(fill, html.EscapeString(m[1:]), html.EscapeString(m))
-	})
-	return s
+	where := gofish(m)
+	if where == "" {
+		return m
+	}
+	who := m[0 : 1+strings.IndexByte(m[1:], '@')]
+	return fmt.Sprintf(fill, html.EscapeString(where), html.EscapeString(who))
 }
 
-func ontologize(s string) string {
-	s = re_hashes.ReplaceAllStringFunc(s, func(o string) string {
-		if o[0] == '&' {
-			return o
-		}
-		p := ""
-		h := o
-		if h[0] != '#' {
-			p = h[:1]
-			h = h[1:]
-		}
-		return fmt.Sprintf(`%s<a href="https://%s/o/%s">%s</a>`, p, serverName,
-			strings.ToLower(h[1:]), h)
-	})
-	return s
+func ontoreplacer(h string) string {
+	return fmt.Sprintf(`<a href="https://%s/o/%s">%s</a>`, serverName,
+		strings.ToLower(h[1:]), h)
 }
 
 var re_unurl = regexp.MustCompile("https://([^/]+).*/([^/]+)")
-var re_urlhost = regexp.MustCompile("https://([^/ ]+)")
+var re_urlhost = regexp.MustCompile("https://([^/ #)]+)")
 
 func originate(u string) string {
 	m := re_urlhost.FindStringSubmatch(u)
@@ -542,7 +558,7 @@ var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool)
 
 // handle, handle@host
 func handles(xid string) (string, string) {
-	if xid == "" {
+	if xid == "" || xid == thewholeworld || strings.HasSuffix(xid, "/followers") {
 		return "", ""
 	}
 	var handle string

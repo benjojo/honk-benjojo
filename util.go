@@ -172,12 +172,17 @@ func initblobdb() {
 		log.Print(err)
 		return
 	}
-	_, err = blobdb.Exec("create table filedata (xid text, media text, content blob)")
+	_, err = blobdb.Exec("create table filedata (xid text, media text, hash text, content blob)")
 	if err != nil {
 		log.Print(err)
 		return
 	}
 	_, err = blobdb.Exec("create index idx_filexid on filedata(xid)")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	_, err = blobdb.Exec("create index idx_filehash on filedata(hash)")
 	if err != nil {
 		log.Print(err)
 		return

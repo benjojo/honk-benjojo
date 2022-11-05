@@ -17,9 +17,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"sort"
 	"strconv"
@@ -29,6 +31,7 @@ import (
 	"humungus.tedunangst.com/r/webs/cache"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/login"
+	"humungus.tedunangst.com/r/webs/mz"
 )
 
 func userfromrow(row *sql.Row) (*WhatAbout, error) {
@@ -53,6 +56,12 @@ func userfromrow(row *sql.Row) (*WhatAbout, error) {
 	if user.Options.Reaction == "" {
 		user.Options.Reaction = "none"
 	}
+	var marker mz.Marker
+	marker.HashLinker = ontoreplacer
+	marker.AtLinker = attoreplacer
+	user.HTAbout = template.HTML(marker.Mark(user.About))
+	user.Onts = marker.HashTags
+
 	return user, nil
 }
 
@@ -232,6 +241,15 @@ func gethonksforme(userid int64, wanted int64) []*Honk {
 	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
 	return getsomehonks(rows, err)
 }
+func gethonksfromlongago(userid int64, wanted int64) []*Honk {
+	now := time.Now().UTC()
+	now = time.Date(now.Year()-1, now.Month(), now.Day(), now.Hour(), now.Minute(),
+		now.Second(), 0, now.Location())
+	dt1 := now.Add(-36 * time.Hour).Format(dbtimeformat)
+	dt2 := now.Add(12 * time.Hour).Format(dbtimeformat)
+	rows, err := stmtHonksFromLongAgo.Query(wanted, userid, dt1, dt2, userid)
+	return getsomehonks(rows, err)
+}
 func getsavedhonks(userid int64, wanted int64) []*Honk {
 	rows, err := stmtHonksISaved.Query(wanted, userid)
 	return getsomehonks(rows, err)
@@ -264,6 +282,9 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 
 	terms := strings.Split(q, " ")
 	for _, t := range terms {
+		if t == "" {
+			continue
+		}
 		negate := " "
 		if t[0] == '-' {
 			t = t[1:]
@@ -380,6 +401,7 @@ func donksforhonks(honks []*Honk) {
 			log.Printf("error scanning donk: %s", err)
 			continue
 		}
+		d.External = !strings.HasPrefix(d.URL, serverPrefix)
 		h := hmap[hid]
 		h.Donks = append(h.Donks, d)
 	}
@@ -484,19 +506,54 @@ func donksforchonks(chonks []*Chonk) {
 	}
 }
 
-func savefile(xid string, name string, desc string, url string, media string, local bool, data []byte) (int64, error) {
-	res, err := stmtSaveFile.Exec(xid, name, desc, url, media, local)
-	if err != nil {
-		return 0, err
-	}
-	fileid, _ := res.LastInsertId()
+func savefile(name string, desc string, url string, media string, local bool, data []byte) (int64, error) {
+	fileid, _, err := savefileandxid(name, desc, url, media, local, data)
+	return fileid, err
+}
+
+func hashfiledata(data []byte) string {
+	h := sha512.New512_256()
+	h.Write(data)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func savefileandxid(name string, desc string, url string, media string, local bool, data []byte) (int64, string, error) {
+	var xid string
 	if local {
-		_, err = stmtSaveFileData.Exec(xid, media, data)
-		if err != nil {
-			return 0, err
+		hash := hashfiledata(data)
+		row := stmtCheckFileData.QueryRow(hash)
+		err := row.Scan(&xid)
+		if err == sql.ErrNoRows {
+			xid = xfiltrate()
+			switch media {
+			case "image/png":
+				xid += ".png"
+			case "image/jpeg":
+				xid += ".jpg"
+			case "application/pdf":
+				xid += ".pdf"
+			case "text/plain":
+				xid += ".txt"
+			}
+			_, err = stmtSaveFileData.Exec(xid, media, hash, data)
+			if err != nil {
+				return 0, "", err
+			}
+		} else if err != nil {
+			log.Printf("error checking file hash: %s", err)
+			return 0, "", err
+		}
+		if url == "" {
+			url = fmt.Sprintf("https://%s/d/%s", serverName, xid)
 		}
 	}
-	return fileid, nil
+
+	res, err := stmtSaveFile.Exec(xid, name, desc, url, media, local)
+	if err != nil {
+		return 0, "", err
+	}
+	fileid, _ := res.LastInsertId()
+	return fileid, xid, nil
 }
 
 func finddonk(url string) *Donk {
@@ -846,9 +903,11 @@ func cleanupdb(arg string) {
 var stmtHonkers, stmtDubbers, stmtNamedDubbers, stmtSaveHonker, stmtUpdateFlavor, stmtUpdateHonker *sql.Stmt
 var stmtAnyXonk, stmtOneXonk, stmtPublicHonks, stmtUserHonks, stmtHonksByCombo, stmtHonksByConvoy *sql.Stmt
 var stmtHonksByOntology, stmtHonksForUser, stmtHonksForMe, stmtSaveDub, stmtHonksByXonker *sql.Stmt
+var stmtHonksFromLongAgo *sql.Stmt
 var stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
 var stmtEventHonks, stmtOneBonk, stmtFindZonk, stmtFindXonk, stmtSaveDonk *sql.Stmt
 var stmtFindFile, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
+var stmtCheckFileData *sql.Stmt
 var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker *sql.Stmt
 var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonker *sql.Stmt
 var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker *sql.Stmt
@@ -869,8 +928,8 @@ func preparetodie(db *sql.DB, s string) *sql.Stmt {
 
 func prepareStatements(db *sql.DB) {
 	stmtHonkers = preparetodie(db, "select honkerid, userid, name, xid, flavor, combos, meta from honkers where userid = ? and (flavor = 'presub' or flavor = 'sub' or flavor = 'peep' or flavor = 'unsub') order by name")
-	stmtSaveHonker = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta) values (?, ?, ?, ?, ?, ?, ?)")
-	stmtUpdateFlavor = preparetodie(db, "update honkers set flavor = ? where userid = ? and xid = ? and name = ? and flavor = ?")
+	stmtSaveHonker = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta, folxid) values (?, ?, ?, ?, ?, ?, ?, '')")
+	stmtUpdateFlavor = preparetodie(db, "update honkers set flavor = ?, folxid = ? where userid = ? and name = ? and xid = ? and flavor = ?")
 	stmtUpdateHonker = preparetodie(db, "update honkers set name = ?, combos = ?, meta = ? where honkerid = ? and userid = ?")
 	stmtOneHonker = preparetodie(db, "select xid from honkers where name = ? and userid = ?")
 	stmtDubbers = preparetodie(db, "select honkerid, userid, name, xid, flavor from honkers where userid = ? and flavor = 'dub'")
@@ -890,6 +949,7 @@ func prepareStatements(db *sql.DB) {
 	stmtHonksForUser = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
 	stmtHonksForUserFirstClass = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (what <> 'tonk')"+myhonkers+butnotthose+limit)
 	stmtHonksForMe = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and whofore = 1"+butnotthose+limit)
+	stmtHonksFromLongAgo = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and dt < ? and whofore = 2"+butnotthose+limit)
 	stmtHonksISaved = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and flags & 4 order by honks.honkid desc")
 	stmtHonksByHonker = preparetodie(db, selecthonks+"join honkers on (honkers.xid = honks.honker or honkers.xid = honks.oonker) where honks.honkid > ? and honks.userid = ? and honkers.name = ?"+butnotthose+limit)
 	stmtHonksByXonker = preparetodie(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and (honker = ? or oonker = ?)"+butnotthose+limit)
@@ -909,13 +969,14 @@ func prepareStatements(db *sql.DB) {
 	stmtDeleteDonks = preparetodie(db, "delete from donks where honkid = ?")
 	stmtSaveFile = preparetodie(db, "insert into filemeta (xid, name, description, url, media, local) values (?, ?, ?, ?, ?, ?)")
 	blobdb := openblobdb()
-	stmtSaveFileData = preparetodie(blobdb, "insert into filedata (xid, media, content) values (?, ?, ?)")
+	stmtSaveFileData = preparetodie(blobdb, "insert into filedata (xid, media, hash, content) values (?, ?, ?, ?)")
+	stmtCheckFileData = preparetodie(blobdb, "select xid from filedata where hash = ?")
 	stmtGetFileData = preparetodie(blobdb, "select media, content from filedata where xid = ?")
 	stmtFindXonk = preparetodie(db, "select honkid from honks where userid = ? and xid = ?")
 	stmtFindFile = preparetodie(db, "select fileid, xid from filemeta where url = ? and local = 1")
 	stmtUserByName = preparetodie(db, "select userid, username, displayname, about, pubkey, seckey, options from users where username = ? and userid > 0")
 	stmtUserByNumber = preparetodie(db, "select userid, username, displayname, about, pubkey, seckey, options from users where userid = ?")
-	stmtSaveDub = preparetodie(db, "insert into honkers (userid, name, xid, flavor) values (?, ?, ?, ?)")
+	stmtSaveDub = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta, folxid) values (?, ?, ?, ?, '', '', '', ?)")
 	stmtAddDoover = preparetodie(db, "insert into doovers (dt, tries, userid, rcpt, msg) values (?, ?, ?, ?, ?)")
 	stmtGetDoovers = preparetodie(db, "select dooverid, dt from doovers")
 	stmtLoadDoover = preparetodie(db, "select tries, userid, rcpt, msg from doovers where dooverid = ?")

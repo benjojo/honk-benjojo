@@ -2,6 +2,8 @@ These are all standalone programs, meant to be compiled individually.
 
 A little of this, a little of that.
 
+autobonker.go - repeats mentioned posts
+
 gettoken.go - obtains an authorization token
 
 saytheday.go - posts a new honk that's a date based look and say sequence

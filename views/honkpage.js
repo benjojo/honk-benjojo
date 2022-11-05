@@ -238,6 +238,8 @@ function relinklinks() {
 	el.onclick = pageswitcher("first", "")
 	el = document.getElementById("savedlink")
 	el.onclick = pageswitcher("saved", "")
+	el = document.getElementById("longagolink")
+	el.onclick = pageswitcher("longago", "")
 	relinklinks()
 	window.onpopstate = statechanger
 	history.replaceState(curpagestate, "some title", "")
@@ -259,7 +261,7 @@ function showhonkform(elem, rid, hname) {
 	var ridinput = document.getElementById("ridinput")
 	if (rid) {
 		ridinput.value = rid
-		honknoise.value = "@" + hname + " "
+		honknoise.value = hname + " "
 	} else {
 		ridinput.value = ""
 		honknoise.value = ""

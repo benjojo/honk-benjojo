@@ -11,7 +11,6 @@ import (
 	"strings"
 )
 
-
 func sendmsg(server, token, msg, rcpt string) {
 	form := make(url.Values)
 	form.Add("token", token)

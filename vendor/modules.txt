@@ -21,7 +21,7 @@ golang.org/x/net/html
 golang.org/x/net/html/atom
 # humungus.tedunangst.com/r/go-sqlite3 v1.1.3
 humungus.tedunangst.com/r/go-sqlite3
-# humungus.tedunangst.com/r/webs v0.6.41
+# humungus.tedunangst.com/r/webs v0.6.44
 humungus.tedunangst.com/r/webs/cache
 humungus.tedunangst.com/r/webs/gate
 humungus.tedunangst.com/r/webs/htfilter
@@ -29,6 +29,7 @@ humungus.tedunangst.com/r/webs/httpsig
 humungus.tedunangst.com/r/webs/image
 humungus.tedunangst.com/r/webs/junk
 humungus.tedunangst.com/r/webs/login
+humungus.tedunangst.com/r/webs/mz
 humungus.tedunangst.com/r/webs/rss
 humungus.tedunangst.com/r/webs/synlight
 humungus.tedunangst.com/r/webs/templates

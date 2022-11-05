@@ -78,7 +78,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 {{ end }}
 {{ else }}
-{{ if .XID }}
+{{ if .External }}
 <p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
 {{ if eq .Media "video/mp4" }}
@@ -106,7 +106,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ else }}
 <button disabled>nope</button>
 {{ end }}
-<button onclick="return showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handle }}');"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
+<button onclick="return showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handles }}');"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
 <button onclick="return muteit(this, '{{ .Honk.Convoy }}');">mute</button>
 <button onclick="return showelement('evenmore{{ .Honk.ID }}')">even more</button>
 </div>

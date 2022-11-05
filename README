@@ -14,10 +14,13 @@ Avatars automatically assigned by the NSA.
 
 The button to submit a new honk says "it's gonna be honked".
 
+The honk mission is to work well if it's what you want.
+This does not imply the goal is to be what you want.
+
 -- build
 
 It should be sufficient to type make after unpacking a release.
-You'll need a go compiler version 1.11 or later.
+You'll need a go compiler version 1.13 or later. And libsqlite3.
 
 Even on a fast machine, building from source can take several seconds.
 

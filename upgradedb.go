@@ -19,14 +19,17 @@ import (
 	"database/sql"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )
 
-var myVersion = 36
+var myVersion = 40
 
-func doordie(db *sql.DB, s string, args ...interface{}) {
+type dbexecer interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
+func doordie(db dbexecer, s string, args ...interface{}) {
 	_, err := db.Exec(s, args...)
 	if err != nil {
 		log.Fatalf("can't run %s: %s", s, err)
@@ -43,234 +46,6 @@ func upgradedb() {
 		log.Fatal("database is too old to upgrade")
 	}
 	switch dbversion {
-	case 13:
-		doordie(db, "alter table honks add column flags integer")
-		doordie(db, "update honks set flags = 0")
-		doordie(db, "update config set value = 14 where key = 'dbversion'")
-		fallthrough
-	case 14:
-		doordie(db, "create table onts (ontology text, honkid integer)")
-		doordie(db, "create index idx_ontology on onts(ontology)")
-		doordie(db, "update config set value = 15 where key = 'dbversion'")
-		fallthrough
-	case 15:
-		doordie(db, "delete from onts")
-		ontmap := make(map[int64][]string)
-		rows, err := db.Query("select honkid, noise from honks")
-		if err != nil {
-			log.Fatalf("can't query honks: %s", err)
-		}
-		re_more := regexp.MustCompile(`#<span>[[:alpha:]][[:alnum:]-]*`)
-		for rows.Next() {
-			var honkid int64
-			var noise string
-			err := rows.Scan(&honkid, &noise)
-			if err != nil {
-				log.Fatalf("can't scan honks: %s", err)
-			}
-			onts := ontologies(noise)
-			mo := re_more.FindAllString(noise, -1)
-			for _, o := range mo {
-				onts = append(onts, "#"+o[7:])
-			}
-			if len(onts) > 0 {
-				ontmap[honkid] = oneofakind(onts)
-			}
-		}
-		rows.Close()
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("can't begin: %s", err)
-		}
-		stmtOnts, err := tx.Prepare("insert into onts (ontology, honkid) values (?, ?)")
-		if err != nil {
-			log.Fatal(err)
-		}
-		for honkid, onts := range ontmap {
-			for _, o := range onts {
-				_, err = stmtOnts.Exec(strings.ToLower(o), honkid)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-		err = tx.Commit()
-		if err != nil {
-			log.Fatalf("can't commit: %s", err)
-		}
-		doordie(db, "update config set value = 16 where key = 'dbversion'")
-		fallthrough
-	case 16:
-		doordie(db, "alter table files add column description text")
-		doordie(db, "update files set description = name")
-		doordie(db, "update config set value = 17 where key = 'dbversion'")
-		fallthrough
-	case 17:
-		doordie(db, "create table forsaken (honkid integer, precis text, noise text)")
-		doordie(db, "update config set value = 18 where key = 'dbversion'")
-		fallthrough
-	case 18:
-		doordie(db, "create index idx_onthonkid on onts(honkid)")
-		doordie(db, "update config set value = 19 where key = 'dbversion'")
-		fallthrough
-	case 19:
-		doordie(db, "create table places (honkid integer, name text, latitude real, longitude real)")
-		doordie(db, "create index idx_placehonkid on places(honkid)")
-		fallthrough
-	case 20:
-		doordie(db, "alter table places add column url text")
-		doordie(db, "update places set url = ''")
-		doordie(db, "update config set value = 21 where key = 'dbversion'")
-		fallthrough
-	case 21:
-		// here we go...
-		initblobdb()
-		blobdb := openblobdb()
-		tx, err := blobdb.Begin()
-		if err != nil {
-			log.Fatalf("can't begin: %s", err)
-		}
-		doordie(db, "drop index idx_filesxid")
-		doordie(db, "drop index idx_filesurl")
-		doordie(db, "create table filemeta (fileid integer primary key, xid text, name text, description text, url text, media text, local integer)")
-		doordie(db, "insert into filemeta select fileid, xid, name, description, url, media, local from files")
-		doordie(db, "create index idx_filesxid on filemeta(xid)")
-		doordie(db, "create index idx_filesurl on filemeta(url)")
-
-		rows, err := db.Query("select xid, media, content from files where local = 1")
-		if err != nil {
-			log.Fatal(err)
-		}
-		for rows.Next() {
-			var xid, media string
-			var data []byte
-			err = rows.Scan(&xid, &media, &data)
-			if err == nil {
-				_, err = tx.Exec("insert into filedata (xid, media, content) values (?, ?, ?)", xid, media, data)
-			}
-			if err != nil {
-				log.Fatalf("can't save filedata: %s", err)
-			}
-		}
-		rows.Close()
-		err = tx.Commit()
-		if err != nil {
-			log.Fatalf("can't commit: %s", err)
-		}
-		doordie(db, "drop table files")
-		doordie(db, "vacuum")
-		doordie(db, "update config set value = 22 where key = 'dbversion'")
-		fallthrough
-	case 22:
-		doordie(db, "create table honkmeta (honkid integer, genus text, json text)")
-		doordie(db, "create index idx_honkmetaid on honkmeta(honkid)")
-		doordie(db, "drop table forsaken") // don't bother saving this one
-		rows, err := db.Query("select honkid, name, latitude, longitude, url from places")
-		if err != nil {
-			log.Fatal(err)
-		}
-		places := make(map[int64]*Place)
-		for rows.Next() {
-			var honkid int64
-			p := new(Place)
-			err = rows.Scan(&honkid, &p.Name, &p.Latitude, &p.Longitude, &p.Url)
-			if err != nil {
-				log.Fatal(err)
-			}
-			places[honkid] = p
-		}
-		rows.Close()
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("can't begin: %s", err)
-		}
-		for honkid, p := range places {
-			j, err := jsonify(p)
-			if err == nil {
-				_, err = tx.Exec("insert into honkmeta (honkid, genus, json) values (?, ?, ?)",
-					honkid, "place", j)
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		err = tx.Commit()
-		if err != nil {
-			log.Fatalf("can't commit: %s", err)
-		}
-		doordie(db, "update config set value = 23 where key = 'dbversion'")
-		fallthrough
-	case 23:
-		doordie(db, "create table hfcs (hfcsid integer primary key, userid integer, json text)")
-		doordie(db, "create index idx_hfcsuser on hfcs(userid)")
-		rows, err := db.Query("select userid, name, wherefore from zonkers where wherefore in ('zord', 'zilence', 'zoggle', 'zonker', 'zomain')")
-		if err != nil {
-			log.Fatalf("can't query zonkers: %s", err)
-		}
-		filtmap := make(map[int64][]*Filter)
-		now := time.Now().UTC()
-		for rows.Next() {
-			var userid int64
-			var name, wherefore string
-			err = rows.Scan(&userid, &name, &wherefore)
-			if err != nil {
-				log.Fatalf("error scanning zonker: %s", err)
-			}
-			f := new(Filter)
-			f.Date = now
-			switch wherefore {
-			case "zord":
-				f.Name = "hide " + name
-				f.Text = name
-				f.Hide = true
-			case "zilence":
-				f.Name = "silence " + name
-				f.Text = name
-				f.Collapse = true
-			case "zoggle":
-				f.Name = "skip " + name
-				f.Actor = name
-				f.SkipMedia = true
-			case "zonker":
-				f.Name = "reject " + name
-				f.Actor = name
-				f.IncludeAudience = true
-				f.Reject = true
-			case "zomain":
-				f.Name = "reject " + name
-				f.Actor = name
-				f.IncludeAudience = true
-				f.Reject = true
-			}
-			filtmap[userid] = append(filtmap[userid], f)
-		}
-		rows.Close()
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("can't begin: %s", err)
-		}
-		for userid, filts := range filtmap {
-			for _, f := range filts {
-				j, err := jsonify(f)
-				if err == nil {
-					_, err = tx.Exec("insert into hfcs (userid, json) values (?, ?)", userid, j)
-				}
-				if err != nil {
-					log.Fatalf("can't save filter: %s", err)
-				}
-			}
-		}
-		err = tx.Commit()
-		if err != nil {
-			log.Fatalf("can't commit: %s", err)
-		}
-		doordie(db, "delete from zonkers where wherefore in ('zord', 'zilence', 'zoggle', 'zonker', 'zomain')")
-		doordie(db, "update config set value = 24 where key = 'dbversion'")
-		fallthrough
-	case 24:
-		doordie(db, "update honks set convoy = 'missing-' || abs(random() % 987654321) where convoy = ''")
-		doordie(db, "update config set value = 25 where key = 'dbversion'")
-		fallthrough
 	case 25:
 		doordie(db, "delete from auth")
 		doordie(db, "alter table auth add column expiry text")
@@ -377,6 +152,55 @@ func upgradedb() {
 		doordie(db, "update config set value = 36 where key = 'dbversion'")
 		fallthrough
 	case 36:
+		doordie(db, "alter table honkers add column folxid text")
+		doordie(db, "update honkers set folxid = 'lostdata'")
+		doordie(db, "update config set value = 37 where key = 'dbversion'")
+		fallthrough
+	case 37:
+		doordie(db, "update honkers set combos = '' where combos is null")
+		doordie(db, "update honkers set owner = '' where owner is null")
+		doordie(db, "update honkers set meta = '' where meta is null")
+		doordie(db, "update honkers set folxid = '' where folxid is null")
+		doordie(db, "update config set value = 38 where key = 'dbversion'")
+		fallthrough
+	case 38:
+		doordie(db, "update honkers set folxid = abs(random())")
+		doordie(db, "update config set value = 39 where key = 'dbversion'")
+		fallthrough
+	case 39:
+		blobdb := openblobdb()
+		doordie(blobdb, "alter table filedata add column hash text")
+		doordie(blobdb, "create index idx_filehash on filedata(hash)")
+		rows, err := blobdb.Query("select xid, content from filedata")
+		if err != nil {
+			log.Fatal(err)
+		}
+		m := make(map[string]string)
+		for rows.Next() {
+			var xid string
+			var data sql.RawBytes
+			err := rows.Scan(&xid, &data)
+			if err != nil {
+				log.Fatal(err)
+			}
+			hash := hashfiledata(data)
+			m[xid] = hash
+		}
+		rows.Close()
+		tx, err := blobdb.Begin()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for xid, hash := range m {
+			doordie(tx, "update filedata set hash = ? where xid = ?", hash, xid)
+		}
+		err = tx.Commit()
+		if err != nil {
+			log.Fatal(err)
+		}
+		doordie(db, "update config set value = 40 where key = 'dbversion'")
+		fallthrough
+	case 40:
 
 	default:
 		log.Fatalf("can't upgrade unknown version %d", dbversion)

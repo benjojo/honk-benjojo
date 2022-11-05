@@ -1,5 +1,27 @@
 changelog
 
+=== 0.9.3 Notacanthous Nutshell
+
+++ backup command.
+
++ Relax requirement for multipart/form-data posts in API.
+
++ Dedupe blob file data.
+
++ Better support for rich text bios.
+
++ Follow and unfollow should work a little better.
+
++ Option to mention all in replies.
+
++ Reduce interference between various text substitution rules.
+
++ Fix crash in search with extra space.
+
++ Fix pubkey issue with domain only keys.
+
+- Custom lingo for those who don't like honking.
+
 === 0.9.2 Malleable Maltote
 
 + Fix compilation on mac.
