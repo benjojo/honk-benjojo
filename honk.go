@@ -29,7 +29,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.1"
+var softwareVersion = "0.9.2"
 
 func init() {
 	notrand.Seed(time.Now().Unix())

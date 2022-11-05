@@ -17,6 +17,11 @@ package main
 
 /*
 #include <termios.h>
+void
+clearecho(struct termios *tio)
+{
+	tio->c_lflag = tio->c_lflag & ~(ECHO|ICANON);
+}
 */
 import "C"
 import (
@@ -117,7 +122,7 @@ func adminscreen() {
 	init := func() {
 		tio := new(C.struct_termios)
 		C.tcgetattr(1, tio)
-		tio.c_lflag = tio.c_lflag & ^C.uint(C.ECHO|C.ICANON)
+		C.clearecho(tio)
 		C.tcsetattr(1, C.TCSADRAIN, tio)
 
 		hidecursor()
