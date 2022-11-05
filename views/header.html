@@ -17,10 +17,10 @@
 <header>
 {{ if .UserInfo }}
 <details id="topmenu">
-<summary>menu<span> {{ .UserInfo.Username }}</span></summary>
+<summary>menu<span> {{ .UserInfo.Name }}</span></summary>
 <ul>
 <li><a id="homelink" href="/">home</a>
-<li><a id="atmelink" href="/atme">@me</a>
+<li><a id="atmelink" href="/atme">@me<span id=mecount>{{ if .UserInfo.Options.MeCount }}({{ .UserInfo.Options.MeCount }}){{ end }}</span></a>
 <li><a id="firstlink" href="/first">first</a>
 <li style="list-style-type:none; margin-left:-1em">
 <details>
@@ -31,7 +31,7 @@
 {{ end }}
 </ul>
 </details>
-<li><a href="/chatter">chatter</a>
+<li><a href="/chatter">chatter<span id=chatcount>{{ if .UserInfo.Options.ChatCount }}({{ .UserInfo.Options.ChatCount }}){{ end }}</span></a>
 <li><a href="/o">tags</a>
 <li><a href="/events">events</a>
 <li><a id="longagolink" href="/longago">long ago</a>
@@ -43,7 +43,7 @@
 <details>
 <summary>more stuff</summary>
 <ul>
-<li><a href="/{{ .UserSep }}/{{ .UserInfo.Username }}">my honks</a>
+<li><a href="/{{ .UserSep }}/{{ .UserInfo.Name }}">my honks</a>
 <li><a href="/about">about</a>
 <li><a href="/front">front</a>
 <li><a href="/funzone">funzone</a>
@@ -59,6 +59,7 @@
 </details>
 <p id="topspacer"></p>
 {{ else }}
+<div id="topmenu">
 <span><a id="homelink" href="/">home</a></span>
 <span><a href="/o">tags</a></span>
 <span><a href="/events">events</a></span>
@@ -67,5 +68,6 @@
 <span><a href="/rss">rss</a></span>
 {{ end }}
 <span><a href="/login">login</a></span>
+</div>
 {{ end }}
 </header>

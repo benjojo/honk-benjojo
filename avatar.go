@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"image"
 	"image/png"
-	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -56,7 +55,7 @@ func loadAvatarColors() {
 		}
 		c, err := strconv.ParseUint(l, 16, 32)
 		if err != nil {
-			log.Printf("error reading avatar color %d: %s", i, err)
+			elog.Printf("error reading avatar color %d: %s", i, err)
 			continue
 		}
 		avatarcolors[i][0] = byte(c >> 24 & 0xff)
@@ -66,7 +65,7 @@ func loadAvatarColors() {
 	}
 }
 
-func genAvatar(name string) []byte {
+func genAvatar(name string, hex bool) []byte {
 	h := sha512.New()
 	h.Write([]byte(name))
 	s := h.Sum(nil)
@@ -74,6 +73,27 @@ func genAvatar(name string) []byte {
 	for i := 0; i < 64; i++ {
 		for j := 0; j < 64; j++ {
 			p := i*img.Stride + j*4
+			if hex {
+				tan := 0.577
+				if i < 32 {
+					if j < 17-int(float64(i)*tan) || j > 46+int(float64(i)*tan) {
+						img.Pix[p+0] = 0
+						img.Pix[p+1] = 0
+						img.Pix[p+2] = 0
+						img.Pix[p+3] = 255
+						continue
+					}
+				} else {
+					if j < 17-int(float64(64-i)*tan) || j > 46+int(float64(64-i)*tan) {
+						img.Pix[p+0] = 0
+						img.Pix[p+1] = 0
+						img.Pix[p+2] = 0
+						img.Pix[p+3] = 255
+						continue
+
+					}
+				}
+			}
 			xx := i/16*16 + j/16
 			x := s[xx]
 			if x < 64 {

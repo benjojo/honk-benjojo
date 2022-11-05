@@ -17,7 +17,6 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -32,7 +31,7 @@ type dbexecer interface {
 func doordie(db dbexecer, s string, args ...interface{}) {
 	_, err := db.Exec(s, args...)
 	if err != nil {
-		log.Fatalf("can't run %s: %s", s, err)
+		elog.Fatalf("can't run %s: %s", s, err)
 	}
 }
 
@@ -43,7 +42,7 @@ func upgradedb() {
 	getconfig("servername", &serverName)
 
 	if dbversion < 13 {
-		log.Fatal("database is too old to upgrade")
+		elog.Fatal("database is too old to upgrade")
 	}
 	switch dbversion {
 	case 25:
@@ -91,11 +90,11 @@ func upgradedb() {
 	case 30:
 		tx, err := db.Begin()
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		rows, err := tx.Query("select userid, options from users")
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		m := make(map[int64]string)
 		for rows.Next() {
@@ -103,25 +102,25 @@ func upgradedb() {
 			var options string
 			err = rows.Scan(&userid, &options)
 			if err != nil {
-				log.Fatal(err)
+				elog.Fatal(err)
 			}
 			var uo UserOptions
 			uo.SkinnyCSS = strings.Contains(options, " skinny ")
 			m[userid], err = jsonify(uo)
 			if err != nil {
-				log.Fatal(err)
+				elog.Fatal(err)
 			}
 		}
 		rows.Close()
 		for u, o := range m {
 			_, err = tx.Exec("update users set options = ? where userid = ?", o, u)
 			if err != nil {
-				log.Fatal(err)
+				elog.Fatal(err)
 			}
 		}
 		err = tx.Commit()
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		doordie(db, "update config set value = 31 where key = 'dbversion'")
 		fallthrough
@@ -173,7 +172,7 @@ func upgradedb() {
 		doordie(blobdb, "create index idx_filehash on filedata(hash)")
 		rows, err := blobdb.Query("select xid, content from filedata")
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		m := make(map[string]string)
 		for rows.Next() {
@@ -181,7 +180,7 @@ func upgradedb() {
 			var data sql.RawBytes
 			err := rows.Scan(&xid, &data)
 			if err != nil {
-				log.Fatal(err)
+				elog.Fatal(err)
 			}
 			hash := hashfiledata(data)
 			m[xid] = hash
@@ -189,21 +188,21 @@ func upgradedb() {
 		rows.Close()
 		tx, err := blobdb.Begin()
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		for xid, hash := range m {
 			doordie(tx, "update filedata set hash = ? where xid = ?", hash, xid)
 		}
 		err = tx.Commit()
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		doordie(db, "update config set value = 40 where key = 'dbversion'")
 		fallthrough
 	case 40:
 
 	default:
-		log.Fatalf("can't upgrade unknown version %d", dbversion)
+		elog.Fatalf("can't upgrade unknown version %d", dbversion)
 	}
 	os.Exit(0)
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 func qordie(db *sql.DB, s string, args ...interface{}) *sql.Rows {
 	rows, err := db.Query(s, args...)
 	if err != nil {
-		log.Fatalf("can't query %s: %s", s, err)
+		elog.Fatalf("can't query %s: %s", s, err)
 	}
 	return rows
 }
@@ -21,31 +20,31 @@ func qordie(db *sql.DB, s string, args ...interface{}) *sql.Rows {
 func scanordie(rows *sql.Rows, args ...interface{}) {
 	err := rows.Scan(args...)
 	if err != nil {
-		log.Fatalf("can't scan: %s", err)
+		elog.Fatalf("can't scan: %s", err)
 	}
 }
 
 func svalbard(dirname string) {
 	err := os.Mkdir(dirname, 0700)
 	if err != nil && !os.IsExist(err) {
-		log.Fatalf("can't create directory: %s", dirname)
+		elog.Fatalf("can't create directory: %s", dirname)
 	}
 	now := time.Now().Unix()
 	backupdbname := fmt.Sprintf("%s/honk-%d.db", dirname, now)
 	backup, err := sql.Open("sqlite3", backupdbname)
 	if err != nil {
-		log.Fatalf("can't open backup database")
+		elog.Fatalf("can't open backup database")
 	}
 	for _, line := range strings.Split(sqlSchema, ";") {
 		_, err = backup.Exec(line)
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 			return
 		}
 	}
 	tx, err := backup.Begin()
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	orig := opendatabase()
 	rows := qordie(orig, "select userid, username, hash, displayname, about, pubkey, seckey, options from users")
@@ -161,21 +160,21 @@ func svalbard(dirname string) {
 
 	err = tx.Commit()
 	if err != nil {
-		log.Fatalf("can't commit backp: %s", err)
+		elog.Fatalf("can't commit backp: %s", err)
 	}
 	backup.Close()
 
 	backupblobname := fmt.Sprintf("%s/blob-%d.db", dirname, now)
 	blob, err := sql.Open("sqlite3", backupblobname)
 	if err != nil {
-		log.Fatalf("can't open backup blob database")
+		elog.Fatalf("can't open backup blob database")
 	}
 	doordie(blob, "create table filedata (xid text, media text, hash text, content blob)")
 	doordie(blob, "create index idx_filexid on filedata(xid)")
 	doordie(blob, "create index idx_filehash on filedata(hash)")
 	tx, err = blob.Begin()
 	if err != nil {
-		log.Fatalf("can't start transaction: %s", err)
+		elog.Fatalf("can't start transaction: %s", err)
 	}
 	origblob := openblobdb()
 	for x := range filexids {
@@ -191,7 +190,7 @@ func svalbard(dirname string) {
 
 	err = tx.Commit()
 	if err != nil {
-		log.Fatalf("can't commit blobs: %s", err)
+		elog.Fatalf("can't commit blobs: %s", err)
 	}
 	blob.Close()
 }

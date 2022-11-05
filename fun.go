@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -173,7 +172,12 @@ func reverbolate(userid int64, honks []*Honk) {
 
 		h.HTPrecis = template.HTML(h.Precis)
 		h.HTML = template.HTML(h.Noise)
-		h.What = relingo[h.What]
+		if h.What == "wonked" {
+			h.HTML = "? wonk ?"
+		}
+		if redo := relingo[h.What]; redo != "" {
+			h.What = redo
+		}
 	}
 }
 
@@ -265,7 +269,7 @@ func inlineimgsfor(honk *Honk) func(node *html.Node) string {
 		if d != nil {
 			honk.Donks = append(honk.Donks, d)
 		}
-		log.Printf("inline img with src: %s", src)
+		dlog.Printf("inline img with src: %s", src)
 		return ""
 	}
 }
@@ -409,9 +413,9 @@ func memetize(honk *Honk) {
 		if name[0] == ' ' {
 			name = name[1:]
 		}
-		fd, err := os.Open("memes/" + name)
+		fd, err := os.Open(dataDir + "/memes/" + name)
 		if err != nil {
-			log.Printf("no meme for %s", name)
+			ilog.Printf("no meme for %s", name)
 			return x
 		}
 		var peek [512]byte
@@ -422,7 +426,7 @@ func memetize(honk *Honk) {
 		url := fmt.Sprintf("https://%s/meme/%s", serverName, name)
 		fileid, err := savefile(name, name, url, ct, false, nil)
 		if err != nil {
-			log.Printf("error saving meme: %s", err)
+			elog.Printf("error saving meme: %s", err)
 			return x
 		}
 		d := &Donk{
@@ -536,11 +540,9 @@ func originate(u string) string {
 }
 
 var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool) {
-	var handle string
-	row := stmtGetXonker.QueryRow(xid, "handle")
-	err := row.Scan(&handle)
-	if err != nil {
-		log.Printf("need to get a handle: %s", xid)
+	handle := getxonker(xid, "handle")
+	if handle == "" {
+		dlog.Printf("need to get a handle: %s", xid)
 		info, err := investigate(xid)
 		if err != nil {
 			m := re_unurl.FindStringSubmatch(xid)
@@ -623,32 +625,29 @@ func ziggy(userid int64) *KeyInfo {
 }
 
 var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.PublicKey, bool) {
-	var data string
-	row := stmtGetXonker.QueryRow(keyname, "pubkey")
-	err := row.Scan(&data)
-	var key httpsig.PublicKey
-	if err != nil {
-		log.Printf("hitting the webs for missing pubkey: %s", keyname)
+	data := getxonker(keyname, "pubkey")
+	if data == "" {
+		var key httpsig.PublicKey
+		dlog.Printf("hitting the webs for missing pubkey: %s", keyname)
 		j, err := GetJunk(keyname)
 		if err != nil {
-			log.Printf("error getting %s pubkey: %s", keyname, err)
+			ilog.Printf("error getting %s pubkey: %s", keyname, err)
 			when := time.Now().UTC().Format(dbtimeformat)
 			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
 			return key, true
 		}
 		allinjest(originate(keyname), j)
-		row = stmtGetXonker.QueryRow(keyname, "pubkey")
-		err = row.Scan(&data)
-		if err != nil {
-			log.Printf("key not found after ingesting")
+		data = getxonker(keyname, "pubkey")
+		if data == "" {
+			ilog.Printf("key not found after ingesting")
 			when := time.Now().UTC().Format(dbtimeformat)
 			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
 			return key, true
 		}
 	}
-	_, key, err = httpsig.DecodeKey(data)
+	_, key, err := httpsig.DecodeKey(data)
 	if err != nil {
-		log.Printf("error decoding %s pubkey: %s", keyname, err)
+		ilog.Printf("error decoding %s pubkey: %s", keyname, err)
 		return key, true
 	}
 	return key, true

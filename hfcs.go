@@ -16,7 +16,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -78,7 +77,7 @@ func init() {
 func filtcachefiller(userid int64) (afiltermap, bool) {
 	rows, err := stmtGetFilters.Query(userid)
 	if err != nil {
-		log.Printf("error querying filters: %s", err)
+		elog.Printf("error querying filters: %s", err)
 		return nil, false
 	}
 	defer rows.Close()
@@ -97,7 +96,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 			err = unjsonify(j, filt)
 		}
 		if err != nil {
-			log.Printf("error scanning filter: %s", err)
+			elog.Printf("error scanning filter: %s", err)
 			continue
 		}
 		if !filt.Expiration.IsZero() {
@@ -120,7 +119,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 			}
 			filt.re_text, err = regexp.Compile(t)
 			if err != nil {
-				log.Printf("error compiling filter text: %s", err)
+				elog.Printf("error compiling filter text: %s", err)
 				continue
 			}
 		}
@@ -136,7 +135,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 			}
 			filt.re_rewrite, err = regexp.Compile(t)
 			if err != nil {
-				log.Printf("error compiling filter rewrite: %s", err)
+				elog.Printf("error compiling filter rewrite: %s", err)
 				continue
 			}
 		}
@@ -244,7 +243,7 @@ func rejectactor(userid int64, actor string) bool {
 			continue
 		}
 		if f.Actor == actor {
-			log.Printf("rejecting actor: %s", actor)
+			ilog.Printf("rejecting actor: %s", actor)
 			return true
 		}
 	}
@@ -258,7 +257,7 @@ func rejectactor(userid int64, actor string) bool {
 			continue
 		}
 		if f.Actor == origin {
-			log.Printf("rejecting actor: %s", actor)
+			ilog.Printf("rejecting actor: %s", actor)
 			return true
 		}
 	}
@@ -271,7 +270,7 @@ func stealthmode(userid int64, r *http.Request) bool {
 	if agent != "" {
 		fake := rejectorigin(userid, agent, false)
 		if fake {
-			log.Printf("faking 404 for %s", agent)
+			ilog.Printf("faking 404 for %s", agent)
 			return true
 		}
 	}
@@ -355,7 +354,7 @@ func rejectxonk(xonk *Honk) bool {
 	}
 	for _, f := range filts {
 		if cause := matchfilterX(xonk, f); cause != "" {
-			log.Printf("rejecting %s because %s", xonk.XID, cause)
+			ilog.Printf("rejecting %s because %s", xonk.XID, cause)
 			return true
 		}
 	}
@@ -407,7 +406,7 @@ func unsee(honks []*Honk, userid int64) {
 var untagged = cache.New(cache.Options{Filler: func(userid int64) (map[string]bool, bool) {
 	rows, err := stmtUntagged.Query(userid)
 	if err != nil {
-		log.Printf("error query untagged: %s", err)
+		elog.Printf("error query untagged: %s", err)
 		return nil, false
 	}
 	defer rows.Close()
@@ -417,7 +416,7 @@ var untagged = cache.New(cache.Options{Filler: func(userid int64) (map[string]bo
 		var flags int64
 		err = rows.Scan(&xid, &rid, &flags)
 		if err != nil {
-			log.Printf("error scanning untag: %s", err)
+			elog.Printf("error scanning untag: %s", err)
 			continue
 		}
 		if flags&flagIsUntagged != 0 {

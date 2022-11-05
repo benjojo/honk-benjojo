@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	notrand "math/rand"
 	"net/http"
 	"net/url"
@@ -96,13 +95,8 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	default:
 		return fmt.Errorf("http post status: %d", resp.StatusCode)
 	}
-	log.Printf("successful post: %s %d", url, resp.StatusCode)
+	ilog.Printf("successful post: %s %d", url, resp.StatusCode)
 	return nil
-}
-
-type JunkError struct {
-	Junk junk.Junk
-	Err  error
 }
 
 func GetJunk(url string) (junk.Junk, error) {
@@ -118,13 +112,13 @@ func GetJunkHardMode(url string) (junk.Junk, error) {
 	if err != nil {
 		emsg := err.Error()
 		if emsg == "http get status: 502" || strings.Contains(emsg, "timeout") {
-			log.Printf("trying again after error: %s", emsg)
+			ilog.Printf("trying again after error: %s", emsg)
 			time.Sleep(time.Duration(60+notrand.Int63n(60)) * time.Second)
 			j, err = GetJunk(url)
 			if err != nil {
-				log.Printf("still couldn't get it")
+				ilog.Printf("still couldn't get it")
 			} else {
-				log.Printf("retry success!")
+				ilog.Printf("retry success!")
 			}
 		}
 	}
@@ -134,7 +128,10 @@ func GetJunkHardMode(url string) (junk.Junk, error) {
 var flightdeck = gate.NewSerializer()
 
 func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
-
+	client := http.DefaultClient
+	if debugMode {
+		client = debugClient
+	}
 	fn := func() (interface{}, error) {
 		at := thefakename
 		if strings.Contains(url, ".well-known/webfinger?resource") {
@@ -144,6 +141,7 @@ func GetJunkTimeout(url string, timeout time.Duration) (junk.Junk, error) {
 			Accept:  at,
 			Agent:   "honksnonk/5.0; " + serverName,
 			Timeout: timeout,
+			Client:  client,
 		})
 		return j, err
 	}
@@ -163,7 +161,7 @@ func fetchsome(url string) ([]byte, error) {
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Printf("error fetching %s: %s", url, err)
+		ilog.Printf("error fetching %s: %s", url, err)
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "honksnonk/5.0; "+serverName)
@@ -172,7 +170,7 @@ func fetchsome(url string) ([]byte, error) {
 	req = req.WithContext(ctx)
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("error fetching %s: %s", url, err)
+		ilog.Printf("error fetching %s: %s", url, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -196,7 +194,7 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 	if donk := finddonk(url); donk != nil {
 		return donk
 	}
-	log.Printf("saving donk: %s", url)
+	ilog.Printf("saving donk: %s", url)
 	data := []byte{}
 	if localize {
 		fn := func() (interface{}, error) {
@@ -204,19 +202,19 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 		}
 		ii, err := flightdeck.Call(url, fn)
 		if err != nil {
-			log.Printf("error fetching donk: %s", err)
+			ilog.Printf("error fetching donk: %s", err)
 			localize = false
 			goto saveit
 		}
 		data = ii.([]byte)
 
 		if len(data) == 10*1024*1024 {
-			log.Printf("truncation likely")
+			ilog.Printf("truncation likely")
 		}
 		if strings.HasPrefix(media, "image") {
 			img, err := shrinkit(data)
 			if err != nil {
-				log.Printf("unable to decode image: %s", err)
+				ilog.Printf("unable to decode image: %s", err)
 				localize = false
 				data = []byte{}
 				goto saveit
@@ -225,12 +223,12 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 			media = "image/" + img.Format
 		} else if media == "application/pdf" {
 			if len(data) > 1000000 {
-				log.Printf("not saving large pdf")
+				ilog.Printf("not saving large pdf")
 				localize = false
 				data = []byte{}
 			}
 		} else if len(data) > 100000 {
-			log.Printf("not saving large attachment")
+			ilog.Printf("not saving large attachment")
 			localize = false
 			data = []byte{}
 		}
@@ -238,7 +236,7 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 saveit:
 	fileid, err := savefile(name, desc, url, media, localize, data)
 	if err != nil {
-		log.Printf("error saving file %s: %s", url, err)
+		elog.Printf("error saving file %s: %s", url, err)
 		return nil
 	}
 	donk := new(Donk)
@@ -254,7 +252,7 @@ func iszonked(userid int64, xid string) bool {
 		return true
 	}
 	if err != sql.ErrNoRows {
-		log.Printf("error querying zonk: %s", err)
+		ilog.Printf("error querying zonk: %s", err)
 	}
 	return false
 }
@@ -279,11 +277,11 @@ func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
 		return false
 	}
 	if rejectorigin(user.ID, xid, isannounce) {
-		log.Printf("rejecting origin: %s", xid)
+		ilog.Printf("rejecting origin: %s", xid)
 		return false
 	}
 	if iszonked(user.ID, xid) {
-		log.Printf("already zonked: %s", xid)
+		ilog.Printf("already zonked: %s", xid)
 		return false
 	}
 	var id int64
@@ -293,7 +291,7 @@ func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
 		return false
 	}
 	if err != sql.ErrNoRows {
-		log.Printf("error querying xonk: %s", err)
+		ilog.Printf("error querying xonk: %s", err)
 	}
 	return true
 }
@@ -305,12 +303,12 @@ func eradicatexonk(userid int64, xid string) {
 	}
 	_, err := stmtSaveZonker.Exec(userid, xid, "zonk")
 	if err != nil {
-		log.Printf("error eradicating: %s", err)
+		elog.Printf("error eradicating: %s", err)
 	}
 }
 
 func savexonk(x *Honk) {
-	log.Printf("saving xonk: %s", x.XID)
+	ilog.Printf("saving xonk: %s", x.XID)
 	go handles(x.Honker)
 	go handles(x.Oonker)
 	savehonk(x)
@@ -327,11 +325,11 @@ var boxofboxes = cache.New(cache.Options{Filler: func(ident string) (*Box, bool)
 	row := stmtGetXonker.QueryRow(ident, "boxes")
 	err := row.Scan(&info)
 	if err != nil {
-		log.Printf("need to get boxes for %s", ident)
+		dlog.Printf("need to get boxes for %s", ident)
 		var j junk.Junk
 		j, err = GetJunk(ident)
 		if err != nil {
-			log.Printf("error getting boxes: %s", err)
+			dlog.Printf("error getting boxes: %s", err)
 			return nil, false
 		}
 		allinjest(originate(ident), j)
@@ -347,10 +345,10 @@ var boxofboxes = cache.New(cache.Options{Filler: func(ident string) (*Box, bool)
 }})
 
 func gimmexonks(user *WhatAbout, outbox string) {
-	log.Printf("getting outbox: %s", outbox)
+	dlog.Printf("getting outbox: %s", outbox)
 	j, err := GetJunk(outbox)
 	if err != nil {
-		log.Printf("error getting outbox: %s", err)
+		ilog.Printf("error getting outbox: %s", err)
 		return
 	}
 	t, _ := j.GetString("type")
@@ -369,7 +367,7 @@ func gimmexonks(user *WhatAbout, outbox string) {
 				if ok {
 					j, err = GetJunk(page1)
 					if err != nil {
-						log.Printf("error gettings page1: %s", err)
+						ilog.Printf("error gettings page1: %s", err)
 						return
 					}
 					items, _ = j.GetArray("orderedItems")
@@ -395,7 +393,7 @@ func gimmexonks(user *WhatAbout, outbox string) {
 				}
 				obj, err = GetJunk(xid)
 				if err != nil {
-					log.Printf("error getting item: %s", err)
+					ilog.Printf("error getting item: %s", err)
 					continue
 				}
 				xonksaver(user, obj, originate(xid))
@@ -451,6 +449,19 @@ func extractattrto(obj junk.Junk) string {
 	return ""
 }
 
+func firstofmany(obj junk.Junk, key string) string {
+	if val, _ := obj.GetString(key); val != "" {
+		return val
+	}
+	if arr, _ := obj.GetArray(key); len(arr) > 0 {
+		val, ok := arr[0].(string)
+		if ok {
+			return val
+		}
+	}
+	return ""
+}
+
 func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	depth := 0
 	maxdepth := 10
@@ -459,14 +470,14 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	var xonkxonkfn func(item junk.Junk, origin string, isUpdate bool) *Honk
 
 	saveonemore := func(xid string) {
-		log.Printf("getting onemore: %s", xid)
+		dlog.Printf("getting onemore: %s", xid)
 		if depth >= maxdepth {
-			log.Printf("in too deep")
+			ilog.Printf("in too deep")
 			return
 		}
 		obj, err := GetJunkHardMode(xid)
 		if err != nil {
-			log.Printf("error getting onemore: %s: %s", xid, err)
+			ilog.Printf("error getting onemore: %s: %s", xid, err)
 			return
 		}
 		depth++
@@ -476,7 +487,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 
 	xonkxonkfn = func(item junk.Junk, origin string, isUpdate bool) *Honk {
 		id, _ := item.GetString("id")
-		what, _ := item.GetString("type")
+		what := firstofmany(item, "type")
 		dt, ok := item.GetString("published")
 		if !ok {
 			dt = time.Now().Format(time.RFC3339)
@@ -498,11 +509,16 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return nil
 			}
 			if originate(xid) != origin {
-				log.Printf("forged delete: %s", xid)
+				ilog.Printf("forged delete: %s", xid)
 				return nil
 			}
-			log.Printf("eradicating %s", xid)
+			ilog.Printf("eradicating %s", xid)
 			eradicatexonk(user.ID, xid)
+			return nil
+		case "Remove":
+			xid, _ = item.GetString("object")
+			targ, _ := obj.GetString("target")
+			ilog.Printf("remove %s from %s", obj, targ)
 			return nil
 		case "Tombstone":
 			xid, _ = item.GetString("id")
@@ -510,10 +526,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return nil
 			}
 			if originate(xid) != origin {
-				log.Printf("forged delete: %s", xid)
+				ilog.Printf("forged delete: %s", xid)
 				return nil
 			}
-			log.Printf("eradicating %s", xid)
+			ilog.Printf("eradicating %s", xid)
 			eradicatexonk(user.ID, xid)
 			return nil
 		case "Announce":
@@ -526,10 +542,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if !needbonkid(user, xid) {
 				return nil
 			}
-			log.Printf("getting bonk: %s", xid)
+			dlog.Printf("getting bonk: %s", xid)
 			obj, err = GetJunkHardMode(xid)
 			if err != nil {
-				log.Printf("error getting bonk: %s: %s", xid, err)
+				ilog.Printf("error getting bonk: %s: %s", xid, err)
 			}
 			origin = originate(xid)
 			what = "bonk"
@@ -540,18 +556,18 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			obj, ok = item.GetMap("object")
 			if !ok {
 				xid, _ = item.GetString("object")
-				log.Printf("getting created honk: %s", xid)
+				dlog.Printf("getting created honk: %s", xid)
 				if originate(xid) != origin {
-					log.Printf("out of bounds %s not from %s", xid, origin)
+					ilog.Printf("out of bounds %s not from %s", xid, origin)
 					return nil
 				}
 				obj, err = GetJunkHardMode(xid)
 				if err != nil {
-					log.Printf("error getting creation: %s", err)
+					ilog.Printf("error getting creation: %s", err)
 				}
 			}
 			if obj == nil {
-				log.Printf("no object for creation %s", id)
+				ilog.Printf("no object for creation %s", id)
 				return nil
 			}
 			return xonkxonkfn(obj, origin, isUpdate)
@@ -559,12 +575,12 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			xid, ok = item.GetString("object")
 			if ok {
 				if !needxonkid(user, xid) {
-					log.Printf("don't need read obj: %s", xid)
+					dlog.Printf("don't need read obj: %s", xid)
 					return nil
 				}
 				obj, err = GetJunkHardMode(xid)
 				if err != nil {
-					log.Printf("error getting read: %s", err)
+					ilog.Printf("error getting read: %s", err)
 					return nil
 				}
 				return xonkxonkfn(obj, originate(xid), false)
@@ -575,12 +591,12 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if ok {
 				// check target...
 				if !needxonkid(user, xid) {
-					log.Printf("don't need added obj: %s", xid)
+					dlog.Printf("don't need added obj: %s", xid)
 					return nil
 				}
 				obj, err = GetJunkHardMode(xid)
 				if err != nil {
-					log.Printf("error getting add: %s", err)
+					ilog.Printf("error getting add: %s", err)
 					return nil
 				}
 				return xonkxonkfn(obj, originate(xid), false)
@@ -589,6 +605,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		case "Move":
 			obj = item
 			what = "move"
+		case "GuessWord": // dealt with below
+			fallthrough
 		case "Audio":
 			fallthrough
 		case "Image":
@@ -611,7 +629,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			obj = item
 			what = "chonk"
 		default:
-			log.Printf("unknown activity: %s", what)
+			ilog.Printf("unknown activity: %s", what)
 			dumpactivity(item)
 			return nil
 		}
@@ -621,13 +639,13 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		}
 
 		if xid == "" {
-			log.Printf("don't know what xid is")
-			item.Write(os.Stdout)
+			ilog.Printf("don't know what xid is")
+			item.Write(ilog.Writer())
 			return nil
 		}
 		if originate(xid) != origin {
-			log.Printf("original sin: %s not from %s", xid, origin)
-			item.Write(os.Stdout)
+			ilog.Printf("original sin: %s not from %s", xid, origin)
+			item.Write(ilog.Writer())
 			return nil
 		}
 
@@ -712,18 +730,24 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				targ, _ := obj.GetString("target")
 				content += string(templates.Sprintf(`<p>Moved to <a href="%s">%s</a>`, targ, targ))
 			}
+			if ot == "GuessWord" {
+				what = "wonk"
+				content, _ = obj.GetString("content")
+				xonk.Wonkles, _ = obj.GetString("wordlist")
+				go savewonkles(xonk.Wonkles)
+			}
 			if what == "honk" && rid != "" {
 				what = "tonk"
 			}
 			if len(content) > 90001 {
-				log.Printf("content too long. truncating")
+				ilog.Printf("content too long. truncating")
 				content = content[:90001]
 			}
 
 			xonk.Noise = content
 			xonk.Precis = precis
 			if rejectxonk(&xonk) {
-				log.Printf("fast reject: %s", xid)
+				dlog.Printf("fast reject: %s", xid)
 				return nil
 			}
 
@@ -752,21 +776,22 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				}
 				name, _ := att.GetString("name")
 				desc, _ := att.GetString("summary")
+				desc = html.UnescapeString(desc)
 				if desc == "" {
 					desc = name
 				}
 				localize := false
 				if numatts > 4 {
-					log.Printf("excessive attachment: %s", at)
+					ilog.Printf("excessive attachment: %s", at)
 				} else if at == "Document" || at == "Image" {
 					mt = strings.ToLower(mt)
-					log.Printf("attachment: %s %s", mt, u)
+					dlog.Printf("attachment: %s %s", mt, u)
 					if mt == "text/plain" || mt == "application/pdf" ||
 						strings.HasPrefix(mt, "image") {
 						localize = true
 					}
 				} else {
-					log.Printf("unknown attachment: %s", at)
+					ilog.Printf("unknown attachment: %s", at)
 				}
 				if skipMedia(&xonk) {
 					localize = false
@@ -781,7 +806,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			for _, atti := range atts {
 				att, ok := atti.(junk.Junk)
 				if !ok {
-					log.Printf("attachment that wasn't map?")
+					ilog.Printf("attachment that wasn't map?")
 					continue
 				}
 				procatt(att)
@@ -798,6 +823,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				tt, _ := tag.GetString("type")
 				name, _ := tag.GetString("name")
 				desc, _ := tag.GetString("summary")
+				desc = html.UnescapeString(desc)
 				if desc == "" {
 					desc = name
 				}
@@ -919,10 +945,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		}
 
 		if isUpdate {
-			log.Printf("something has changed! %s", xonk.XID)
+			dlog.Printf("something has changed! %s", xonk.XID)
 			prev := getxonk(user.ID, xonk.XID)
 			if prev == nil {
-				log.Printf("didn't find old version for update: %s", xonk.XID)
+				ilog.Printf("didn't find old version for update: %s", xonk.XID)
 				isUpdate = false
 			} else {
 				xonk.ID = prev.ID
@@ -956,7 +982,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		if goingup == 0 {
 			for _, replid := range replies {
 				if needxonkid(user, replid) {
-					log.Printf("missing a reply: %s", replid)
+					dlog.Printf("missing a reply: %s", replid)
 					saveonemore(replid)
 				}
 			}
@@ -970,7 +996,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 func dumpactivity(item junk.Junk) {
 	fd, err := os.OpenFile("savedinbox.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		log.Printf("error opening inbox! %s", err)
+		elog.Printf("error opening inbox! %s", err)
 		return
 	}
 	defer fd.Close()
@@ -1013,7 +1039,7 @@ func itakeitallback(user *WhatAbout, xid string, owner string, folxid string) {
 
 func subsub(user *WhatAbout, xid string, owner string, folxid string) {
 	if xid == "" {
-		log.Printf("can't subscribe to empty")
+		ilog.Printf("can't subscribe to empty")
 		return
 	}
 	j := junk.New()
@@ -1065,6 +1091,8 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		fallthrough
 	case "event":
 		fallthrough
+	case "wonk":
+		fallthrough
 	case "honk":
 		j["type"] = "Create"
 		if h.What == "update" {
@@ -1076,6 +1104,8 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		jo["type"] = "Note"
 		if h.What == "event" {
 			jo["type"] = "Event"
+		} else if h.What == "wonk" {
+			jo["type"] = "GuessWord"
 		}
 		jo["published"] = dt
 		jo["url"] = h.XID
@@ -1177,6 +1207,9 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			if t.Duration != 0 {
 				jo["duration"] = "PT" + strings.ToUpper(t.Duration.String())
 			}
+		}
+		if w := h.Wonkles; w != "" {
+			jo["wordlist"] = w
 		}
 		atts := activatedonks(h.Donks)
 		if len(atts) > 0 {
@@ -1357,12 +1390,16 @@ func honkworldwide(user *WhatAbout, honk *Honk) {
 			}
 		}
 		for _, f := range getbacktracks(honk.XID) {
-			var box *Box
-			ok := boxofboxes.Get(f, &box)
-			if ok && box.Shared != "" {
-				rcpts["%"+box.Shared] = true
-			} else {
+			if f[0] == '%' {
 				rcpts[f] = true
+			} else {
+				var box *Box
+				ok := boxofboxes.Get(f, &box)
+				if ok && box.Shared != "" {
+					rcpts["%"+box.Shared] = true
+				} else {
+					rcpts[f] = true
+				}
 			}
 		}
 	}
@@ -1450,7 +1487,11 @@ func junkuser(user *WhatAbout) junk.Junk {
 		if ava := user.Options.Avatar; ava != "" {
 			a["url"] = ava
 		} else {
-			a["url"] = fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
+			u := fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
+			if user.Options.Avahex {
+				u += "&hex=1"
+			}
+			a["url"] = u
 		}
 		j["icon"] = a
 	} else {
@@ -1485,7 +1526,7 @@ func asjonker(name string) ([]byte, bool) {
 var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) {
 	m := strings.Split(name, "@")
 	if len(m) != 2 {
-		log.Printf("bad fish name: %s", name)
+		dlog.Printf("bad fish name: %s", name)
 		return "", true
 	}
 	var href string
@@ -1494,10 +1535,10 @@ var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) 
 	if err == nil {
 		return href, true
 	}
-	log.Printf("fishing for %s", name)
+	dlog.Printf("fishing for %s", name)
 	j, err := GetJunkFast(fmt.Sprintf("https://%s/.well-known/webfinger?resource=acct:%s", m[1], name))
 	if err != nil {
-		log.Printf("failed to go fish %s: %s", name, err)
+		ilog.Printf("failed to go fish %s: %s", name, err)
 		return "", true
 	}
 	links, _ := j.GetArray("links")
@@ -1513,7 +1554,7 @@ var handfull = cache.New(cache.Options{Filler: func(name string) (string, bool) 
 			when := time.Now().UTC().Format(dbtimeformat)
 			_, err := stmtSaveXonker.Exec(name, href, "fishname", when)
 			if err != nil {
-				log.Printf("error saving fishname: %s", err)
+				elog.Printf("error saving fishname: %s", err)
 			}
 			return href, true
 		}
@@ -1601,33 +1642,33 @@ func ingestpubkey(origin string, obj junk.Junk) {
 		return
 	}
 	if !ok || origin != originate(keyname) {
-		log.Printf("bad key origin %s <> %s", origin, keyname)
+		ilog.Printf("bad key origin %s <> %s", origin, keyname)
 		return
 	}
-	log.Printf("ingesting a needed pubkey: %s", keyname)
+	dlog.Printf("ingesting a needed pubkey: %s", keyname)
 	owner, ok := obj.GetString("owner")
 	if !ok {
-		log.Printf("error finding %s pubkey owner", keyname)
+		ilog.Printf("error finding %s pubkey owner", keyname)
 		return
 	}
 	data, ok = obj.GetString("publicKeyPem")
 	if !ok {
-		log.Printf("error finding %s pubkey", keyname)
+		ilog.Printf("error finding %s pubkey", keyname)
 		return
 	}
 	if originate(owner) != origin {
-		log.Printf("bad key owner: %s <> %s", owner, origin)
+		ilog.Printf("bad key owner: %s <> %s", owner, origin)
 		return
 	}
 	_, _, err = httpsig.DecodeKey(data)
 	if err != nil {
-		log.Printf("error decoding %s pubkey: %s", keyname, err)
+		ilog.Printf("error decoding %s pubkey: %s", keyname, err)
 		return
 	}
 	when := time.Now().UTC().Format(dbtimeformat)
 	_, err = stmtSaveXonker.Exec(keyname, data, "pubkey", when)
 	if err != nil {
-		log.Printf("error saving key: %s", err)
+		elog.Printf("error saving key: %s", err)
 	}
 }
 
@@ -1645,7 +1686,7 @@ func ingestboxes(origin string, obj junk.Junk) {
 	if err == nil {
 		return
 	}
-	log.Printf("ingesting boxes: %s", ident)
+	dlog.Printf("ingesting boxes: %s", ident)
 	inbox, _ := obj.GetString("inbox")
 	outbox, _ := obj.GetString("outbox")
 	sbox, _ := obj.GetString("endpoints", "sharedInbox")
@@ -1654,7 +1695,7 @@ func ingestboxes(origin string, obj junk.Junk) {
 		m := strings.Join([]string{inbox, outbox, sbox}, " ")
 		_, err = stmtSaveXonker.Exec(ident, m, "boxes", when)
 		if err != nil {
-			log.Printf("error saving boxes: %s", err)
+			elog.Printf("error saving boxes: %s", err)
 		}
 	}
 }
@@ -1678,7 +1719,7 @@ func ingesthandle(origin string, obj junk.Junk) {
 		when := time.Now().UTC().Format(dbtimeformat)
 		_, err = stmtSaveXonker.Exec(xid, handle, "handle", when)
 		if err != nil {
-			log.Printf("error saving handle: %s", err)
+			elog.Printf("error saving handle: %s", err)
 		}
 	}
 }
@@ -1719,17 +1760,17 @@ func updateMe(username string) {
 func followme(user *WhatAbout, who string, name string, j junk.Junk) {
 	folxid, _ := j.GetString("id")
 
-	log.Printf("updating honker follow: %s %s", who, folxid)
+	ilog.Printf("updating honker follow: %s %s", who, folxid)
 
 	var x string
 	db := opendatabase()
 	row := db.QueryRow("select xid from honkers where name = ? and xid = ? and userid = ? and flavor in ('dub', 'undub')", name, who, user.ID)
 	err := row.Scan(&x)
 	if err != sql.ErrNoRows {
-		log.Printf("duplicate follow request: %s", who)
+		ilog.Printf("duplicate follow request: %s", who)
 		_, err = stmtUpdateFlavor.Exec("dub", folxid, user.ID, name, who, "undub")
 		if err != nil {
-			log.Printf("error updating honker: %s", err)
+			elog.Printf("error updating honker: %s", err)
 		}
 	} else {
 		stmtSaveDub.Exec(user.ID, name, who, "dub", folxid)
@@ -1747,16 +1788,16 @@ func unfollowme(user *WhatAbout, who string, name string, j junk.Junk) {
 		err := row.Scan(&who, &name)
 		if err != nil {
 			if err != sql.ErrNoRows {
-				log.Printf("error scanning honker: %s", err)
+				elog.Printf("error scanning honker: %s", err)
 			}
 			return
 		}
 	}
 
-	log.Printf("updating honker undo: %s %s", who, folxid)
+	ilog.Printf("updating honker undo: %s %s", who, folxid)
 	_, err := stmtUpdateFlavor.Exec("undub", folxid, user.ID, name, who, "dub")
 	if err != nil {
-		log.Printf("error updating honker: %s", err)
+		elog.Printf("error updating honker: %s", err)
 		return
 	}
 }
@@ -1768,14 +1809,14 @@ func followyou(user *WhatAbout, honkerid int64) {
 		honkerid, user.ID)
 	err := row.Scan(&url, &owner)
 	if err != nil {
-		log.Printf("can't get honker xid: %s", err)
+		elog.Printf("can't get honker xid: %s", err)
 		return
 	}
 	folxid := xfiltrate()
-	log.Printf("subscribing to %s", url)
+	ilog.Printf("subscribing to %s", url)
 	_, err = db.Exec("update honkers set flavor = ?, folxid = ? where honkerid = ?", "presub", folxid, honkerid)
 	if err != nil {
-		log.Printf("error updating honker: %s", err)
+		elog.Printf("error updating honker: %s", err)
 		return
 	}
 	go subsub(user, url, owner, folxid)
@@ -1788,13 +1829,13 @@ func unfollowyou(user *WhatAbout, honkerid int64) {
 	var url, owner, folxid string
 	err := row.Scan(&url, &owner, &folxid)
 	if err != nil {
-		log.Printf("can't get honker xid: %s", err)
+		elog.Printf("can't get honker xid: %s", err)
 		return
 	}
-	log.Printf("unsubscribing from %s", url)
+	ilog.Printf("unsubscribing from %s", url)
 	_, err = db.Exec("update honkers set flavor = ? where honkerid = ?", "unsub", honkerid)
 	if err != nil {
-		log.Printf("error updating honker: %s", err)
+		elog.Printf("error updating honker: %s", err)
 		return
 	}
 	go itakeitallback(user, url, owner, folxid)
@@ -1803,19 +1844,19 @@ func unfollowyou(user *WhatAbout, honkerid int64) {
 func followyou2(user *WhatAbout, j junk.Junk) {
 	who, _ := j.GetString("actor")
 
-	log.Printf("updating honker accept: %s", who)
+	ilog.Printf("updating honker accept: %s", who)
 	db := opendatabase()
 	row := db.QueryRow("select name, folxid from honkers where userid = ? and xid = ? and flavor in ('presub')",
 		user.ID, who)
 	var name, folxid string
 	err := row.Scan(&name, &folxid)
 	if err != nil {
-		log.Printf("can't get honker name: %s", err)
+		elog.Printf("can't get honker name: %s", err)
 		return
 	}
 	_, err = stmtUpdateFlavor.Exec("sub", folxid, user.ID, name, who, "presub")
 	if err != nil {
-		log.Printf("error updating honker: %s", err)
+		elog.Printf("error updating honker: %s", err)
 		return
 	}
 }
@@ -1823,20 +1864,20 @@ func followyou2(user *WhatAbout, j junk.Junk) {
 func nofollowyou2(user *WhatAbout, j junk.Junk) {
 	who, _ := j.GetString("actor")
 
-	log.Printf("updating honker reject: %s", who)
+	ilog.Printf("updating honker reject: %s", who)
 	db := opendatabase()
 	row := db.QueryRow("select name, folxid from honkers where userid = ? and xid = ? and flavor in ('presub', 'sub')",
 		user.ID, who)
 	var name, folxid string
 	err := row.Scan(&name, &folxid)
 	if err != nil {
-		log.Printf("can't get honker name: %s", err)
+		elog.Printf("can't get honker name: %s", err)
 		return
 	}
 	_, err = stmtUpdateFlavor.Exec("unsub", folxid, user.ID, name, who, "presub")
 	_, err = stmtUpdateFlavor.Exec("unsub", folxid, user.ID, name, who, "sub")
 	if err != nil {
-		log.Printf("error updating honker: %s", err)
+		elog.Printf("error updating honker: %s", err)
 		return
 	}
 }

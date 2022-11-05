@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,7 +48,7 @@ func userfromrow(row *sql.Row) (*WhatAbout, error) {
 		user.URL = fmt.Sprintf("https://%s/%s/%s", serverName, userSep, user.Name)
 		err = unjsonify(options, &user.Options)
 		if err != nil {
-			log.Printf("error processing user options: %s", err)
+			elog.Printf("error processing user options: %s", err)
 		}
 	} else {
 		user.URL = fmt.Sprintf("https://%s/%s", serverName, user.Name)
@@ -88,7 +87,7 @@ func getserveruser() *WhatAbout {
 	var user *WhatAbout
 	ok := somenumberedusers.Get(serverUID, &user)
 	if !ok {
-		log.Panicf("lost server user")
+		elog.Panicf("lost server user")
 	}
 	return user
 }
@@ -107,7 +106,7 @@ var honkerinvalidator cache.Invalidator
 func gethonkers(userid int64) []*Honker {
 	rows, err := stmtHonkers.Query(userid)
 	if err != nil {
-		log.Printf("error querying honkers: %s", err)
+		elog.Printf("error querying honkers: %s", err)
 		return nil
 	}
 	defer rows.Close()
@@ -120,7 +119,7 @@ func gethonkers(userid int64) []*Honker {
 			err = unjsonify(meta, &h.Meta)
 		}
 		if err != nil {
-			log.Printf("error scanning honker: %s", err)
+			elog.Printf("error scanning honker: %s", err)
 			continue
 		}
 		h.Combos = strings.Split(strings.TrimSpace(combos), " ")
@@ -141,7 +140,7 @@ func getnameddubs(userid int64, name string) []*Honker {
 
 func dubsfromrows(rows *sql.Rows, err error) []*Honker {
 	if err != nil {
-		log.Printf("error querying dubs: %s", err)
+		elog.Printf("error querying dubs: %s", err)
 		return nil
 	}
 	defer rows.Close()
@@ -150,7 +149,7 @@ func dubsfromrows(rows *sql.Rows, err error) []*Honker {
 		h := new(Honker)
 		err = rows.Scan(&h.ID, &h.UserID, &h.Name, &h.XID, &h.Flavor)
 		if err != nil {
-			log.Printf("error scanning honker: %s", err)
+			elog.Printf("error scanning honker: %s", err)
 			return nil
 		}
 		honkers = append(honkers, h)
@@ -244,12 +243,16 @@ func gethonksforme(userid int64, wanted int64) []*Honk {
 }
 func gethonksfromlongago(userid int64, wanted int64) []*Honk {
 	now := time.Now().UTC()
-	now = time.Date(now.Year()-1, now.Month(), now.Day(), now.Hour(), now.Minute(),
-		now.Second(), 0, now.Location())
-	dt1 := now.Add(-36 * time.Hour).Format(dbtimeformat)
-	dt2 := now.Add(12 * time.Hour).Format(dbtimeformat)
-	rows, err := stmtHonksFromLongAgo.Query(wanted, userid, dt1, dt2, userid)
-	return getsomehonks(rows, err)
+	var honks []*Honk
+	for i := 1; i <= 3; i++ {
+		dt := time.Date(now.Year()-i, now.Month(), now.Day(), now.Hour(), now.Minute(),
+			now.Second(), 0, now.Location())
+		dt1 := dt.Add(-36 * time.Hour).Format(dbtimeformat)
+		dt2 := dt.Add(12 * time.Hour).Format(dbtimeformat)
+		rows, err := stmtHonksFromLongAgo.Query(wanted, userid, dt1, dt2, userid)
+		honks = append(honks, getsomehonks(rows, err)...)
+	}
+	return honks
 }
 func getsavedhonks(userid int64, wanted int64) []*Honk {
 	rows, err := stmtHonksISaved.Query(wanted, userid)
@@ -340,7 +343,7 @@ func reversehonks(honks []*Honk) {
 
 func getsomehonks(rows *sql.Rows, err error) []*Honk {
 	if err != nil {
-		log.Printf("error querying honks: %s", err)
+		elog.Printf("error querying honks: %s", err)
 		return nil
 	}
 	defer rows.Close()
@@ -367,7 +370,7 @@ func scanhonk(row RowLike) *Honk {
 		&dt, &h.URL, &aud, &h.Noise, &h.Precis, &h.Format, &h.Convoy, &h.Whofore, &h.Flags)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			log.Printf("error scanning honk: %s", err)
+			elog.Printf("error scanning honk: %s", err)
 		}
 		return nil
 	}
@@ -390,7 +393,7 @@ func donksforhonks(honks []*Honk) {
 	q := fmt.Sprintf("select honkid, donks.fileid, xid, name, description, url, media, local from donks join filemeta on donks.fileid = filemeta.fileid where honkid in (%s)", idset)
 	rows, err := db.Query(q)
 	if err != nil {
-		log.Printf("error querying donks: %s", err)
+		elog.Printf("error querying donks: %s", err)
 		return
 	}
 	defer rows.Close()
@@ -399,7 +402,7 @@ func donksforhonks(honks []*Honk) {
 		d := new(Donk)
 		err = rows.Scan(&hid, &d.FileID, &d.XID, &d.Name, &d.Desc, &d.URL, &d.Media, &d.Local)
 		if err != nil {
-			log.Printf("error scanning donk: %s", err)
+			elog.Printf("error scanning donk: %s", err)
 			continue
 		}
 		d.External = !strings.HasPrefix(d.URL, serverPrefix)
@@ -412,7 +415,7 @@ func donksforhonks(honks []*Honk) {
 	q = fmt.Sprintf("select honkid, ontology from onts where honkid in (%s)", idset)
 	rows, err = db.Query(q)
 	if err != nil {
-		log.Printf("error querying onts: %s", err)
+		elog.Printf("error querying onts: %s", err)
 		return
 	}
 	defer rows.Close()
@@ -421,7 +424,7 @@ func donksforhonks(honks []*Honk) {
 		var o string
 		err = rows.Scan(&hid, &o)
 		if err != nil {
-			log.Printf("error scanning donk: %s", err)
+			elog.Printf("error scanning donk: %s", err)
 			continue
 		}
 		h := hmap[hid]
@@ -433,7 +436,7 @@ func donksforhonks(honks []*Honk) {
 	q = fmt.Sprintf("select honkid, genus, json from honkmeta where honkid in (%s)", idset)
 	rows, err = db.Query(q)
 	if err != nil {
-		log.Printf("error querying honkmeta: %s", err)
+		elog.Printf("error querying honkmeta: %s", err)
 		return
 	}
 	defer rows.Close()
@@ -442,7 +445,7 @@ func donksforhonks(honks []*Honk) {
 		var genus, j string
 		err = rows.Scan(&hid, &genus, &j)
 		if err != nil {
-			log.Printf("error scanning honkmeta: %s", err)
+			elog.Printf("error scanning honkmeta: %s", err)
 			continue
 		}
 		h := hmap[hid]
@@ -451,7 +454,7 @@ func donksforhonks(honks []*Honk) {
 			p := new(Place)
 			err = unjsonify(j, p)
 			if err != nil {
-				log.Printf("error parsing place: %s", err)
+				elog.Printf("error parsing place: %s", err)
 				continue
 			}
 			h.Place = p
@@ -459,25 +462,29 @@ func donksforhonks(honks []*Honk) {
 			t := new(Time)
 			err = unjsonify(j, t)
 			if err != nil {
-				log.Printf("error parsing time: %s", err)
+				elog.Printf("error parsing time: %s", err)
 				continue
 			}
 			h.Time = t
 		case "mentions":
 			err = unjsonify(j, &h.Mentions)
 			if err != nil {
-				log.Printf("error parsing mentions: %s", err)
+				elog.Printf("error parsing mentions: %s", err)
 				continue
 			}
 		case "badonks":
 			err = unjsonify(j, &h.Badonks)
 			if err != nil {
-				log.Printf("error parsing badonks: %s", err)
+				elog.Printf("error parsing badonks: %s", err)
 				continue
 			}
+		case "wonkles":
+			h.Wonkles = j
+		case "guesses":
+			h.Guesses = template.HTML(j)
 		case "oldrev":
 		default:
-			log.Printf("unknown meta genus: %s", genus)
+			elog.Printf("unknown meta genus: %s", genus)
 		}
 	}
 	rows.Close()
@@ -496,7 +503,7 @@ func donksforchonks(chonks []*Chonk) {
 	q := fmt.Sprintf("select chonkid, donks.fileid, xid, name, description, url, media, local from donks join filemeta on donks.fileid = filemeta.fileid where chonkid in (%s)", idset)
 	rows, err := db.Query(q)
 	if err != nil {
-		log.Printf("error querying donks: %s", err)
+		elog.Printf("error querying donks: %s", err)
 		return
 	}
 	defer rows.Close()
@@ -505,7 +512,7 @@ func donksforchonks(chonks []*Chonk) {
 		d := new(Donk)
 		err = rows.Scan(&chid, &d.FileID, &d.XID, &d.Name, &d.Desc, &d.URL, &d.Media, &d.Local)
 		if err != nil {
-			log.Printf("error scanning donk: %s", err)
+			elog.Printf("error scanning donk: %s", err)
 			continue
 		}
 		ch := chmap[chid]
@@ -547,7 +554,7 @@ func savefileandxid(name string, desc string, url string, media string, local bo
 				return 0, "", err
 			}
 		} else if err != nil {
-			log.Printf("error checking file hash: %s", err)
+			elog.Printf("error checking file hash: %s", err)
 			return 0, "", err
 		}
 		if url == "" {
@@ -571,7 +578,7 @@ func finddonk(url string) *Donk {
 		return donk
 	}
 	if err != sql.ErrNoRows {
-		log.Printf("error finding file: %s", err)
+		elog.Printf("error finding file: %s", err)
 	}
 	return nil
 }
@@ -581,7 +588,7 @@ func savechonk(ch *Chonk) error {
 	db := opendatabase()
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("can't begin tx: %s", err)
+		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
 
@@ -591,10 +598,11 @@ func savechonk(ch *Chonk) error {
 		for _, d := range ch.Donks {
 			_, err := tx.Stmt(stmtSaveDonk).Exec(-1, ch.ID, d.FileID)
 			if err != nil {
-				log.Printf("error saving donk: %s", err)
+				elog.Printf("error saving donk: %s", err)
 				break
 			}
 		}
+		chatplusone(tx, ch.UserID)
 		err = tx.Commit()
 	} else {
 		tx.Rollback()
@@ -602,11 +610,89 @@ func savechonk(ch *Chonk) error {
 	return err
 }
 
+func chatplusone(tx *sql.Tx, userid int64) {
+	var user *WhatAbout
+	ok := somenumberedusers.Get(userid, &user)
+	if !ok {
+		return
+	}
+	options := user.Options
+	options.ChatCount += 1
+	j, err := jsonify(options)
+	if err == nil {
+		_, err = tx.Exec("update users set options = ? where username = ?", j, user.Name)
+	}
+	if err != nil {
+		elog.Printf("error plussing chat: %s", err)
+	}
+	somenamedusers.Clear(user.Name)
+	somenumberedusers.Clear(user.ID)
+}
+
+func chatnewnone(userid int64) {
+	var user *WhatAbout
+	ok := somenumberedusers.Get(userid, &user)
+	if !ok || user.Options.ChatCount == 0 {
+		return
+	}
+	options := user.Options
+	options.ChatCount = 0
+	j, err := jsonify(options)
+	if err == nil {
+		db := opendatabase()
+		_, err = db.Exec("update users set options = ? where username = ?", j, user.Name)
+	}
+	if err != nil {
+		elog.Printf("error noneing chat: %s", err)
+	}
+	somenamedusers.Clear(user.Name)
+	somenumberedusers.Clear(user.ID)
+}
+
+func meplusone(tx *sql.Tx, userid int64) {
+	var user *WhatAbout
+	ok := somenumberedusers.Get(userid, &user)
+	if !ok {
+		return
+	}
+	options := user.Options
+	options.MeCount += 1
+	j, err := jsonify(options)
+	if err == nil {
+		_, err = tx.Exec("update users set options = ? where username = ?", j, user.Name)
+	}
+	if err != nil {
+		elog.Printf("error plussing me: %s", err)
+	}
+	somenamedusers.Clear(user.Name)
+	somenumberedusers.Clear(user.ID)
+}
+
+func menewnone(userid int64) {
+	var user *WhatAbout
+	ok := somenumberedusers.Get(userid, &user)
+	if !ok || user.Options.MeCount == 0 {
+		return
+	}
+	options := user.Options
+	options.MeCount = 0
+	j, err := jsonify(options)
+	if err == nil {
+		db := opendatabase()
+		_, err = db.Exec("update users set options = ? where username = ?", j, user.Name)
+	}
+	if err != nil {
+		elog.Printf("error noneing me: %s", err)
+	}
+	somenamedusers.Clear(user.Name)
+	somenumberedusers.Clear(user.ID)
+}
+
 func loadchatter(userid int64) []*Chatter {
 	duedt := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
 	rows, err := stmtLoadChonks.Query(userid, duedt)
 	if err != nil {
-		log.Printf("error loading chonks: %s", err)
+		elog.Printf("error loading chonks: %s", err)
 		return nil
 	}
 	defer rows.Close()
@@ -617,7 +703,7 @@ func loadchatter(userid int64) []*Chatter {
 		var dt string
 		err = rows.Scan(&ch.ID, &ch.UserID, &ch.XID, &ch.Who, &ch.Target, &dt, &ch.Noise, &ch.Format)
 		if err != nil {
-			log.Printf("error scanning chonk: %s", err)
+			elog.Printf("error scanning chonk: %s", err)
 			continue
 		}
 		ch.Date, _ = time.Parse(dbtimeformat, dt)
@@ -628,14 +714,14 @@ func loadchatter(userid int64) []*Chatter {
 	rows.Close()
 	rows, err = stmtGetChatters.Query(userid)
 	if err != nil {
-		log.Printf("error getting chatters: %s", err)
+		elog.Printf("error getting chatters: %s", err)
 		return nil
 	}
 	for rows.Next() {
 		var target string
 		err = rows.Scan(&target)
 		if err != nil {
-			log.Printf("error scanning chatter: %s", target)
+			elog.Printf("error scanning chatter: %s", target)
 			continue
 		}
 		if _, ok := chonks[target]; !ok {
@@ -671,7 +757,7 @@ func savehonk(h *Honk) error {
 	db := opendatabase()
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("can't begin tx: %s", err)
+		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
 
@@ -683,12 +769,15 @@ func savehonk(h *Honk) error {
 		err = saveextras(tx, h)
 	}
 	if err == nil {
+		if h.Whofore == 1 {
+			meplusone(tx, h.UserID)
+		}
 		err = tx.Commit()
 	} else {
 		tx.Rollback()
 	}
 	if err != nil {
-		log.Printf("error saving honk: %s", err)
+		elog.Printf("error saving honk: %s", err)
 	}
 	honkhonkline()
 	return err
@@ -702,7 +791,7 @@ func updatehonk(h *Honk) error {
 	db := opendatabase()
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("can't begin tx: %s", err)
+		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
 
@@ -720,7 +809,7 @@ func updatehonk(h *Honk) error {
 			_, err = tx.Stmt(stmtSaveMeta).Exec(old.ID, "oldrev", j)
 		}
 		if err != nil {
-			log.Printf("error saving oldrev: %s", err)
+			elog.Printf("error saving oldrev: %s", err)
 		}
 	}
 	if err == nil {
@@ -729,7 +818,7 @@ func updatehonk(h *Honk) error {
 		tx.Rollback()
 	}
 	if err != nil {
-		log.Printf("error updating honk %d: %s", h.ID, err)
+		elog.Printf("error updating honk %d: %s", h.ID, err)
 	}
 	return err
 }
@@ -738,7 +827,7 @@ func deletehonk(honkid int64) error {
 	db := opendatabase()
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("can't begin tx: %s", err)
+		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
 
@@ -752,7 +841,7 @@ func deletehonk(honkid int64) error {
 		tx.Rollback()
 	}
 	if err != nil {
-		log.Printf("error deleting honk %d: %s", honkid, err)
+		elog.Printf("error deleting honk %d: %s", honkid, err)
 	}
 	return err
 }
@@ -761,14 +850,14 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 	for _, d := range h.Donks {
 		_, err := tx.Stmt(stmtSaveDonk).Exec(h.ID, -1, d.FileID)
 		if err != nil {
-			log.Printf("error saving donk: %s", err)
+			elog.Printf("error saving donk: %s", err)
 			return err
 		}
 	}
 	for _, o := range h.Onts {
 		_, err := tx.Stmt(stmtSaveOnt).Exec(strings.ToLower(o), h.ID)
 		if err != nil {
-			log.Printf("error saving ont: %s", err)
+			elog.Printf("error saving ont: %s", err)
 			return err
 		}
 	}
@@ -778,7 +867,7 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 			_, err = tx.Stmt(stmtSaveMeta).Exec(h.ID, "place", j)
 		}
 		if err != nil {
-			log.Printf("error saving place: %s", err)
+			elog.Printf("error saving place: %s", err)
 			return err
 		}
 	}
@@ -788,7 +877,7 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 			_, err = tx.Stmt(stmtSaveMeta).Exec(h.ID, "time", j)
 		}
 		if err != nil {
-			log.Printf("error saving time: %s", err)
+			elog.Printf("error saving time: %s", err)
 			return err
 		}
 	}
@@ -798,7 +887,21 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 			_, err = tx.Stmt(stmtSaveMeta).Exec(h.ID, "mentions", j)
 		}
 		if err != nil {
-			log.Printf("error saving mentions: %s", err)
+			elog.Printf("error saving mentions: %s", err)
+			return err
+		}
+	}
+	if w := h.Wonkles; w != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "wonkles", w)
+		if err != nil {
+			elog.Printf("error saving wonkles: %s", err)
+			return err
+		}
+	}
+	if g := h.Guesses; g != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "guesses", g)
+		if err != nil {
+			elog.Printf("error saving guesses: %s", err)
 			return err
 		}
 	}
@@ -858,6 +961,17 @@ func unjsonify(s string, dest interface{}) error {
 	return err
 }
 
+func getxonker(what, flav string) string {
+	var res string
+	row := stmtGetXonker.QueryRow(what, flav)
+	row.Scan(&res)
+	return res
+}
+
+func savexonker(what, value, flav, when string) {
+	stmtSaveXonker.Exec(what, value, flav, when)
+}
+
 func cleanupdb(arg string) {
 	db := opendatabase()
 	days, err := strconv.Atoi(arg)
@@ -888,13 +1002,13 @@ func cleanupdb(arg string) {
 	blobdb := openblobdb()
 	rows, err := blobdb.Query("select xid from filedata")
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	for rows.Next() {
 		var xid string
 		err = rows.Scan(&xid)
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		filexids[xid] = true
 	}
@@ -904,24 +1018,24 @@ func cleanupdb(arg string) {
 		var xid string
 		err = rows.Scan(&xid)
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 		delete(filexids, xid)
 	}
 	rows.Close()
 	tx, err := blobdb.Begin()
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	for xid, _ := range filexids {
 		_, err = tx.Exec("delete from filedata where xid = ?", xid)
 		if err != nil {
-			log.Fatal(err)
+			elog.Fatal(err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 }
 
@@ -947,7 +1061,7 @@ var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
 func preparetodie(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
 	if err != nil {
-		log.Fatalf("error %s: %s", err, s)
+		elog.Fatalf("error %s: %s", err, s)
 	}
 	return stmt
 }

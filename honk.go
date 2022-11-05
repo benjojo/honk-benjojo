@@ -19,7 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"log"
 	notrand "math/rand"
 	"os"
 	"strconv"
@@ -29,7 +28,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.6"
+var softwareVersion = "0.9.7"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -51,10 +50,13 @@ type WhatAbout struct {
 type UserOptions struct {
 	SkinnyCSS  bool   `json:",omitempty"`
 	OmitImages bool   `json:",omitempty"`
+	Avahex     bool   `json:",omitempty"`
+	MentionAll bool   `json:",omitempty"`
 	Avatar     string `json:",omitempty"`
 	MapLink    string `json:",omitempty"`
 	Reaction   string `json:",omitempty"`
-	MentionAll bool
+	MeCount    int64
+	ChatCount  int64
 }
 
 type KeyInfo struct {
@@ -97,6 +99,8 @@ type Honk struct {
 	Time     *Time
 	Mentions []Mention
 	Badonks  []Badonk
+	Wonkles  string
+	Guesses template.HTML
 }
 
 type Badonk struct {
@@ -139,6 +143,7 @@ const (
 	flagIsSaved    = 4
 	flagIsUntagged = 8
 	flagIsReacted  = 16
+	flagIsWonked   = 32
 )
 
 func (honk *Honk) IsAcked() bool {
@@ -159,6 +164,10 @@ func (honk *Honk) IsUntagged() bool {
 
 func (honk *Honk) IsReacted() bool {
 	return honk.Flags&flagIsReacted != 0
+}
+
+func (honk *Honk) IsWonked() bool {
+	return honk.Flags&flagIsWonked != 0
 }
 
 type Donk struct {
@@ -257,10 +266,25 @@ func unplugserver(hostname string) {
 	db.Exec("delete from doovers where rcpt like ?", xid)
 }
 
+func reexecArgs(cmd string) []string {
+	args := []string{"-datadir", dataDir}
+	args = append(args, loggingArgs()...)
+	args = append(args, cmd)
+	return args
+}
+
 func main() {
 	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
 	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
 	flag.Parse()
+
+	if alllogname != "stderr" {
+		elogname = alllogname
+		ilogname = alllogname
+		dlogname = alllogname
+	}
+	initLogging(elogname, ilogname, dlogname)
+
 	args := flag.Args()
 	cmd := "run"
 	if len(args) > 0 {
@@ -279,7 +303,7 @@ func main() {
 	dbversion := 0
 	getconfig("dbversion", &dbversion)
 	if dbversion != myVersion {
-		log.Fatal("incorrect database version. run upgrade.")
+		elog.Fatal("incorrect database version. run upgrade.")
 	}
 	getconfig("servermsg", &serverMsg)
 	getconfig("aboutmsg", &aboutMsg)
@@ -299,12 +323,12 @@ func main() {
 		adminscreen()
 	case "import":
 		if len(args) != 4 {
-			log.Fatal("import username mastodon|twitter srcdir")
+			elog.Fatal("import username mastodon|twitter srcdir")
 		}
 		importMain(args[1], args[2], args[3])
 	case "debug":
 		if len(args) != 2 {
-			log.Fatal("need an argument: debug (on|off)")
+			elog.Fatal("need an argument: debug (on|off)")
 		}
 		switch args[1] {
 		case "on":
@@ -312,7 +336,7 @@ func main() {
 		case "off":
 			setconfig("debug", 0)
 		default:
-			log.Fatal("argument must be on or off")
+			elog.Fatal("argument must be on or off")
 		}
 	case "adduser":
 		adduser()
@@ -353,7 +377,7 @@ func main() {
 		targ := args[2]
 		user, err := butwhatabout(name)
 		if err != nil {
-			log.Printf("unknown user")
+			elog.Printf("unknown user")
 			return
 		}
 		ping(user, targ)
@@ -364,6 +388,6 @@ func main() {
 	case "test":
 		ElaborateUnitTests()
 	default:
-		log.Fatal("unknown command")
+		elog.Fatal("unknown command")
 	}
 }

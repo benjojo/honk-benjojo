@@ -4,7 +4,7 @@ var lexer_c = "" +
 	"whitespace [ \\t\\r\\n]+\n" +
 	"number (0[xX][0-9a-fA-F]+|[0-9]+)\n" +
 	"number '(\\\\.|[^'])'\n" +
-	"keyword (if|else|for|while|continue|break|switch|case|return|typedef|extern)\\b\n" +
+	"keyword (if|else|for|while|continue|break|switch|case|default|return|typedef|extern)\\b\n" +
 	"builtin (NULL|va_list|true|false)\\b\n" +
 	"builtin #(\\\\\\n|[^\\n])*\n" +
 	"type (static|struct|const|unsigned|char|int|long|byte|bool|void|int8_t|uint8_t|int32_t|uint32_t)\\b\n" +
@@ -12,7 +12,9 @@ var lexer_c = "" +
 	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
 	"comment //[^\\n]*\n" +
 	"comment /\\*(?s:.*?)\\*/\n" +
-	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	"operator [-+/*=:<>,\\.!]+\n" +
+	"pair [([{]\n" +
+	"unpair [)\\]}]\n" +
 	""
 var lexer_diff = "" +
 	"keyword diff[^\\n]*\n" +
@@ -26,15 +28,18 @@ var lexer_go = "" +
 	"whitespace [ \\t\\r\\n]+\n" +
 	"number (0[xX][0-9a-fA-F]+|[0-9]+)\n" +
 	"number '(\\\\.|[^'])'\n" +
-	"keyword (package|if|else|nil|func|var|for|continue|break|switch|case|return|type|struct|interface)\\b\n" +
+	"keyword (package|if|else|nil|func|var|for|continue|break|switch|case|default|return|type)\\b\n" +
 	"builtin (import|defer|len|append|range|make|true|false)\\b\n" +
-	"type (string|map|int|byte|bool|chan|int32)\\b\n" +
+	"type (struct|interface|string|map|int|byte|bool|chan|int32)\\b\n" +
 	"string `[^`]*`\n" +
 	"string \"(\\\\\"|[^\"])*\"\n" +
 	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
 	"comment //[^\\n]*\n" +
 	"comment /\\*(?s:.*?)\\*/\n" +
-	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	"operator [-+/*=:<>,\\.!]+\n" +
+	"nop (\\[]|{})\n" +
+	"pair [([{]\n" +
+	"unpair [)\\]}]\n" +
 	""
 var lexer_html = "" +
 	"builtin:0:1 <[/a-zA-Z]*\n" +
@@ -55,7 +60,9 @@ var lexer_js = "" +
 	"string \"(\\\\\"|[^\"])*\"\n" +
 	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
 	"comment //[^\\n]*\n" +
-	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	"operator [-+/*=:<>,\\.!]+\n" +
+	"pair [([{]\n" +
+	"unpair [)\\]}]\n" +
 	""
 var lexer_lua = "" +
 	"whitespace [ \\t\\r\\n]+\n" +
@@ -68,7 +75,9 @@ var lexer_lua = "" +
 	"string \"(\\\\\"|[^\"])*\"\n" +
 	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
 	"comment --[^\\n]*\n" +
-	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	"operator [-+/*=:<>,\\.!]+\n" +
+	"pair [([{]\n" +
+	"unpair [)\\]}]\n" +
 	""
 var lexer_py = "" +
 	"whitespace [ \\t\\r\\n]+\n" +
@@ -97,7 +106,9 @@ var lexer_rs = "" +
 	"word [a-zA-Z_][a-zA-Z0-9_]*\n" +
 	"comment //[^\\n]*\n" +
 	"comment /\\*(?s:.*?)\\*/\n" +
-	"operator [-+/*=:[\\](){}<>,\\.!]+\n" +
+	"operator [-+/*=:<>,\\.!]+\n" +
+	"pair [([{]\n" +
+	"unpair [)\\]}]\n" +
 	""
 var lexer_sql = "" +
 	"whitespace [ \\t\\r\\n]+\n" +

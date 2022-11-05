@@ -54,17 +54,35 @@ Even on fast machines, building from source can take several seconds.
 The following options control where
 .Nm
 looks for data.
-.Bl -tag -width datadirx
-.It Fl datadir
+.Bl -tag -width datadirxdirx
+.It Fl datadir Ar dir
 The root data directory, where the database and other user data are stored.
 This directory contains all user data that persists across upgrades.
 Requires write access.
 Defaults to ".".
-.It Fl viewdir
+.It Fl viewdir Ar dir
 The root view directory, where html and other templates are stored.
 The contents of this directory are generally replaced with each release.
 Read only.
 Defaults to ".".
+.El
+.Pp
+The following options control log output.
+Acceptable values include "stderr" (the default), "stdout", "null", "syslog",
+or a file name.
+syslog messages will be sent to the UUCP facility.
+.Bl -tag -width errorlogxlogx
+.It Fl errorlog Ar log
+The error log.
+Something bad has happened.
+.It Fl infolog Ar log
+The informative messages log.
+Something has happened, but probably not too bad.
+.It Fl debuglog Ar log
+The debug log.
+There's probably no reason to care.
+.It Fl log Ar log
+Set all three logs.
 .El
 .Ss Init
 Run the
@@ -75,7 +93,6 @@ the initial user.
 See below about importing existing data.
 .Ss Operation
 Run honk.
-Log messages are sent to stderr and should probably be redirected to a file.
 .Ss Customization
 The funzone contains fun flair that users may add to posts and profiles.
 Add custom memes (stickers) to the

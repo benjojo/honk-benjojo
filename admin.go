@@ -27,15 +27,13 @@ import "C"
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 )
 
 func adminscreen() {
-	log.SetOutput(ioutil.Discard)
+	initLogging("null", "null", "null")
 	stdout := bufio.NewWriter(os.Stdout)
 	esc := "\x1b"
 	smcup := esc + "[?1049h"

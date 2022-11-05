@@ -17,7 +17,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	notrand "math/rand"
 	"time"
 
@@ -43,7 +42,7 @@ func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 	case 5:
 		drift = 24 * time.Hour
 	default:
-		log.Printf("he's dead jim: %s", rcpt)
+		ilog.Printf("he's dead jim: %s", rcpt)
 		clearoutbound(rcpt)
 		return
 	}
@@ -51,7 +50,7 @@ func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 	when := time.Now().UTC().Add(drift)
 	_, err := stmtAddDoover.Exec(when.Format(dbtimeformat), goarounds, userid, rcpt, msg)
 	if err != nil {
-		log.Printf("error saving doover: %s", err)
+		elog.Printf("error saving doover: %s", err)
 	}
 	select {
 	case pokechan <- 0:
@@ -65,7 +64,7 @@ func clearoutbound(rcpt string) {
 		return
 	}
 	xid := fmt.Sprintf("%%https://%s/%%", hostname)
-	log.Printf("clearing outbound for %s", xid)
+	ilog.Printf("clearing outbound for %s", xid)
 	db := opendatabase()
 	db.Exec("delete from doovers where rcpt like ?", xid)
 }
@@ -79,7 +78,7 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 	var ki *KeyInfo
 	ok := ziggies.Get(userid, &ki)
 	if !ok {
-		log.Printf("lost key for delivery")
+		elog.Printf("lost key for delivery")
 		return
 	}
 	var inbox string
@@ -90,7 +89,7 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 		var box *Box
 		ok := boxofboxes.Get(rcpt, &box)
 		if !ok {
-			log.Printf("failed getting inbox for %s", rcpt)
+			ilog.Printf("failed getting inbox for %s", rcpt)
 			sayitagain(goarounds+1, userid, rcpt, msg)
 			return
 		}
@@ -98,7 +97,7 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 	}
 	err := PostMsg(ki.keyname, ki.seckey, inbox, msg)
 	if err != nil {
-		log.Printf("failed to post json to %s: %s", inbox, err)
+		ilog.Printf("failed to post json to %s: %s", inbox, err)
 		if prio {
 			sayitagain(goarounds+1, userid, rcpt, msg)
 		}
@@ -111,7 +110,7 @@ var pokechan = make(chan int, 1)
 func getdoovers() []Doover {
 	rows, err := stmtGetDoovers.Query()
 	if err != nil {
-		log.Printf("wat?")
+		elog.Printf("wat?")
 		time.Sleep(1 * time.Minute)
 		return nil
 	}
@@ -122,7 +121,7 @@ func getdoovers() []Doover {
 		var dt string
 		err := rows.Scan(&d.ID, &dt)
 		if err != nil {
-			log.Printf("error scanning dooverid: %s", err)
+			elog.Printf("error scanning dooverid: %s", err)
 			continue
 		}
 		d.When, _ = time.Parse(dbtimeformat, dt)
@@ -155,15 +154,15 @@ func redeliverator() {
 				row := stmtLoadDoover.QueryRow(d.ID)
 				err := row.Scan(&goarounds, &userid, &rcpt, &msg)
 				if err != nil {
-					log.Printf("error scanning doover: %s", err)
+					elog.Printf("error scanning doover: %s", err)
 					continue
 				}
 				_, err = stmtZapDoover.Exec(d.ID)
 				if err != nil {
-					log.Printf("error deleting doover: %s", err)
+					elog.Printf("error deleting doover: %s", err)
 					continue
 				}
-				log.Printf("redeliverating %s try %d", rcpt, goarounds)
+				ilog.Printf("redeliverating %s try %d", rcpt, goarounds)
 				deliverate(goarounds, userid, rcpt, msg, true)
 			} else if d.When.Before(nexttime) {
 				nexttime = d.When

@@ -17,6 +17,7 @@
    -->
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
   <title>HONK(8)</title>
 </head>
@@ -47,10 +48,8 @@
     requires accurate time keeping.</p>
 <p class="Pp">Make sure to pass the Host header, if necessary (as for
   nginx).</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-proxy_set_header Host $http_host;
-</pre>
+<div class="Bd Pp Bd-indent Li">
+<pre>proxy_set_header Host $http_host;</pre>
 </div>
 </section>
 <section class="Ss">
@@ -66,14 +65,35 @@ proxy_set_header Host $http_host;
 <p class="Pp">The following options control where <code class="Nm">honk</code>
     looks for data.</p>
 <dl class="Bl-tag">
-  <dt id="datadir"><a class="permalink" href="#datadir"><code class="Fl">-datadir</code></a></dt>
+  <dt id="datadir"><a class="permalink" href="#datadir"><code class="Fl">-datadir</code></a>
+    <var class="Ar">dir</var></dt>
   <dd>The root data directory, where the database and other user data are
       stored. This directory contains all user data that persists across
       upgrades. Requires write access. Defaults to &quot;.&quot;.</dd>
-  <dt id="viewdir"><a class="permalink" href="#viewdir"><code class="Fl">-viewdir</code></a></dt>
+  <dt id="viewdir"><a class="permalink" href="#viewdir"><code class="Fl">-viewdir</code></a>
+    <var class="Ar">dir</var></dt>
   <dd>The root view directory, where html and other templates are stored. The
       contents of this directory are generally replaced with each release. Read
       only. Defaults to &quot;.&quot;.</dd>
+</dl>
+<p class="Pp">The following options control log output. Acceptable values
+    include &quot;stderr&quot; (the default), &quot;stdout&quot;,
+    &quot;null&quot;, &quot;syslog&quot;, or a file name. syslog messages will
+    be sent to the UUCP facility.</p>
+<dl class="Bl-tag">
+  <dt id="errorlog"><a class="permalink" href="#errorlog"><code class="Fl">-errorlog</code></a>
+    <var class="Ar">log</var></dt>
+  <dd>The error log. Something bad has happened.</dd>
+  <dt id="infolog"><a class="permalink" href="#infolog"><code class="Fl">-infolog</code></a>
+    <var class="Ar">log</var></dt>
+  <dd>The informative messages log. Something has happened, but probably not too
+      bad.</dd>
+  <dt id="debuglog"><a class="permalink" href="#debuglog"><code class="Fl">-debuglog</code></a>
+    <var class="Ar">log</var></dt>
+  <dd>The debug log. There's probably no reason to care.</dd>
+  <dt id="log"><a class="permalink" href="#log"><code class="Fl">-log</code></a>
+    <var class="Ar">log</var></dt>
+  <dd>Set all three logs.</dd>
 </dl>
 </section>
 <section class="Ss">
@@ -84,8 +104,7 @@ proxy_set_header Host $http_host;
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Operation"><a class="permalink" href="#Operation">Operation</a></h2>
-<p class="Pp">Run honk. Log messages are sent to stderr and should probably be
-    redirected to a file.</p>
+<p class="Pp">Run honk.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Customization"><a class="permalink" href="#Customization">Customization</a></h2>
@@ -216,36 +235,30 @@ proxy_set_header Host $http_host;
 <h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
 <p class="Pp">This series of commands creates a new database, sets a friendly
     welcome message, and runs honk.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-honk-v98&gt; make
+<div class="Bd Pp Bd-indent Li">
+<pre>honk-v98&gt; make
 honk-v98&gt; ./honk -datadir ../honkdata init
 username: puffy
 password: OxychromaticBlowfishSwatDynamite
 listen address: /var/www/honk.sock
 server name: honk.example.com
 honk-v98&gt; ./honk -datadir ../honkdata admin
-honk-v98&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
-</pre>
+honk-v98&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
 </div>
 <p class="Pp">The views directory includes a sample pleroma.css to change color
     scheme.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-honk-v98&gt; mkdir ../honkdata/views
-honk-v98&gt; cp views/pleroma.css ../honkdata/views/local.css
-</pre>
+<div class="Bd Pp Bd-indent Li">
+<pre>honk-v98&gt; mkdir ../honkdata/views
+honk-v98&gt; cp views/pleroma.css ../honkdata/views/local.css</pre>
 </div>
 <p class="Pp">Upgrade to the next version. Clean things up a bit.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-datadir&gt; cp honk.db backup.db
+<div class="Bd Pp Bd-indent Li">
+<pre>datadir&gt; cp honk.db backup.db
 datadir&gt; cd ../honk-v99
 honk-v99&gt; make
 honk-v99&gt; ./honk -datadir ../honkdata upgrade
 honk-v99&gt; ./honk -datadir ../honkdata cleanup
-honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
-</pre>
+honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
 </div>
 </section>
 <section class="Sh">
@@ -267,8 +280,8 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">April 4, 2021</td>
-    <td class="foot-os">OpenBSD 6.7</td>
+    <td class="foot-date">February 12, 2022</td>
+    <td class="foot-os">OpenBSD 7.0</td>
   </tr>
 </table>
 </body>

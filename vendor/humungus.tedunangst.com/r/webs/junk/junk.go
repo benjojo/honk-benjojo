@@ -84,11 +84,15 @@ type GetArgs struct {
 	Accept  string // Accept: header
 	Agent   string // User-Agent: header
 	Timeout time.Duration
+	Client  *http.Client
 }
 
 // Fetch json from url via http and return some junk.
 func Get(url string, args GetArgs) (Junk, error) {
 	client := http.DefaultClient
+	if args.Client != nil {
+		client = args.Client
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

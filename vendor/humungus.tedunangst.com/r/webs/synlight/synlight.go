@@ -158,6 +158,8 @@ func New(options Options) *Lighter {
 	return hl
 }
 
+var pairnames = []string{"string", "keyword", "comment", "builtin"}
+
 // Highlight code, writing it to w.
 func (hl *Lighter) Highlight(data []byte, filename string, w io.Writer) {
 	dot := strings.LastIndex(filename, ".")
@@ -178,6 +180,7 @@ func (hl *Lighter) Highlight(data []byte, filename string, w io.Writer) {
 
 	dataloc := 0
 	state := 0
+	pairidx := 0
 	for dataloc < len(data) {
 	restart:
 		for _, tok := range tokens {
@@ -187,7 +190,15 @@ func (hl *Lighter) Highlight(data []byte, filename string, w io.Writer) {
 			m := tok.re.Find(data[dataloc:])
 			if m != nil {
 				state = tok.nextstate
-				mk := markers[tok.name]
+				name := tok.name
+				if name == "pair" {
+					name = pairnames[pairidx%len(pairnames)]
+					pairidx += 1
+				} else if name == "unpair" {
+					pairidx -= 1
+					name = pairnames[pairidx%len(pairnames)]
+				}
+				mk := markers[name]
 				if mk != nil {
 					w.Write(mk.before)
 				}

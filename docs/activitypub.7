@@ -54,6 +54,13 @@ activities are ignored.
 Limited support.
 .It Vt Audio
 Limited Support.
+.It Vt GuessWord
+Guess the word game.
+(Unofficial extension.)
+The solution is stored in
+.Fa content
+with the possible words, one per line, in a file located at
+.Fa wordlist .
 .El
 .Pp
 Honk primarily supports HTML content, not markdown or other formats,
@@ -98,10 +105,6 @@ Works with collections.
 .It Vt Follow
 Supported.
 Can follow both actors and collections.
-.Vt Accept
-and
-.Vt Undo
-require that the original request be quoted, not referred to by URI.
 .It Vt Update
 Supported.
 Honk sends and receives

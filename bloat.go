@@ -14,3 +14,54 @@
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 package main
+
+import (
+	"net/http"
+	"strings"
+
+	"humungus.tedunangst.com/r/webs/junk"
+)
+
+func servewonkles(w http.ResponseWriter, r *http.Request) {
+	url := r.FormValue("w")
+	dlog.Printf("getting wordlist: %s", url)
+	wonkles := getxonker(url, "wonkles")
+	if wonkles == "" {
+		wonkles = savewonkles(url)
+		if wonkles == "" {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	var words []string
+	for _, l := range strings.Split(wonkles, "\n") {
+		words = append(words, l)
+	}
+	if !debugMode {
+		w.Header().Set("Cache-Control", "max-age=7776000")
+	}
+
+	j := junk.New()
+	j["wordlist"] = words
+	j.Write(w)
+}
+
+func savewonkles(url string) string {
+	w := getxonker(url, "wonkles")
+	if w != "" {
+		return w
+	}
+	ilog.Printf("fetching wonkles: %s", url)
+	res, err := fetchsome(url)
+	if err != nil {
+		ilog.Printf("error fetching wonkles: %s", err)
+		return ""
+	}
+	w = getxonker(url, "wonkles")
+	if w != "" {
+		return w
+	}
+	w = string(res)
+	savexonker(url, w, "wonkles", "")
+	return w
+}

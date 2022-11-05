@@ -40,7 +40,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -80,11 +79,11 @@ func initdb() {
 	dbname := dataDir + "/honk.db"
 	_, err := os.Stat(dbname)
 	if err == nil {
-		log.Fatalf("%s already exists", dbname)
+		elog.Fatalf("%s already exists", dbname)
 	}
 	db, err := sql.Open("sqlite3", dbname)
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	alreadyopendb = db
 	defer func() {
@@ -104,7 +103,7 @@ func initdb() {
 	for _, line := range strings.Split(sqlSchema, ";") {
 		_, err = db.Exec(line)
 		if err != nil {
-			log.Print(err)
+			elog.Print(err)
 			return
 		}
 	}
@@ -116,37 +115,37 @@ func initdb() {
 
 	err = createuser(db, r)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	// must came later or user above will have negative id
 	err = createserveruser(db)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 
 	fmt.Printf("listen address: ")
 	addr, err := r.ReadString('\n')
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	addr = addr[:len(addr)-1]
 	if len(addr) < 1 {
-		log.Print("that's way too short")
+		elog.Print("that's way too short")
 		return
 	}
 	setconfig("listenaddr", addr)
 	fmt.Printf("server name: ")
 	addr, err = r.ReadString('\n')
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	addr = addr[:len(addr)-1]
 	if len(addr) < 1 {
-		log.Print("that's way too short")
+		elog.Print("that's way too short")
 		return
 	}
 	setconfig("servername", addr)
@@ -170,26 +169,26 @@ func initblobdb() {
 	blobdbname := dataDir + "/blob.db"
 	_, err := os.Stat(blobdbname)
 	if err == nil {
-		log.Fatalf("%s already exists", blobdbname)
+		elog.Fatalf("%s already exists", blobdbname)
 	}
 	blobdb, err := sql.Open("sqlite3", blobdbname)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	_, err = blobdb.Exec("create table filedata (xid text, media text, hash text, content blob)")
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	_, err = blobdb.Exec("create index idx_filexid on filedata(xid)")
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	_, err = blobdb.Exec("create index idx_filehash on filedata(hash)")
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	blobdb.Close()
@@ -213,7 +212,7 @@ func adduser() {
 
 	err := createuser(db, r)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 
@@ -223,7 +222,7 @@ func adduser() {
 func deluser(username string) {
 	user, _ := butwhatabout(username)
 	if user == nil {
-		log.Printf("no userfound")
+		elog.Printf("no userfound")
 		return
 	}
 	userid := user.ID
@@ -253,7 +252,7 @@ func chpass() {
 	}
 	user, err := butwhatabout(os.Args[2])
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	defer func() {
 		os.Exit(1)
@@ -268,18 +267,18 @@ func chpass() {
 	}()
 
 	db := opendatabase()
-	login.Init(db)
+	login.Init(login.InitArgs{Db: db, Logger: ilog})
 
 	r := bufio.NewReader(os.Stdin)
 
 	pass, err := askpassword(r)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	err = login.SetPassword(user.ID, pass)
 	if err != nil {
-		log.Print(err)
+		elog.Print(err)
 		return
 	}
 	fmt.Printf("done\n")
@@ -376,15 +375,15 @@ func opendatabase() *sql.DB {
 	dbname := dataDir + "/honk.db"
 	_, err := os.Stat(dbname)
 	if err != nil {
-		log.Fatalf("unable to open database: %s", err)
+		elog.Fatalf("unable to open database: %s", err)
 	}
 	db, err := sql.Open("sqlite3", dbname)
 	if err != nil {
-		log.Fatalf("unable to open database: %s", err)
+		elog.Fatalf("unable to open database: %s", err)
 	}
 	stmtConfig, err = db.Prepare("select value from config where key = ?")
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	alreadyopendb = db
 	return db
@@ -394,11 +393,11 @@ func openblobdb() *sql.DB {
 	blobdbname := dataDir + "/blob.db"
 	_, err := os.Stat(blobdbname)
 	if err != nil {
-		log.Fatalf("unable to open database: %s", err)
+		elog.Fatalf("unable to open database: %s", err)
 	}
 	db, err := sql.Open("sqlite3", blobdbname)
 	if err != nil {
-		log.Fatalf("unable to open database: %s", err)
+		elog.Fatalf("unable to open database: %s", err)
 	}
 	return db
 }
@@ -450,7 +449,7 @@ func openListener() (net.Listener, error) {
 		proto = "unix"
 		err := os.Remove(listenAddr)
 		if err != nil && !os.IsNotExist(err) {
-			log.Printf("unable to unlink socket: %s", err)
+			elog.Printf("unable to unlink socket: %s", err)
 		}
 	}
 	listener, err := net.Listen(proto, listenAddr)

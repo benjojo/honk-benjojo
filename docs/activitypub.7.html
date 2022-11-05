@@ -17,6 +17,7 @@
    -->
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
   <title>ACTIVITYPUB(7)</title>
 </head>
@@ -63,13 +64,16 @@
   <dd>Limited support.</dd>
   <dt><var class="Vt">Audio</var></dt>
   <dd>Limited Support.</dd>
+  <dt><var class="Vt">GuessWord</var></dt>
+  <dd>Guess the word game. (Unofficial extension.) The solution is stored in
+      <var class="Fa">content</var> with the possible words, one per line, in a
+      file located at <var class="Fa">wordlist</var>.</dd>
 </dl>
 <p class="Pp">Honk primarily supports HTML content, not markdown or other
     formats, with a wide range of permitted HTML tags in object
     <var class="Fa">content</var> fields. The following tags are supported.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-a, img, span,
+<div class="Bd Pp Bd-indent Li">
+<pre>a, img, span,
 div, h1, h2, h3, h4, h5, h6, hr,
 table, thead, tbody, tfoot, th, tr, td, colgroup, col,
 p, br, pre, code, blockquote, q,
@@ -77,21 +81,16 @@ caption, kbd, time, wbr, aside,
 ruby, rtc, rb, rt, details, summary,
 samp, mark, ins, dfn, cite, abbr, address,
 strong, em, b, i, s, u, sub, sup, del, tt, small,
-ol, ul, li, dl, dt, dd
-</pre>
+ol, ul, li, dl, dt, dd</pre>
 </div>
 <p class="Pp">The following tag attributes are permitted.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-href, src, alt, colspan, rowspan
-</pre>
+<div class="Bd Pp Bd-indent Li">
+<pre>href, src, alt, colspan, rowspan</pre>
 </div>
 <p class="Pp">The following class names are used for syntax highlighting code
     blocks.</p>
-<div class="Bd Pp Bd-indent">
-<pre>
-kw, bi, st, nm, tp, op, cm, al, dl
-</pre>
+<div class="Bd Pp Bd-indent Li">
+<pre>kw, bi, st, nm, tp, op, cm, al, dl</pre>
 </div>
 </section>
 <section class="Ss">
@@ -108,9 +107,7 @@ kw, bi, st, nm, tp, op, cm, al, dl
   <dt><var class="Vt">Add</var></dt>
   <dd>Works with collections.</dd>
   <dt><var class="Vt">Follow</var></dt>
-  <dd>Supported. Can follow both actors and collections.
-      <var class="Vt">Accept</var> and <var class="Vt">Undo</var> require that
-      the original request be quoted, not referred to by URI.</dd>
+  <dd>Supported. Can follow both actors and collections.</dd>
   <dt><var class="Vt">Update</var></dt>
   <dd>Supported. Honk sends and receives <var class="Vt">Update</var>
       activities.</dd>
@@ -183,8 +180,8 @@ kw, bi, st, nm, tp, op, cm, al, dl
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">April 4, 2021</td>
-    <td class="foot-os">OpenBSD 6.7</td>
+    <td class="foot-date">February 12, 2022</td>
+    <td class="foot-os">OpenBSD 7.0</td>
   </tr>
 </table>
 </body>

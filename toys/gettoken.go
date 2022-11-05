@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var debugMode = false
+
 func main() {
 	server := ""
 	username := ""
@@ -19,6 +21,7 @@ func main() {
 	flag.StringVar(&server, "server", server, "server to connnect")
 	flag.StringVar(&username, "username", username, "username to use")
 	flag.StringVar(&password, "password", password, "password to use")
+	flag.BoolVar(&debugMode, "debug", debugMode, "debug mode")
 	flag.Parse()
 
 	if server == "" || username == "" || password == "" {
@@ -37,7 +40,12 @@ func main() {
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := http.DefaultClient
+	if debugMode {
+		client = debugClient
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}

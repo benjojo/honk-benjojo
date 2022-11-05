@@ -21,6 +21,14 @@ servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
 </script>
 <script src="/honkpage.js{{ .JSParam }}"></script>
 {{ end }}
+<script>
+function playit(elem, word, wordlist, xid) {
+	import('/wonk.js').then(module => {
+		makeaguess = module.makeaguess
+		module.addguesscontrols(elem, word, wordlist, xid)
+	})
+}
+</script>
 </div>
 {{ if and .HonkCSRF (not .IsPreview) }}
 <div class="info" id="refreshbox">

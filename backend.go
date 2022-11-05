@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"log"
 	"net"
 	"net/rpc"
 	"os"
@@ -76,27 +75,27 @@ func shrinkit(data []byte) (*image.Image, error) {
 var backendhooks []func()
 
 func backendServer() {
-	log.Printf("backend server running")
+	dlog.Printf("backend server running")
 	shrinker := new(Shrinker)
 	srv := rpc.NewServer()
 	err := srv.Register(shrinker)
 	if err != nil {
-		log.Panicf("unable to register shrinker: %s", err)
+		elog.Panicf("unable to register shrinker: %s", err)
 	}
 
 	sockname := backendSockname()
 	err = os.Remove(sockname)
 	if err != nil && !os.IsNotExist(err) {
-		log.Panicf("unable to unlink socket: %s", err)
+		elog.Panicf("unable to unlink socket: %s", err)
 	}
 
 	lis, err := net.Listen("unix", sockname)
 	if err != nil {
-		log.Panicf("unable to register shrinker: %s", err)
+		elog.Panicf("unable to register shrinker: %s", err)
 	}
 	err = setLimits()
 	if err != nil {
-		log.Printf("error setting backend limits: %s", err)
+		elog.Printf("error setting backend limits: %s", err)
 	}
 	for _, h := range backendhooks {
 		h()
@@ -105,13 +104,13 @@ func backendServer() {
 }
 
 func runBackendServer() {
-	proc := exec.Command(os.Args[0], "-datadir", dataDir, "backend")
+	proc := exec.Command(os.Args[0], reexecArgs("backend")...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
 	err := proc.Start()
 	if err != nil {
-		log.Panicf("can't exec backend: %s", err)
+		elog.Panicf("can't exec backend: %s", err)
 	}
 	err = proc.Wait()
-	log.Printf("lost the backend: %s", err)
+	elog.Printf("lost the backend: %s", err)
 }

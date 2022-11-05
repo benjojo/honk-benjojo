@@ -1,5 +1,21 @@
 changelog
 
+=== 0.9.7 Witless Weekender
+
++++ Word guessing game. Wonk wonk!
+
++ Flexible logging, to file, syslog, null, etc.
+
++ Low key unread counters.
+
++ Images in the hooter.
+
++ More flexible hashtag characters.
+
++ Fix the memetizer to work in more environments.
+
++ Printing is prettier than ever before.
+
 === 0.9.6 Virile Vigorous and Potent
 
 + A bug, a fix, a bug fix, a fix bug.

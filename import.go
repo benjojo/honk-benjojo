@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -35,7 +34,7 @@ func importMain(username, flavor, source string) {
 	case "twitter":
 		importTwitter(username, source)
 	default:
-		log.Fatal("unknown source flavor")
+		elog.Fatal("unknown source flavor")
 	}
 }
 
@@ -68,7 +67,7 @@ func (obj *TootObject) UnmarshalJSON(b []byte) error {
 func importMastodon(username, source string) {
 	user, err := butwhatabout(username)
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	type Toot struct {
 		Id     string
@@ -82,12 +81,12 @@ func importMastodon(username, source string) {
 	}
 	fd, err := os.Open(source + "/outbox.json")
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	dec := json.NewDecoder(fd)
 	err = dec.Decode(&outbox)
 	if err != nil {
-		log.Fatalf("error parsing json: %s", err)
+		elog.Fatalf("error parsing json: %s", err)
 	}
 	fd.Close()
 
@@ -139,7 +138,7 @@ func importMastodon(username, source string) {
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
 				data, err := ioutil.ReadFile(fname)
 				if err != nil {
-					log.Printf("error reading media: %s", fname)
+					elog.Printf("error reading media: %s", fname)
 					continue
 				}
 				u := xfiltrate()
@@ -148,7 +147,7 @@ func importMastodon(username, source string) {
 				newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
 				fileid, err := savefile(name, desc, newurl, att.MediaType, true, data)
 				if err != nil {
-					log.Printf("error saving media: %s", fname)
+					elog.Printf("error saving media: %s", fname)
 					continue
 				}
 				donk := &Donk{
@@ -170,7 +169,7 @@ func importMastodon(username, source string) {
 func importTwitter(username, source string) {
 	user, err := butwhatabout(username)
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 
 	type Tweet struct {
@@ -199,14 +198,14 @@ func importTwitter(username, source string) {
 	var tweets []*Tweet
 	fd, err := os.Open(source + "/tweet.js")
 	if err != nil {
-		log.Fatal(err)
+		elog.Fatal(err)
 	}
 	// skip past window.YTD.tweet.part0 =
 	fd.Seek(25, 0)
 	dec := json.NewDecoder(fd)
 	err = dec.Decode(&tweets)
 	if err != nil {
-		log.Fatalf("error parsing json: %s", err)
+		elog.Fatalf("error parsing json: %s", err)
 	}
 	fd.Close()
 	tweetmap := make(map[string]*Tweet)
@@ -272,14 +271,14 @@ func importTwitter(username, source string) {
 			fname := fmt.Sprintf("%s/tweet_media/%s-%s", source, t.ID_str, u)
 			data, err := ioutil.ReadFile(fname)
 			if err != nil {
-				log.Printf("error reading media: %s", fname)
+				elog.Printf("error reading media: %s", fname)
 				continue
 			}
 			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
 
 			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
 			if err != nil {
-				log.Printf("error saving media: %s", fname)
+				elog.Printf("error saving media: %s", fname)
 				continue
 			}
 			donk := &Donk{

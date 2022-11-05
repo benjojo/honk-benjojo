@@ -15,7 +15,7 @@ function post(url, data) {
 function get(url, whendone) {
 	var x = new XMLHttpRequest()
 	x.open("GET", url)
-	x.responseType = "document"
+	x.responseType = "json"
 	x.onload = function() { whendone(x) }
 	x.send()
 }
@@ -82,11 +82,28 @@ function removeglow() {
 }
 
 function fillinhonks(xhr, glowit) {
-	var doc = xhr.responseXML
+	var resp = xhr.response
 	var stash = curpagestate.name + ":" + curpagestate.arg
-	tophid[stash] = doc.children[0].children[1].children[0].innerText
-	var srvmsg = doc.children[0].children[1].children[1]
-	var honks = doc.children[0].children[1].children[2].children
+	tophid[stash] = resp.Tophid
+	var doc = document.createElement( 'div' );
+	doc.innerHTML = resp.Srvmsg
+	var srvmsg = doc
+	doc = document.createElement( 'div' );
+	doc.innerHTML = resp.Honks
+	var honks = doc.children
+
+	var mecount = document.getElementById("mecount")
+	if (resp.MeCount) {
+		mecount.innerHTML = "(" + resp.MeCount + ")"
+	} else {
+		mecount.innerHTML = ""
+	}
+	var chatcount = document.getElementById("chatcount")
+	if (resp.ChatCount) {
+		chatcount.innerHTML = "(" + resp.ChatCount + ")"
+	} else {
+		chatcount.innerHTML = ""
+	}
 
 	var srvel = document.getElementById("srvmsg")
 	while (srvel.children[0]) {

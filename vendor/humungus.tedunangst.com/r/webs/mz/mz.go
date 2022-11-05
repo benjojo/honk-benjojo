@@ -36,7 +36,7 @@ var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
 var re_lister = regexp.MustCompile(`((^|\n)(\+|-).*)+\n?`)
 var re_tabler = regexp.MustCompile(`((^|\n)\|.*)+\n?`)
 var re_header = regexp.MustCompile(`(^|\n)(#+) (.*)\n?`)
-var re_hashes = regexp.MustCompile(`(?:^| |>)#[[:alnum:]]*[[:alpha:]][[:alnum:]_-]*`)
+var re_hashes = regexp.MustCompile(`(?:^| |>)#[\pL\pN]*[\pL][\pL\pN_-]*`)
 var re_mentions = regexp.MustCompile(`@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]`)
 
 var lighter = synlight.New(synlight.Options{Format: synlight.HTML})

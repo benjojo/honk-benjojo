@@ -28,6 +28,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -48,6 +49,8 @@ type keytype struct{}
 var thekey keytype
 
 var dbtimeformat = "2006-01-02 15:04:05"
+
+var logger *log.Logger
 
 // Check for auth cookie. Allows failure.
 func Checker(handler http.Handler) http.Handler {
@@ -191,39 +194,50 @@ func getconfig(db *sql.DB, key string, value interface{}) error {
 	return err
 }
 
+type InitArgs struct {
+	Db     *sql.DB
+	Logger *log.Logger
+}
+
 // Init. Must be called with the database.
 // Requires a users table with (userid, username, hash) columns and a
 // auth table with (userid, hash, expiry) columns.
 // Requires a config table with (key, value) ('csrfkey', some secret).
-func Init(db *sql.DB) {
+func Init(args InitArgs) {
+	if args.Logger != nil {
+		logger = args.Logger
+	} else {
+		logger = log.New(os.Stderr, "", log.LstdFlags)
+	}
+	db := args.Db
 	var err error
 	stmtUserName, err = db.Prepare("select userid, hash from users where username = ? and userid > 0")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtUserAuth, err = db.Prepare("select users.userid, username, expiry from users join auth on users.userid = auth.userid where auth.hash = ? and expiry > ?")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtUpdateUser, err = db.Prepare("update users set hash = ? where userid = ?")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtSaveAuth, err = db.Prepare("insert into auth (userid, hash, expiry) values (?, ?, ?)")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtDeleteAuth, err = db.Prepare("delete from auth where userid = ?")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtUpdateExpiry, err = db.Prepare("update auth set expiry = ? where hash = ?")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	stmtDeleteOneAuth, err = db.Prepare("delete from auth where hash = ?")
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 	debug := false
 	getconfig(db, "debug", &debug)
@@ -257,7 +271,7 @@ func getauthcookie(r *http.Request) string {
 	}
 	auth := cookie.Value
 	if !(len(auth) == authlen && authregex.MatchString(auth)) {
-		log.Printf("login: bad auth: %s", auth)
+		logger.Printf("login: bad auth: %s", auth)
 		return ""
 	}
 	return auth
@@ -275,7 +289,7 @@ func getformtoken(r *http.Request) string {
 		return ""
 	}
 	if !(len(token) == authlen && authregex.MatchString(token)) {
-		log.Printf("login: bad token: %s", token)
+		logger.Printf("login: bad token: %s", token)
 		return ""
 	}
 	return token
@@ -292,9 +306,9 @@ var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInf
 	err := row.Scan(&userinfo.UserID, &userinfo.Username, &stamp)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Printf("login: no auth found")
+			logger.Printf("login: no auth found")
 		} else {
-			log.Printf("login: error scanning auth row: %s", err)
+			logger.Printf("login: error scanning auth row: %s", err)
 		}
 		return nil, false
 	}
@@ -333,9 +347,9 @@ func loaduser(username string) (int64, []byte, bool) {
 	err := row.Scan(&userid, &hash)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Printf("login: no username found")
+			logger.Printf("login: no username found")
 		} else {
-			log.Printf("login: error loading username: %s", err)
+			logger.Printf("login: error loading username: %s", err)
 		}
 		return -1, nil, false
 	}
@@ -361,7 +375,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	if len(username) == 0 || len(username) > userlen ||
 		!userregex.MatchString(username) || len(password) == 0 ||
 		len(password) > passlen {
-		log.Printf("login: invalid password attempt")
+		logger.Printf("login: invalid password attempt")
 		if gettoken {
 			http.Error(w, "incorrect", http.StatusForbidden)
 		} else {
@@ -386,7 +400,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 
 	err := bcrypt.CompareHashAndPassword(hash, []byte(password))
 	if err != nil {
-		log.Printf("login: incorrect password")
+		logger.Printf("login: incorrect password")
 		if gettoken {
 			http.Error(w, "incorrect", http.StatusForbidden)
 		} else {
@@ -416,10 +430,10 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	expiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(dbtimeformat)
 	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
-		log.Printf("error saving auth: %s", err)
+		logger.Printf("error saving auth: %s", err)
 	}
 
-	log.Printf("login: successful login")
+	logger.Printf("login: successful login")
 	if gettoken {
 		w.Write([]byte(auth))
 	} else {
@@ -448,7 +462,7 @@ func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 	if ok && CheckCSRF("logout", r) {
 		err := deleteauth(userinfo.UserID)
 		if err != nil {
-			log.Printf("login: error deleting old auth: %s", err)
+			logger.Printf("login: error deleting old auth: %s", err)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -483,7 +497,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 
 	if len(oldpass) == 0 || len(oldpass) > passlen ||
 		len(newpass) == 0 || len(newpass) > passlen {
-		log.Printf("login: invalid password attempt")
+		logger.Printf("login: invalid password attempt")
 		return fmt.Errorf("bad password")
 	}
 	if len(newpass) < 6 {
@@ -496,23 +510,23 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 
 	err := bcrypt.CompareHashAndPassword(hash, []byte(oldpass))
 	if err != nil {
-		log.Printf("login: incorrect password")
+		logger.Printf("login: incorrect password")
 		return fmt.Errorf("bad password")
 	}
 	hash, err = bcrypt.GenerateFromPassword([]byte(newpass), 12)
 	if err != nil {
-		log.Printf("error generating hash: %s", err)
+		logger.Printf("error generating hash: %s", err)
 		return fmt.Errorf("error")
 	}
 	_, err = stmtUpdateUser.Exec(hash, userinfo.UserID)
 	if err != nil {
-		log.Printf("login: error updating user: %s", err)
+		logger.Printf("login: error updating user: %s", err)
 		return fmt.Errorf("error")
 	}
 
 	err = deleteauth(userid)
 	if err != nil {
-		log.Printf("login: error deleting old auth: %s", err)
+		logger.Printf("login: error deleting old auth: %s", err)
 		return fmt.Errorf("error")
 	}
 
@@ -537,7 +551,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	expiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(dbtimeformat)
 	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
-		log.Printf("error saving auth: %s", err)
+		logger.Printf("error saving auth: %s", err)
 	}
 
 	return nil
@@ -547,18 +561,18 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 func SetPassword(userid int64, newpass string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newpass), 12)
 	if err != nil {
-		log.Printf("error generating hash: %s", err)
+		logger.Printf("error generating hash: %s", err)
 		return fmt.Errorf("error")
 	}
 	_, err = stmtUpdateUser.Exec(hash, userid)
 	if err != nil {
-		log.Printf("login: error updating user: %s", err)
+		logger.Printf("login: error updating user: %s", err)
 		return fmt.Errorf("error")
 	}
 
 	err = deleteauth(userid)
 	if err != nil {
-		log.Printf("login: error deleting old auth: %s", err)
+		logger.Printf("login: error deleting old auth: %s", err)
 		return fmt.Errorf("error")
 	}
 	return nil
