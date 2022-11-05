@@ -29,8 +29,8 @@ import (
 	"humungus.tedunangst.com/r/webs/htfilter"
 )
 
-var tweetsel = cascadia.MustCompile("div.tweet-text")
-var linksel = cascadia.MustCompile("td.timestamp a")
+var tweetsel = cascadia.MustCompile("p.tweet-text")
+var linksel = cascadia.MustCompile("a.tweet-timestamp")
 var replyingto = cascadia.MustCompile(".ReplyingToContextBelowAuthor")
 var authorregex = regexp.MustCompile("twitter.com/([^/]+)")
 
@@ -109,14 +109,13 @@ func hooterize(noise string) string {
 			url = url[1:]
 		}
 		url = strings.Replace(url, "mobile.twitter.com", "twitter.com", -1)
-		url = strings.Replace(url, "twitter.com", "mobile.twitter.com", -1)
 		log.Printf("hooterizing %s", url)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			log.Printf("error: %s", err)
 			return hoot
 		}
-		req.Header.Set("User-Agent", "OpenBSD ftp")
+		req.Header.Set("User-Agent", "Bot")
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 		resp, err := http.DefaultClient.Do(req)

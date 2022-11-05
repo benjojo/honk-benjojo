@@ -68,9 +68,11 @@ proxy_set_header Host $http_host;
 <dl class="Bl-tag">
   <dt id="datadir"><a class="permalink" href="#datadir"><code class="Fl">-datadir</code></a></dt>
   <dd>The root data directory, where the database and other user data are
-      stored. Requires write access. Defaults to &quot;.&quot;.</dd>
+      stored. This directory contains all user data that persists across
+      upgrades. Requires write access. Defaults to &quot;.&quot;.</dd>
   <dt id="viewdir"><a class="permalink" href="#viewdir"><code class="Fl">-viewdir</code></a></dt>
-  <dd>The root view directory, where html and other templates are stored. Read
+  <dd>The root view directory, where html and other templates are stored. The
+      contents of this directory are generally replaced with each release. Read
       only. Defaults to &quot;.&quot;.</dd>
 </dl>
 </section>
@@ -87,23 +89,24 @@ proxy_set_header Host $http_host;
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Customization"><a class="permalink" href="#Customization">Customization</a></h2>
-<p class="Pp">Add custom memes (stickers) to the <span class="Pa">memes</span>
-    data directory. Image and video files are supported.</p>
-<p class="Pp">Add custom emus (emoji) to the <span class="Pa">emus</span> data
-    directory. Image files are supported.</p>
+<p class="Pp">The funzone contains fun flair that users may add to posts and
+    profiles. Add custom memes (stickers) to the <span class="Pa">memes</span>
+    data directory. Image and video files are supported. Add custom emus (emoji)
+    to the <span class="Pa">emus</span> data directory. PNG files are
+  supported.</p>
 <p class="Pp">Site CSS may be overridden by creating a
     <span class="Pa">views/local.css</span> file in the data directory. A
     restart is required after changes.</p>
 <p class="Pp">Custom HTML messages may be added to select pages by using the
-    <code class="Ic">admin</code> command. A restart is required after
-  changes.</p>
+    <code class="Ic">admin</code> command. This interface is a little rough. A
+    restart is required after changes.</p>
 <dl class="Bl-tag">
   <dt>server</dt>
   <dd>Displayed on the home page.</dd>
   <dt>about</dt>
   <dd>Displayed on the about page.</dd>
   <dt>login</dt>
-  <dd>Displayed about the login form.</dd>
+  <dd>Displayed on the login form.</dd>
   <dt>avatar colors</dt>
   <dd>Four 32-bit hex colors (RGBA).</dd>
 </dl>
@@ -122,10 +125,11 @@ proxy_set_header Host $http_host;
 <h2 class="Ss" id="Maintenance"><a class="permalink" href="#Maintenance">Maintenance</a></h2>
 <p class="Pp">The database may grow large over time. The
     <code class="Ic">cleanup</code> [<var class="Ar">days</var>] command exists
-    to purge old data, by default 30 days. This removes unreferenced, unsaved
-    posts and attachments. It does not remove any original content.</p>
+    to purge old external data, by default 30 days. This removes unreferenced,
+    unsaved posts and attachments. It does not remove any original content.</p>
 <p class="Pp">Backups may be performed by running <code class="Ic">backup
-    dirname</code>. Backups only include the minimal necessary information.</p>
+    dirname</code>. Backups only include the minimal necessary information, such
+    as user posts and follower information, but not external posts.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Upgrade"><a class="permalink" href="#Upgrade">Upgrade</a></h2>
@@ -263,7 +267,7 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">December 10, 2020</td>
+    <td class="foot-date">April 4, 2021</td>
     <td class="foot-os">OpenBSD 6.7</td>
   </tr>
 </table>

@@ -41,3 +41,10 @@ func getSensors() Sensors {
 
 	return sensors
 }
+
+func setLimits() error {
+	var limit syscall.Rlimit
+	limit.Cur = 2 * 1024 * 1024 * 1024
+	limit.Max = 2 * 1024 * 1024 * 1024
+	return syscall.Setrlimit(syscall.RLIMIT_DATA, &limit)
+}

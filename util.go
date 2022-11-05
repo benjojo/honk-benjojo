@@ -55,7 +55,7 @@ import (
 
 var savedassetparams = make(map[string]string)
 
-var re_plainname = regexp.MustCompile("^[[:alnum:]]+$")
+var re_plainname = regexp.MustCompile("^[[:alnum:]_-]+$")
 
 func getassetparam(file string) string {
 	if p, ok := savedassetparams[file]; ok {

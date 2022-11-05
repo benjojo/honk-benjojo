@@ -225,16 +225,14 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 		default:
 			s = req.Header.Get(h)
 		}
-		required[h] = false
+		delete(required, h)
 		stuff = append(stuff, h+": "+s)
 	}
-	var missing []string
-	for h, req := range required {
-		if req {
+	if len(required) > 0 {
+		var missing []string
+		for h := range required {
 			missing = append(missing, h)
 		}
-	}
-	if len(missing) > 0 {
 		return "", fmt.Errorf("required httpsig headers missing (%s)", strings.Join(missing, ","))
 	}
 

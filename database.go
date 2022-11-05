@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"humungus.tedunangst.com/r/webs/cache"
@@ -468,6 +469,12 @@ func donksforhonks(honks []*Honk) {
 				log.Printf("error parsing mentions: %s", err)
 				continue
 			}
+		case "badonks":
+			err = unjsonify(j, &h.Badonks)
+			if err != nil {
+				log.Printf("error parsing badonks: %s", err)
+				continue
+			}
 		case "oldrev":
 		default:
 			log.Printf("unknown meta genus: %s", genus)
@@ -798,6 +805,24 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 	return nil
 }
 
+var baxonker sync.Mutex
+
+func addreaction(user *WhatAbout, xid string, who, react string) {
+	baxonker.Lock()
+	defer baxonker.Unlock()
+	h := getxonk(user.ID, xid)
+	if h == nil {
+		return
+	}
+	h.Badonks = append(h.Badonks, Badonk{Who: who, What: react})
+	j, _ := jsonify(h.Badonks)
+	db := opendatabase()
+	tx, _ := db.Begin()
+	_, _ = tx.Stmt(stmtDeleteOneMeta).Exec(h.ID, "badonks")
+	_, _ = tx.Stmt(stmtSaveMeta).Exec(h.ID, "badonks", j)
+	tx.Commit()
+}
+
 func deleteextras(tx *sql.Tx, honkid int64, everything bool) error {
 	_, err := tx.Stmt(stmtDeleteDonks).Exec(honkid)
 	if err != nil {
@@ -914,7 +939,7 @@ var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonke
 var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker *sql.Stmt
 var stmtAllOnts, stmtSaveOnt, stmtUpdateFlags, stmtClearFlags *sql.Stmt
 var stmtHonksForUserFirstClass *sql.Stmt
-var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteSomeMeta, stmtUpdateHonk *sql.Stmt
+var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteOneMeta, stmtDeleteSomeMeta, stmtUpdateHonk *sql.Stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
 var stmtGetTracks *sql.Stmt
 var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
@@ -962,6 +987,7 @@ func prepareStatements(db *sql.DB) {
 	stmtSaveMeta = preparetodie(db, "insert into honkmeta (honkid, genus, json) values (?, ?, ?)")
 	stmtDeleteAllMeta = preparetodie(db, "delete from honkmeta where honkid = ?")
 	stmtDeleteSomeMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus not in ('oldrev')")
+	stmtDeleteOneMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus = ?")
 	stmtSaveHonk = preparetodie(db, "insert into honks (userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	stmtDeleteHonk = preparetodie(db, "delete from honks where honkid = ?")
 	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ? where honkid = ?")

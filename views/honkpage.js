@@ -261,7 +261,11 @@ function showhonkform(elem, rid, hname) {
 	var ridinput = document.getElementById("ridinput")
 	if (rid) {
 		ridinput.value = rid
-		honknoise.value = hname + " "
+		if (hname) {
+			honknoise.value = hname + " "
+		} else {
+			honknoise.value = ""
+		}
 	} else {
 		ridinput.value = ""
 		honknoise.value = ""

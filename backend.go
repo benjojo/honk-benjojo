@@ -94,6 +94,10 @@ func backendServer() {
 	if err != nil {
 		log.Panicf("unable to register shrinker: %s", err)
 	}
+	err = setLimits()
+	if err != nil {
+		log.Printf("error setting backend limits: %s", err)
+	}
 	for _, h := range backendhooks {
 		h()
 	}

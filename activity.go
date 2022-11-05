@@ -456,7 +456,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	maxdepth := 10
 	currenttid := ""
 	goingup := 0
-	var xonkxonkfn func(item junk.Junk, origin string) *Honk
+	var xonkxonkfn func(item junk.Junk, origin string, isUpdate bool) *Honk
 
 	saveonemore := func(xid string) {
 		log.Printf("getting onemore: %s", xid)
@@ -470,11 +470,11 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			return
 		}
 		depth++
-		xonkxonkfn(obj, originate(xid))
+		xonkxonkfn(obj, originate(xid), false)
 		depth--
 	}
 
-	xonkxonkfn = func(item junk.Junk, origin string) *Honk {
+	xonkxonkfn = func(item junk.Junk, origin string, isUpdate bool) *Honk {
 		id, _ := item.GetString("id")
 		what, _ := item.GetString("type")
 		dt, ok := item.GetString("published")
@@ -486,7 +486,6 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		var xid, rid, url, convoy string
 		var replies []string
 		var obj junk.Junk
-		isUpdate := false
 		switch what {
 		case "Delete":
 			obj, ok = item.GetMap("object")
@@ -555,7 +554,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				log.Printf("no object for creation %s", id)
 				return nil
 			}
-			return xonkxonkfn(obj, origin)
+			return xonkxonkfn(obj, origin, isUpdate)
 		case "Read":
 			xid, ok = item.GetString("object")
 			if ok {
@@ -568,7 +567,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					log.Printf("error getting read: %s", err)
 					return nil
 				}
-				return xonkxonkfn(obj, originate(xid))
+				return xonkxonkfn(obj, originate(xid), false)
 			}
 			return nil
 		case "Add":
@@ -584,7 +583,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					log.Printf("error getting add: %s", err)
 					return nil
 				}
-				return xonkxonkfn(obj, originate(xid))
+				return xonkxonkfn(obj, originate(xid), false)
 			}
 			return nil
 		case "Move":
@@ -965,7 +964,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		return &xonk
 	}
 
-	return xonkxonkfn(item, origin)
+	return xonkxonkfn(item, origin, false)
 }
 
 func dumpactivity(item junk.Junk) {

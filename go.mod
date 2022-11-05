@@ -10,5 +10,5 @@ require (
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
-	humungus.tedunangst.com/r/webs v0.6.44
+	humungus.tedunangst.com/r/webs v0.6.45
 )

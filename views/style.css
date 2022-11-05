@@ -90,14 +90,6 @@ header > details[open] summary span {
 header > details li {
 	margin: 1em 0em 1em 0em;
 }
-details summary {
-	display: inline;
-}
-@supports (-moz-appearance:none) {
-	details summary {
-		display: list-item;
-	}
-}
 main {
 	max-width: 1200px;
 	margin: auto;

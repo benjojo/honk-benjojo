@@ -29,7 +29,7 @@ import (
 	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.9.5"
+var softwareVersion = "0.9.6"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -96,6 +96,12 @@ type Honk struct {
 	Place    *Place
 	Time     *Time
 	Mentions []Mention
+	Badonks  []Badonk
+}
+
+type Badonk struct {
+	Who  string
+	What string
 }
 
 type Chonk struct {

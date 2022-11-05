@@ -178,7 +178,7 @@ var authregex = regexp.MustCompile("^[[:alnum:]]+$")
 var authlen = 32
 
 var stmtUserName, stmtUserAuth, stmtUpdateUser, stmtSaveAuth, stmtDeleteAuth *sql.Stmt
-var stmtDeleteOneAuth *sql.Stmt
+var stmtUpdateExpiry, stmtDeleteOneAuth *sql.Stmt
 var csrfkey string
 var securecookies bool
 
@@ -201,7 +201,7 @@ func Init(db *sql.DB) {
 	if err != nil {
 		log.Panic(err)
 	}
-	stmtUserAuth, err = db.Prepare("select userid, username from users where userid = (select userid from auth where hash = ? and expiry > ?)")
+	stmtUserAuth, err = db.Prepare("select users.userid, username, expiry from users join auth on users.userid = auth.userid where auth.hash = ? and expiry > ?")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -214,6 +214,10 @@ func Init(db *sql.DB) {
 		log.Panic(err)
 	}
 	stmtDeleteAuth, err = db.Prepare("delete from auth where userid = ?")
+	if err != nil {
+		log.Panic(err)
+	}
+	stmtUpdateExpiry, err = db.Prepare("update auth set expiry = ? where hash = ?")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -281,10 +285,11 @@ var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInf
 	hasher := sha512.New512_256()
 	hasher.Write([]byte(cookie))
 	authhash := hexsum(hasher)
-	now := time.Now().UTC().Format(dbtimeformat)
-	row := stmtUserAuth.QueryRow(authhash, now)
+	now := time.Now().UTC()
+	row := stmtUserAuth.QueryRow(authhash, now.Format(dbtimeformat))
 	var userinfo UserInfo
-	err := row.Scan(&userinfo.UserID, &userinfo.Username)
+	var stamp string
+	err := row.Scan(&userinfo.UserID, &userinfo.Username, &stamp)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("login: no auth found")
@@ -293,6 +298,11 @@ var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInf
 		}
 		return nil, false
 	}
+	expiry, _ := time.Parse(dbtimeformat, stamp)
+	if expiry.Before(now.Add(3 * 24 * time.Hour)) {
+		stmtUpdateExpiry.Exec(now.Add(7*24*time.Hour).Format(dbtimeformat), authhash)
+	}
+
 	return &userinfo, true
 }, Duration: 5 * time.Minute})
 
@@ -388,12 +398,8 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	io.CopyN(hasher, rand.Reader, 32)
 	auth := hexsum(hasher)
 
-	maxage := 3600 * 24 * 30
-
-	if gettoken {
-		maxage = 3600 * 24 * 30 * 12
-	} else {
-
+	maxage := 3600 * 24 * 365
+	if !gettoken {
 		http.SetCookie(w, &http.Cookie{
 			Name:     "auth",
 			Value:    auth,
@@ -407,7 +413,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	hasher.Write([]byte(auth))
 	authhash := hexsum(hasher)
 
-	expiry := time.Now().UTC().Add(time.Duration(maxage) * time.Second).Format(dbtimeformat)
+	expiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(dbtimeformat)
 	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
 		log.Printf("error saving auth: %s", err)
@@ -514,7 +520,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	io.CopyN(hasher, rand.Reader, 32)
 	auth := hexsum(hasher)
 
-	maxage := 3600 * 24 * 30
+	maxage := 3600 * 24 * 365
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth",
@@ -528,7 +534,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	hasher.Write([]byte(auth))
 	authhash := hexsum(hasher)
 
-	expiry := time.Now().UTC().Add(time.Duration(maxage) * time.Second).Format(dbtimeformat)
+	expiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(dbtimeformat)
 	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
 		log.Printf("error saving auth: %s", err)

@@ -39,36 +39,46 @@ func importMain(username, flavor, source string) {
 	}
 }
 
+type TootObject struct {
+	Summary      string
+	Content      string
+	InReplyTo    string
+	Conversation string
+	Published    time.Time
+	Tag          []struct {
+		Type string
+		Name string
+	}
+	Attachment []struct {
+		Type      string
+		MediaType string
+		Url       string
+		Name      string
+	}
+}
+
+type PlainTootObject TootObject
+
+func (obj *TootObject) UnmarshalJSON(b []byte) error {
+	p := (*PlainTootObject)(obj)
+	json.Unmarshal(b, p)
+	return nil
+}
+
 func importMastodon(username, source string) {
 	user, err := butwhatabout(username)
 	if err != nil {
 		log.Fatal(err)
 	}
 	type Toot struct {
-		Id           string
-		Type         string
-		To           []string
-		Cc           []string
-		Summary      string
-		Content      string
-		InReplyTo    string
-		Conversation string
-		Published    time.Time
-		Tag          []struct {
-			Type string
-			Name string
-		}
-		Attachment []struct {
-			Type      string
-			MediaType string
-			Url       string
-			Name      string
-		}
+		Id     string
+		Type   string
+		To     []string
+		Cc     []string
+		Object TootObject
 	}
 	var outbox struct {
-		OrderedItems []struct {
-			Object Toot
-		}
+		OrderedItems []Toot
 	}
 	fd, err := os.Open(source + "/outbox.json")
 	if err != nil {
@@ -93,7 +103,10 @@ func importMastodon(username, source string) {
 
 	re_tootid := regexp.MustCompile("[^/]+$")
 	for _, item := range outbox.OrderedItems {
-		toot := item.Object
+		toot := item
+		if toot.Type != "Create" {
+			continue
+		}
 		tootid := re_tootid.FindString(toot.Id)
 		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, tootid)
 		if havetoot(xid) {
@@ -104,15 +117,15 @@ func importMastodon(username, source string) {
 			What:     "honk",
 			Honker:   user.URL,
 			XID:      xid,
-			RID:      toot.InReplyTo,
-			Date:     toot.Published,
+			RID:      toot.Object.InReplyTo,
+			Date:     toot.Object.Published,
 			URL:      xid,
 			Audience: append(toot.To, toot.Cc...),
-			Noise:    toot.Content,
-			Convoy:   toot.Conversation,
+			Noise:    toot.Object.Content,
+			Convoy:   toot.Object.Conversation,
 			Whofore:  2,
 			Format:   "html",
-			Precis:   toot.Summary,
+			Precis:   toot.Object.Summary,
 		}
 		if honk.RID != "" {
 			honk.What = "tonk"
@@ -120,7 +133,7 @@ func importMastodon(username, source string) {
 		if !loudandproud(honk.Audience) {
 			honk.Whofore = 3
 		}
-		for _, att := range toot.Attachment {
+		for _, att := range toot.Object.Attachment {
 			switch att.Type {
 			case "Document":
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
@@ -144,7 +157,7 @@ func importMastodon(username, source string) {
 				honk.Donks = append(honk.Donks, donk)
 			}
 		}
-		for _, t := range toot.Tag {
+		for _, t := range toot.Object.Tag {
 			switch t.Type {
 			case "Hashtag":
 				honk.Onts = append(honk.Onts, t.Name)

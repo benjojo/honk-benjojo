@@ -78,7 +78,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 	u := login.GetUserInfo(r)
 	templinfo := make(map[string]interface{})
 	templinfo["StyleParam"] = getassetparam(viewDir + "/views/style.css")
-	templinfo["LocalStyleParam"] = getassetparam(viewDir + "/views/local.css")
+	templinfo["LocalStyleParam"] = getassetparam(dataDir + "/views/local.css")
 	templinfo["JSParam"] = getassetparam(viewDir + "/views/honkpage.js")
 	templinfo["UserStyle"] = getuserstyle(u)
 	templinfo["ServerName"] = serverName
@@ -429,6 +429,12 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		default:
 			log.Printf("unknown undo: %s", what)
 		}
+	case "EmojiReact":
+		obj, ok := j.GetString("object")
+		if ok {
+			content, _ := j.GetString("content")
+			addreaction(user, obj, who, content)
+		}
 	default:
 		go xonksaver(user, j, origin)
 	}
@@ -727,7 +733,12 @@ func showhonker(w http.ResponseWriter, r *http.Request) {
 	} else {
 		honks = gethonksbyhonker(u.UserID, name, 0)
 	}
-	msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>`, name, name)
+	miniform := templates.Sprintf(`<form action="/submithonker" method="POST">
+<input type="hidden" name="CSRF" value="%s">
+<input type="hidden" name="url" value="%s">
+<button tabindex=1 name="add honker" value="add honker">add honker</button>
+</form>`, login.GetCSRF("submithonker", r), name)
+	msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, name, name, miniform)
 	templinfo := getInfo(r)
 	templinfo["PageName"] = "honker"
 	templinfo["PageArg"] = name
@@ -1840,7 +1851,8 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	combos = " " + combos + " "
 	honkerid, _ := strconv.ParseInt(r.FormValue("honkerid"), 10, 0)
 
-	if name != "" && !re_plainname.MatchString(name) {
+	re_namecheck := regexp.MustCompile("[[:alnum:]_.-]+")
+	if name != "" && !re_namecheck.MatchString(name) {
 		http.Error(w, "please use a plainer name", http.StatusInternalServerError)
 		return
 	}
@@ -1886,7 +1898,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	if url[0] == '#' {
 		flavor = "peep"
 		if name == "" {
-			name = url
+			name = url[1:]
 		}
 		_, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, url, mj)
 		if err != nil {
@@ -2160,6 +2172,7 @@ func nomoroboto(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "Disallow: /meme/\n")
 	io.WriteString(w, "Disallow: /o\n")
 	io.WriteString(w, "Disallow: /o/\n")
+	io.WriteString(w, "Disallow: /help/\n")
 	for _, u := range allusers() {
 		fmt.Fprintf(w, "Disallow: /%s/%s/%s/\n", userSep, u.Username, honkSep)
 	}
@@ -2209,7 +2222,12 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	case "honker":
 		xid := r.FormValue("xid")
 		honks = gethonksbyxonker(userid, xid, wanted)
-		msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>`, xid, xid)
+		miniform := templates.Sprintf(`<form action="/submithonker" method="POST">
+			<input type="hidden" name="CSRF" value="%s">
+			<input type="hidden" name="url" value="%s">
+			<button tabindex=1 name="add honker" value="add honker">add honker</button>
+			</form>`, login.GetCSRF("submithonker", r), xid)
+		msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, xid, xid, miniform)
 		templinfo["ServerMessage"] = msg
 	default:
 		http.NotFound(w, r)
