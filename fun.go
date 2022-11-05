@@ -17,7 +17,6 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha512"
 	"fmt"
 	"html/template"
@@ -174,7 +173,7 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 			}
 			return string(templates.Sprintf(`<img alt="%s" title="%s" src="%s/d/%s">`, alt, alt, base, d.XID))
 		}
-		return string(templates.Sprintf(`&lt;img alt="%s" src="<a href="%s">%s<a>"&gt;`, alt, src, src))
+		return string(templates.Sprintf(`&lt;img alt="%s" src="<a href="%s">%s</a>"&gt;`, alt, src, src))
 	}
 }
 
@@ -288,20 +287,12 @@ func ontologies(s string) []string {
 var re_mentions = regexp.MustCompile(`@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]`)
 var re_urltions = regexp.MustCompile(`@https://\S+`)
 
-func grapevine(s string) []string {
-	var mentions []string
-	m := re_mentions.FindAllString(s, -1)
-	for i := range m {
-		where := gofish(m[i])
-		if where != "" {
-			mentions = append(mentions, where)
-		}
+func grapevine(mentions []Mention) []string {
+	var s []string
+	for _, m := range mentions {
+		s = append(s, m.Where)
 	}
-	m = re_urltions.FindAllString(s, -1)
-	for i := range m {
-		mentions = append(mentions, m[i][1:])
-	}
-	return mentions
+	return s
 }
 
 func bunchofgrapes(s string) []Mention {
@@ -594,35 +585,40 @@ func ziggy(userid int64) *KeyInfo {
 	return ki
 }
 
-var zaggies = cache.New(cache.Options{Filler: func(keyname string) (*rsa.PublicKey, bool) {
+var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.PublicKey, bool) {
 	var data string
 	row := stmtGetXonker.QueryRow(keyname, "pubkey")
 	err := row.Scan(&data)
+	var key httpsig.PublicKey
 	if err != nil {
 		log.Printf("hitting the webs for missing pubkey: %s", keyname)
 		j, err := GetJunk(keyname)
 		if err != nil {
 			log.Printf("error getting %s pubkey: %s", keyname, err)
-			return nil, true
+			when := time.Now().UTC().Format(dbtimeformat)
+			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			return key, true
 		}
 		allinjest(originate(keyname), j)
 		row = stmtGetXonker.QueryRow(keyname, "pubkey")
 		err = row.Scan(&data)
 		if err != nil {
 			log.Printf("key not found after ingesting")
-			return nil, true
+			when := time.Now().UTC().Format(dbtimeformat)
+			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			return key, true
 		}
 	}
-	_, key, err := httpsig.DecodeKey(data)
+	_, key, err = httpsig.DecodeKey(data)
 	if err != nil {
 		log.Printf("error decoding %s pubkey: %s", keyname, err)
-		return nil, true
+		return key, true
 	}
 	return key, true
 }, Limit: 512})
 
-func zaggy(keyname string) *rsa.PublicKey {
-	var key *rsa.PublicKey
+func zaggy(keyname string) httpsig.PublicKey {
+	var key httpsig.PublicKey
 	zaggies.Get(keyname, &key)
 	return key
 }

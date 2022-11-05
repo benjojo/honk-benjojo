@@ -16,7 +16,6 @@
 package main
 
 import (
-	"crypto/rsa"
 	"flag"
 	"fmt"
 	"html/template"
@@ -26,9 +25,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"humungus.tedunangst.com/r/webs/httpsig"
 )
 
-var softwareVersion = "0.8.6"
+var softwareVersion = "0.9.0"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -42,18 +43,20 @@ type WhatAbout struct {
 	Key     string
 	URL     string
 	Options UserOptions
-	SecKey  *rsa.PrivateKey
+	SecKey  httpsig.PrivateKey
 }
 
 type UserOptions struct {
-	SkinnyCSS bool   `json:",omitempty"`
-	Avatar    string `json:",omitempty"`
-	MapLink   string `json:",omitempty"`
+	SkinnyCSS  bool   `json:",omitempty"`
+	OmitImages bool   `json:",omitempty"`
+	Avatar     string `json:",omitempty"`
+	MapLink    string `json:",omitempty"`
+	Reaction   string `json:",omitempty"`
 }
 
 type KeyInfo struct {
 	keyname string
-	seckey  *rsa.PrivateKey
+	seckey  httpsig.PrivateKey
 }
 
 const serverUID int64 = -2
@@ -106,6 +109,7 @@ const (
 	flagIsBonked   = 2
 	flagIsSaved    = 4
 	flagIsUntagged = 8
+	flagIsReacted  = 16
 )
 
 func (honk *Honk) IsAcked() bool {
@@ -122,6 +126,10 @@ func (honk *Honk) IsSaved() bool {
 
 func (honk *Honk) IsUntagged() bool {
 	return honk.Flags&flagIsUntagged != 0
+}
+
+func (honk *Honk) IsReacted() bool {
+	return honk.Flags&flagIsReacted != 0
 }
 
 type Donk struct {
@@ -200,6 +208,7 @@ const (
 )
 
 var serverName string
+var masqName string
 var dataDir = "."
 var viewDir = "."
 var iconName = "icon.png"
@@ -245,6 +254,10 @@ func main() {
 	getconfig("aboutmsg", &aboutMsg)
 	getconfig("loginmsg", &loginMsg)
 	getconfig("servername", &serverName)
+	getconfig("masqname", &masqName)
+	if masqName == "" {
+		masqName = serverName
+	}
 	getconfig("usersep", &userSep)
 	getconfig("honksep", &honkSep)
 	prepareStatements(db)

@@ -171,6 +171,10 @@ To prepare a Twitter data archive, extract the twitter-longhash.zip file.
 After unzipping the data archive, navigate to the tweet_media directory
 and unzip any zip files contained within.
 .Dl ./honk import username twitter source-directory
+.Ss Advanced Options
+To support separate mentions without a subdomain,
+e.g. @user@example.com and https://honk.example.com/u/user,
+add a ('masqname', 'example.com') row the config table of the database.
 .Sh FILES
 .Nm
 files are split between the data directory and the view directory.

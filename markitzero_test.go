@@ -108,6 +108,18 @@ para
 	doonezerotest(t, input, output)
 }
 
+func TestTables(t *testing.T) {
+	input := `hello
+
+| col1 | col 2 |
+| row2 | cell4 |
+
+para
+`
+	output := `hello<table><tr><td>col1<td>col 2<tr><td>row2<td>cell4</table><p>para`
+	doonezerotest(t, input, output)
+}
+
 var benchData, simpleData string
 
 func init() {

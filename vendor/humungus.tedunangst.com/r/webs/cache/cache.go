@@ -54,6 +54,7 @@ type Options struct {
 	SizeLimit   int
 	Sizer       interface{}
 	Reducer     interface{}
+	Singleton   bool
 }
 
 type entry struct {
@@ -77,6 +78,7 @@ type Cache struct {
 	limit      int
 	size       int
 	sizelimit  int
+	singleton  bool
 }
 
 // An Invalidator is a collection of caches to be cleared or flushed together.
@@ -143,6 +145,7 @@ func New(options Options) *Cache {
 	c.serializer = gate.NewSerializer()
 	c.limit = options.Limit
 	c.sizelimit = options.SizeLimit
+	c.singleton = options.Singleton
 	return c
 }
 
@@ -269,6 +272,10 @@ func (c *Cache) Unlock() {
 
 // Clear one key from the cache
 func (c *Cache) Clear(key interface{}) {
+	if c.singleton {
+		c.Flush()
+		return
+	}
 	if c.reducer != nil {
 		key = c.reducer(key)
 	}
@@ -312,7 +319,7 @@ func NewCounter(options Options) Counter {
 	var c Counter
 	c.cache = New(Options{Filler: func(name string) (int64, bool) {
 		return 0, true
-	}, Duration:options.Duration, Limit:options.Limit})
+	}, Duration: options.Duration, Limit: options.Limit})
 	return c
 }
 

@@ -8,4 +8,4 @@ saytheday.go - posts a new honk that's a date based look and say sequence
 
 sprayandpray.go - send an activity with no error checking and hope it works
 
-youvegothonks.go - polls for new mesages
+youvegothonks.go - polls for new messages

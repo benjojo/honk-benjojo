@@ -95,6 +95,29 @@ func writetag(w writer, node *html.Node) {
 		if permittedattr[attr.Key] {
 			templates.Fprintf(w, ` %s="%s"`, attr.Key, attr.Val)
 		}
+		if attr.Key == "style" {
+			styles := strings.Split(attr.Val, ";")
+			printedstyle := false
+			for _, style := range styles {
+				style = strings.Replace(style, " ", "", -1)
+				switch style {
+				case "text-align:left":
+				case "text-align:right":
+				case "text-align:center":
+				default:
+					continue
+				}
+				if !printedstyle {
+					w.WriteString(` style ="`)
+					printedstyle = true
+				}
+				w.WriteString(style)
+				w.WriteString(";")
+			}
+			if printedstyle {
+				w.WriteString(`"`)
+			}
+		}
 	}
 	w.WriteString(">")
 }

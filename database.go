@@ -50,6 +50,9 @@ func userfromrow(row *sql.Row) (*WhatAbout, error) {
 	} else {
 		user.URL = fmt.Sprintf("https://%s/%s", serverName, user.Name)
 	}
+	if user.Options.Reaction == "" {
+		user.Options.Reaction = "none"
+	}
 	return user, nil
 }
 
@@ -252,51 +255,52 @@ func gethonksbyconvoy(userid int64, convoy string, wanted int64) []*Honk {
 	return honks
 }
 func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
-	honker := ""
-	withhonker := 0
-	site := ""
-	withsite := 0
-	withnotq := 0
+	var queries []string
+	var params []interface{}
+	queries = append(queries, "honks.honkid > ?")
+	params = append(params, wanted)
+	queries = append(queries, "honks.userid = ?")
+	params = append(params, userid)
+
 	terms := strings.Split(q, " ")
-	q = "%"
-	notq := "%"
 	for _, t := range terms {
+		negate := " "
+		if t[0] == '-' {
+			t = t[1:]
+			negate = " not "
+		}
+		if t == "" {
+			continue
+		}
 		if strings.HasPrefix(t, "site:") {
-			site = t[5:]
+			site := t[5:]
 			site = "%" + site + "%"
-			withsite = 1
+			queries = append(queries, "xid"+negate+"like ?")
+			params = append(params, site)
 			continue
 		}
 		if strings.HasPrefix(t, "honker:") {
-			honker = t[7:]
+			honker := t[7:]
 			xid := fullname(honker, userid)
 			if xid != "" {
 				honker = xid
 			}
-			withhonker = 1
+			queries = append(queries, negate+"(honks.honker = ? or honks.oonker = ?)")
+			params = append(params, honker)
+			params = append(params, honker)
 			continue
 		}
-		if t[0] == '-' {
-			if t == "-" {
-				continue
-			}
-			if len(notq) != 1 {
-				notq += " "
-			}
-			notq += t[1:]
-			continue
-		}
-		if len(q) != 1 {
-			q += " "
-		}
-		q += t
+		t = "%" + t + "%"
+		queries = append(queries, "noise"+negate+"like ?")
+		params = append(params, t)
 	}
-	q += "%"
-	notq += "%"
-	if notq != "%%" {
-		withnotq = 1
-	}
-	rows, err := stmtHonksBySearch.Query(wanted, userid, withsite, site, withhonker, honker, honker, q, withnotq, notq, userid)
+
+	selecthonks := "select honks.honkid, honks.userid, username, what, honker, oonker, honks.xid, rid, dt, url, audience, noise, precis, format, convoy, whofore, flags from honks join users on honks.userid = users.userid "
+	where := "where " + strings.Join(queries, " and ")
+	butnotthose := " and convoy not in (select name from zonkers where userid = ? and wherefore = 'zonvoy' order by zonkerid desc limit 100)"
+	limit := " order by honks.honkid desc limit 250"
+	params = append(params, userid)
+	rows, err := opendatabase().Query(selecthonks+where+butnotthose+limit, params...)
 	honks := getsomehonks(rows, err)
 	return honks
 }
@@ -724,7 +728,7 @@ func cleanupdb(arg string) {
 var stmtHonkers, stmtDubbers, stmtNamedDubbers, stmtSaveHonker, stmtUpdateFlavor, stmtUpdateHonker *sql.Stmt
 var stmtAnyXonk, stmtOneXonk, stmtPublicHonks, stmtUserHonks, stmtHonksByCombo, stmtHonksByConvoy *sql.Stmt
 var stmtHonksByOntology, stmtHonksForUser, stmtHonksForMe, stmtSaveDub, stmtHonksByXonker *sql.Stmt
-var stmtHonksBySearch, stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
+var stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
 var stmtEventHonks, stmtOneBonk, stmtFindZonk, stmtFindXonk, stmtSaveDonk *sql.Stmt
 var stmtFindFile, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
 var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker *sql.Stmt
@@ -771,7 +775,6 @@ func prepareStatements(db *sql.DB) {
 	stmtHonksByHonker = preparetodie(db, selecthonks+"join honkers on (honkers.xid = honks.honker or honkers.xid = honks.oonker) where honks.honkid > ? and honks.userid = ? and honkers.name = ?"+butnotthose+limit)
 	stmtHonksByXonker = preparetodie(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and (honker = ? or oonker = ?)"+butnotthose+limit)
 	stmtHonksByCombo = preparetodie(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and honks.honker in (select xid from honkers where honkers.userid = ? and honkers.combos like ?) "+butnotthose+" union "+selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and honks.userid = ? and onts.ontology in (select xid from honkers where combos like ?)"+butnotthose+limit)
-	stmtHonksBySearch = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and (? = 0 or xid like ?) and (? = 0 or honks.honker = ? or honks.oonker = ?) and noise like ? and (? = 0 or noise not like ?)"+butnotthose+limit)
 	stmtHonksByConvoy = preparetodie(db, selecthonks+"where honks.honkid > ? and (honks.userid = ? or (? = -1 and whofore = 2)) and convoy = ?"+limit)
 	stmtHonksByOntology = preparetodie(db, selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and onts.ontology = ? and (honks.userid = ? or (? = -1 and honks.whofore = 2))"+limit)
 

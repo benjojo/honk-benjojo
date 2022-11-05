@@ -159,6 +159,10 @@ func CSRFWrap(action string, handler http.Handler) http.Handler {
 	})
 }
 
+func CSRFWrapFunc(action string, fn http.HandlerFunc) http.Handler {
+	return CSRFWrap(action, fn)
+}
+
 func loginredirect(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth",
@@ -475,6 +479,9 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 		len(newpass) == 0 || len(newpass) > passlen {
 		log.Printf("login: invalid password attempt")
 		return fmt.Errorf("bad password")
+	}
+	if len(newpass) < 6 {
+		return fmt.Errorf("newpassword is too short")
 	}
 	userid, hash, ok := loaduser(userinfo.Username)
 	if !ok {

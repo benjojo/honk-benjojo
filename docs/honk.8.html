@@ -169,6 +169,13 @@ proxy_set_header Host $http_host;
 <div class="Bd Bd-indent"><code class="Li">./honk import username twitter
   source-directory</code></div>
 </section>
+<section class="Ss">
+<h2 class="Ss" id="Advanced_Options"><a class="permalink" href="#Advanced_Options">Advanced
+  Options</a></h2>
+<p class="Pp">To support separate mentions without a subdomain, e.g.
+    @user@example.com and https://honk.example.com/u/user, add a ('masqname',
+    'example.com') row the config table of the database.</p>
+</section>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
@@ -249,7 +256,7 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">December 25, 2019</td>
+    <td class="foot-date">March 9, 2020</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>

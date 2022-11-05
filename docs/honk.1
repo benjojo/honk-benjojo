@@ -126,6 +126,8 @@ Sometimes a thread goes on entirely too long.
 Untag will hide further replies to the selected post, but without muting the
 entire thread.
 Replies higher in the tree are still received.
+.It Ic badonk
+Please no.
 .It Ic edit
 Change it up.
 Alas, Update activities do not federate reliably.
@@ -181,9 +183,13 @@ Some options to customize the site appearance:
 .Bl -tag -width skinny
 .It skinny
 Use a narrower column for the main display.
+.It omit images
+Omit img tags, to lighten page loads on slow connections.
 .It apple
 Prefer Apple links for maps.
 The default is OpenStreetMap.
+.It reaction
+Pick an emoji for reacting to posts.
 .El
 .Sh ENVIRONMENT
 .Nm

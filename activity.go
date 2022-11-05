@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -28,7 +27,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -58,11 +56,11 @@ func friendorfoe(ct string) bool {
 	return false
 }
 
-func PostJunk(keyname string, key *rsa.PrivateKey, url string, j junk.Junk) error {
+func PostJunk(keyname string, key httpsig.PrivateKey, url string, j junk.Junk) error {
 	return PostMsg(keyname, key, url, j.ToBytes())
 }
 
-func PostMsg(keyname string, key *rsa.PrivateKey, url string, msg []byte) error {
+func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) error {
 	client := http.DefaultClient
 	req, err := http.NewRequest("POST", url, bytes.NewReader(msg))
 	if err != nil {
@@ -177,6 +175,7 @@ func savedonk(url string, name, desc, media string, localize bool) *Donk {
 		}
 		ii, err := flightdeck.Call(url, fn)
 		if err != nil {
+			log.Printf("error fetching donk: %s", err)
 			localize = false
 			goto saveit
 		}
@@ -256,6 +255,7 @@ func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
 		return false
 	}
 	if rejectorigin(user.ID, xid, isannounce) {
+		log.Printf("rejecting origin: %s", xid)
 		return false
 	}
 	if iszonked(user.ID, xid) {
@@ -378,19 +378,6 @@ func gimmexonks(user *WhatAbout, outbox string) {
 			}
 		}
 	}
-}
-
-func whosthere(xid string) ([]string, string) {
-	obj, err := GetJunk(xid)
-	if err != nil {
-		log.Printf("error getting remote xonk: %s", err)
-		return nil, ""
-	}
-	convoy, _ := obj.GetString("context")
-	if convoy == "" {
-		convoy, _ = obj.GetString("conversation")
-	}
-	return newphone(nil, obj), convoy
 }
 
 func newphone(a []string, obj junk.Junk) []string {
@@ -580,6 +567,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			what = "move"
 		case "Audio":
 			fallthrough
+		case "Image":
+			fallthrough
 		case "Video":
 			fallthrough
 		case "Question":
@@ -596,38 +585,28 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			what = "event"
 		default:
 			log.Printf("unknown activity: %s", what)
-			fd, _ := os.OpenFile("savedinbox.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-			item.Write(fd)
-			io.WriteString(fd, "\n")
-			fd.Close()
+			dumpactivity(item)
 			return nil
 		}
 
 		if obj != nil {
-			if _, ok := obj.GetString("diaspora:guid"); ok {
-				// friendica does the silliest bonks
-				if c, ok := obj.GetString("source", "content"); ok {
-					re_link := regexp.MustCompile(`link='([^']*)'`)
-					if m := re_link.FindStringSubmatch(c); len(m) > 1 {
-						xid := m[1]
-						log.Printf("getting friendica flavored bonk: %s", xid)
-						if !needxonkid(user, xid) {
-							return nil
-						}
-						if newobj, err := GetJunkHardMode(xid); err == nil {
-							obj = newobj
-							origin = originate(xid)
-							what = "bonk"
-						} else {
-							log.Printf("error getting bonk: %s: %s", xid, err)
-						}
-					}
-				}
-			}
+			xid, _ = obj.GetString("id")
+		}
+
+		if xid == "" {
+			log.Printf("don't know what xid is")
+			item.Write(os.Stdout)
+			return nil
+		}
+		if originate(xid) != origin {
+			log.Printf("original sin: %s <> %s", xid, origin)
+			item.Write(os.Stdout)
+			return nil
 		}
 
 		var xonk Honk
 		// early init
+		xonk.XID = xid
 		xonk.UserID = user.ID
 		xonk.Honker, _ = item.GetString("actor")
 		if xonk.Honker == "" {
@@ -653,17 +632,16 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if dt2, ok := obj.GetString("published"); ok {
 				dt = dt2
 			}
-			xid, _ = obj.GetString("id")
-			precis, _ = obj.GetString("summary")
-			if name, ok := obj.GetString("name"); ok {
-				if precis != "" {
-					precis = "\n" + precis
-				}
-				precis = name + precis
-			}
 			content, _ = obj.GetString("content")
 			if !strings.HasPrefix(content, "<p>") {
 				content = "<p>" + content
+			}
+			precis, _ = obj.GetString("summary")
+			if name, ok := obj.GetString("name"); ok {
+				if precis != "" {
+					content = precis + "<p>" + content
+				}
+				precis = html.EscapeString(name)
 			}
 			if sens, _ := obj["sensitive"].(bool); sens && precis == "" {
 				precis = "unspecified horror"
@@ -712,6 +690,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 			atts, _ := obj.GetArray("attachment")
 			for i, atti := range atts {
+				if rejectxonk(&xonk) {
+					log.Printf("skipping rejected attachment: %s", xid)
+					continue
+				}
 				att, ok := atti.(junk.Junk)
 				if !ok {
 					continue
@@ -747,6 +729,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 			tags, _ := obj.GetArray("tag")
 			for _, tagi := range tags {
+				if rejectxonk(&xonk) {
+					log.Printf("skipping rejected attachment: %s", xid)
+					continue
+				}
 				tag, ok := tagi.(junk.Junk)
 				if !ok {
 					continue
@@ -839,11 +825,6 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 
 		}
-		if originate(xid) != origin {
-			log.Printf("original sin: %s <> %s", xid, origin)
-			item.Write(os.Stdout)
-			return nil
-		}
 
 		if currenttid == "" {
 			currenttid = convoy
@@ -856,7 +837,6 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 
 		// init xonk
 		xonk.What = what
-		xonk.XID = xid
 		xonk.RID = rid
 		xonk.Date, _ = time.Parse(time.RFC3339, dt)
 		xonk.URL = url
@@ -884,14 +864,6 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			}
 		}
 		if !isUpdate && needxonk(user, &xonk) {
-			if strings.HasSuffix(convoy, "#context") {
-				// friendica...
-				if rid != "" {
-					convoy = ""
-				} else {
-					convoy = url
-				}
-			}
 			if rid != "" {
 				if needxonkid(user, rid) {
 					goingup++
@@ -927,6 +899,17 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	}
 
 	return xonkxonkfn(item, origin)
+}
+
+func dumpactivity(item junk.Junk) {
+	fd, err := os.OpenFile("savedinbox.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("error opening inbox! %s", err)
+		return
+	}
+	defer fd.Close()
+	item.Write(fd)
+	io.WriteString(fd, "\n")
 }
 
 func rubadubdub(user *WhatAbout, req junk.Junk) {
@@ -1033,7 +1016,12 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		if !h.Public {
 			jo["directMessage"] = true
 		}
-		mentions := bunchofgrapes(h.Noise)
+		var mentions []Mention
+		if len(h.Mentions) > 0 {
+			mentions = h.Mentions
+		} else {
+			mentions = bunchofgrapes(h.Noise)
+		}
 		translate(h)
 		redoimages(h)
 		jo["summary"] = html.EscapeString(h.Precis)
@@ -1151,6 +1139,13 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		if h.Convoy != "" {
 			j["context"] = h.Convoy
 		}
+	case "react":
+		j["type"] = "EmojiReact"
+		j["object"] = h.XID
+		if h.Convoy != "" {
+			j["context"] = h.Convoy
+		}
+		j["content"] = user.Options.Reaction
 	case "deack":
 		b := junk.New()
 		b["id"] = user.URL + "/" + "ack" + "/" + shortxid(h.XID)

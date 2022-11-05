@@ -19,6 +19,7 @@ package httpsig
 import (
 	"bytes"
 	"crypto"
+	"golang.org/x/crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -36,6 +37,54 @@ import (
 
 	"humungus.tedunangst.com/r/webs/junk"
 )
+
+type KeyType int
+
+const (
+	None KeyType = iota
+	RSA
+	Ed25519
+)
+
+type PublicKey struct {
+	Type KeyType
+	Key  interface{}
+}
+
+func (pubkey PublicKey) Verify(msg []byte, sig []byte) error {
+	switch pubkey.Type {
+	case RSA:
+		return rsa.VerifyPKCS1v15(pubkey.Key.(*rsa.PublicKey), crypto.SHA256, msg, sig)
+	case Ed25519:
+		ok := ed25519.Verify(pubkey.Key.(ed25519.PublicKey), msg, sig)
+		if !ok {
+			return fmt.Errorf("verification failed")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown key type")
+	}
+}
+
+type PrivateKey struct {
+	Type KeyType
+	Key  interface{}
+}
+
+func (privkey PrivateKey) Sign(msg []byte) []byte {
+	switch privkey.Type {
+	case RSA:
+		sig, err := rsa.SignPKCS1v15(rand.Reader, privkey.Key.(*rsa.PrivateKey), crypto.SHA256, msg)
+		if err != nil {
+			log.Panic("error signing msg: %s", err)
+		}
+		return sig
+	case Ed25519:
+		return ed25519.Sign(privkey.Key.(ed25519.PrivateKey), msg)
+	default:
+		panic("unknown key type")
+	}
+}
 
 func sb64(data []byte) string {
 	var sb strings.Builder
@@ -59,7 +108,7 @@ func sb64sha256(content []byte) string {
 }
 
 // Sign a request and add Signature header
-func SignRequest(keyname string, key *rsa.PrivateKey, req *http.Request, content []byte) {
+func SignRequest(keyname string, key PrivateKey, req *http.Request, content []byte) {
 	headers := []string{"(request-target)", "date", "host", "content-type", "digest"}
 	var stuff []string
 	for _, h := range headers {
@@ -93,7 +142,7 @@ func SignRequest(keyname string, key *rsa.PrivateKey, req *http.Request, content
 
 	h := sha256.New()
 	h.Write([]byte(strings.Join(stuff, "\n")))
-	sig, _ := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, h.Sum(nil))
+	sig := key.Sign(h.Sum(nil))
 	bsig := sb64(sig)
 
 	sighdr := fmt.Sprintf(`keyId="%s",algorithm="%s",headers="%s",signature="%s"`,
@@ -107,7 +156,7 @@ var re_sighdrval = regexp.MustCompile(`(.*)="(.*)"`)
 // The request body should be provided separately.
 // The lookupPubkey function takes a keyname and returns a public key.
 // Returns keyname if known, and/or error.
-func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) *rsa.PublicKey) (string, error) {
+func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) PublicKey) (string, error) {
 	sighdr := req.Header.Get("Signature")
 	if sighdr == "" {
 		return "", fmt.Errorf("no signature header")
@@ -137,7 +186,7 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 	}
 
 	key := lookupPubkey(keyname)
-	if key == nil {
+	if key.Type == None {
 		return keyname, fmt.Errorf("no key for %s", keyname)
 	}
 	headers := strings.Split(heads, " ")
@@ -167,7 +216,7 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 	h := sha256.New()
 	h.Write([]byte(strings.Join(stuff, "\n")))
 	sig := b64s(bsig)
-	err := rsa.VerifyPKCS1v15(key, crypto.SHA256, h.Sum(nil), sig)
+	err := key.Verify(h.Sum(nil), sig)
 	if err != nil {
 		return keyname, err
 	}
@@ -175,7 +224,7 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 }
 
 // Unmarshall an ASCII string into (optional) private and public keys
-func DecodeKey(s string) (pri *rsa.PrivateKey, pub *rsa.PublicKey, err error) {
+func DecodeKey(s string) (pri PrivateKey, pub PublicKey, err error) {
 	block, _ := pem.Decode([]byte(s))
 	if block == nil {
 		err = fmt.Errorf("no pem data")
@@ -185,15 +234,41 @@ func DecodeKey(s string) (pri *rsa.PrivateKey, pub *rsa.PublicKey, err error) {
 	case "PUBLIC KEY":
 		var k interface{}
 		k, err = x509.ParsePKIXPublicKey(block.Bytes)
-		if k != nil {
-			pub, _ = k.(*rsa.PublicKey)
+		if err == nil {
+			pub.Key = k
+			switch k.(type) {
+			case *rsa.PublicKey:
+				pub.Type = RSA
+
+			case ed25519.PublicKey:
+				pub.Type = Ed25519
+			}
+		}
+	case "PRIVATE KEY":
+		var k interface{}
+		k, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err == nil {
+			pub.Key = k
+			switch k.(type) {
+			case *rsa.PrivateKey:
+				pub.Type = RSA
+			case ed25519.PrivateKey:
+				pub.Type = Ed25519
+			}
 		}
 	case "RSA PUBLIC KEY":
-		pub, err = x509.ParsePKCS1PublicKey(block.Bytes)
-	case "RSA PRIVATE KEY":
-		pri, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		pub.Key, err = x509.ParsePKCS1PublicKey(block.Bytes)
 		if err == nil {
-			pub = &pri.PublicKey
+			pub.Type = RSA
+		}
+	case "RSA PRIVATE KEY":
+		var rsakey *rsa.PrivateKey
+		rsakey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err == nil {
+			pri.Key = rsakey
+			pri.Type = RSA
+			pub.Key = &rsakey.PublicKey
+			pub.Type = RSA
 		}
 	default:
 		err = fmt.Errorf("unknown key type")
@@ -212,6 +287,12 @@ func EncodeKey(i interface{}) (string, error) {
 	case *rsa.PublicKey:
 		b.Type = "PUBLIC KEY"
 		b.Bytes, err = x509.MarshalPKIXPublicKey(k)
+	case ed25519.PrivateKey:
+		b.Type = "PRIVATE KEY"
+		b.Bytes, err = x509.MarshalPKCS8PrivateKey(k)
+	case ed25519.PublicKey:
+		b.Type = "PUBLIC KEY"
+		b.Bytes, err = x509.MarshalPKIXPublicKey(k)
 	default:
 		err = fmt.Errorf("unknown key type: %s", k)
 	}
@@ -221,15 +302,15 @@ func EncodeKey(i interface{}) (string, error) {
 	return string(pem.EncodeToMemory(&b)), nil
 }
 
-var cachedKeys = make(map[string]*rsa.PublicKey)
+var cachedKeys = make(map[string]PublicKey)
 var cachedKeysLock sync.Mutex
 
 // Get a key as typically used with ActivityPub
-func ActivityPubKeyGetter(keyname string) (key *rsa.PublicKey) {
+func ActivityPubKeyGetter(keyname string) (key PublicKey) {
 	cachedKeysLock.Lock()
 	key = cachedKeys[keyname]
 	cachedKeysLock.Unlock()
-	if key != nil {
+	if key.Type != None {
 		return key
 	}
 	j, err := junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 5 * time.Second})

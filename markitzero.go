@@ -34,6 +34,7 @@ var re_link = regexp.MustCompile(`.?.?https?://[^\s"]+[\w/)!]`)
 var re_zerolink = regexp.MustCompile(`\[([^]]*)\]\(([^)]*\)?)\)`)
 var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
 var re_lister = regexp.MustCompile(`((^|\n)(\+|-).*)+\n?`)
+var re_tabler = regexp.MustCompile(`((^|\n)\|.*)+\n?`)
 
 var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
 
@@ -74,10 +75,14 @@ func markitzero(s string) string {
 	s = string(buf)
 
 	// mark it zero
-	s = re_link.ReplaceAllStringFunc(s, linkreplacer)
+	if strings.Contains(s, "http") {
+		s = re_link.ReplaceAllStringFunc(s, linkreplacer)
+	}
 	s = re_zerolink.ReplaceAllString(s, `<a href="$2">$1</a>`)
-	s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
-	s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
+	if strings.Contains(s, "*") {
+		s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
+		s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
+	}
 	s = re_quoter.ReplaceAllString(s, "<blockquote>$1<br><cite>$3</cite></blockquote><p>")
 	s = re_reciter.ReplaceAllString(s, "$1$2$3")
 	s = strings.Replace(s, "\n---\n", "<hr><p>", -1)
@@ -91,6 +96,42 @@ func markitzero(s string) string {
 		}
 		r += "</ul><p>"
 		return r
+	})
+	s = re_tabler.ReplaceAllStringFunc(s, func(m string) string {
+		m = strings.Trim(m, "\n")
+		rows := strings.Split(m, "\n")
+		var r strings.Builder
+		r.WriteString("<table>")
+		alignments := make(map[int]string)
+		for _, row := range rows {
+			hastr := false
+			cells := strings.Split(row, "|")
+			for i, cell := range cells {
+				cell = strings.TrimSpace(cell)
+				if cell == "" && (i == 0 || i == len(cells)-1) {
+					continue
+				}
+				switch cell {
+				case ":---":
+					alignments[i] = ` style="text-align: left"`
+					continue
+				case ":---:":
+					alignments[i] = ` style="text-align: center"`
+					continue
+				case "---:":
+					alignments[i] = ` style="text-align: right"`
+					continue
+				}
+				if !hastr {
+					r.WriteString("<tr>")
+					hastr = true
+				}
+				fmt.Fprintf(&r, "<td%s>", alignments[i])
+				r.WriteString(cell)
+			}
+		}
+		r.WriteString("</table><p>")
+		return r.String()
 	})
 
 	// restore images
@@ -122,6 +163,7 @@ func markitzero(s string) string {
 	s = strings.Replace(s, "<br><cite></cite>", "", -1)
 	s = strings.Replace(s, "<br><pre>", "<pre>", -1)
 	s = strings.Replace(s, "<br><ul>", "<ul>", -1)
+	s = strings.Replace(s, "<br><table>", "<table>", -1)
 	s = strings.Replace(s, "<p><br>", "<p>", -1)
 	return s
 }

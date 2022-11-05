@@ -59,6 +59,7 @@ function flogit(el, how, xid) {
 	if (s[s.length-1] != "e") { s += "e" }
 	s += "d"
 	if (s == "untaged") s = "untagged"
+	if (s == "reacted") s = "badonked"
 	el.innerHTML = s
 	el.disabled = true
 	post("/zonkit", encode({"CSRF": csrftoken, "wherefore": how, "what": xid}))
@@ -166,6 +167,7 @@ function switchtopage(name, arg) {
 		msg.remove()
 		servermsgs[stash] = msg
 	}
+	showelement("refreshbox")
 
 	honksforpage[stash] = holder
 
@@ -241,8 +243,7 @@ function relinklinks() {
 	history.replaceState(curpagestate, "some title", "")
 })();
 (function() {
-	var el = document.getElementById("donkdescriptor")
-	el.style.display = "none"
+	hideelement("donkdescriptor")
 })();
 function showhonkform(elem, rid, hname) {
 	var form = lehonkform
@@ -256,7 +257,6 @@ function showhonkform(elem, rid, hname) {
 		elem.insertAdjacentElement('afterend', form)
 	}
 	var ridinput = document.getElementById("ridinput")
-	var honknoise = document.getElementById("honknoise")
 	if (rid) {
 		ridinput.value = rid
 		honknoise.value = "@" + hname + " "
@@ -276,11 +276,13 @@ function cancelhonking() {
 function showelement(el) {
 	if (typeof(el) == "string")
 		el = document.getElementById(el)
+	if (!el) return
 	el.style.display = "block"
 }
 function hideelement(el) {
 	if (typeof(el) == "string")
 		el = document.getElementById(el)
+	if (!el) return
 	el.style.display = "none"
 }
 function updatedonker() {

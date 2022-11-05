@@ -121,6 +121,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <button onclick="return flogit(this, 'untag', '{{ .Honk.XID }}');">untag me</button>
 {{ end }}
 <button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
+{{ if .Honk.IsReacted }}
+<button disabled>badonked</button>
+{{ else }}
+<button onclick="return flogit(this, 'react', '{{ .Honk.XID }}');">badonk</button>
+{{ end }}
 </div>
 </details>
 <p>

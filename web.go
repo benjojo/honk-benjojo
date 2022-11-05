@@ -55,10 +55,14 @@ func getuserstyle(u *login.UserInfo) template.CSS {
 		return ""
 	}
 	user, _ := butwhatabout(u.Username)
+	css := template.CSS("")
 	if user.Options.SkinnyCSS {
-		return "main { max-width: 700px; }"
+		css += "main { max-width: 700px; }\n"
 	}
-	return ""
+	if user.Options.OmitImages {
+		css += ".honk .noise img { display: none; }\n"
+	}
+	return css
 }
 
 func getmaplink(u *login.UserInfo) string {
@@ -211,7 +215,10 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, d := range honk.Donks {
 			desc += string(templates.Sprintf(`<p><a href="%s">Attachment: %s</a>`,
-				d.URL, d.Name))
+				d.URL, d.Desc))
+			if strings.HasPrefix(d.Media, "image") {
+				desc += string(templates.Sprintf(`<img src="%s">`, d.URL))
+			}
 		}
 
 		feed.Items = append(feed.Items, &rss.Item{
@@ -325,7 +332,8 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	what, _ := j.GetString("type")
-	if what == "Like" {
+	obj, _ := j.GetString("object")
+	if what == "Like" || (what == "EmojiReact" && originate(obj) != serverName) {
 		return
 	}
 	who, _ := j.GetString("actor")
@@ -357,14 +365,12 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 
 	switch what {
 	case "Ping":
-		obj, _ := j.GetString("id")
-		log.Printf("ping from %s: %s", who, obj)
+		id, _ := j.GetString("id")
+		log.Printf("ping from %s: %s", who, id)
 		pong(user, who, obj)
 	case "Pong":
-		obj, _ := j.GetString("object")
 		log.Printf("pong from %s: %s", who, obj)
 	case "Follow":
-		obj, _ := j.GetString("object")
 		if obj != user.URL {
 			log.Printf("can't follow %s", obj)
 			return
@@ -416,11 +422,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		log.Printf("unknown Update activity")
-		fd, _ := os.OpenFile("savedinbox.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		j.Write(fd)
-		io.WriteString(fd, "\n")
-		fd.Close()
-
+		dumpactivity(j)
 	case "Undo":
 		obj, ok := j.GetMap("object")
 		if !ok {
@@ -449,7 +451,8 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func serverinbox(w http.ResponseWriter, r *http.Request) {
-	if stealthmode(serverUID, r) {
+	user := getserveruser()
+	if stealthmode(user.ID, r) {
 		http.NotFound(w, r)
 		return
 	}
@@ -483,7 +486,6 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "what did you call me?", http.StatusTeapot)
 		return
 	}
-	user := getserveruser()
 	who, _ := j.GetString("actor")
 	origin := keymatch(keyname, who)
 	if origin == "" {
@@ -547,15 +549,18 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error updating honker: %s", err)
 			return
 		}
+	default:
+		log.Printf("unhandled server activity: %s", what)
+		dumpactivity(j)
 	}
 }
 
 func serveractor(w http.ResponseWriter, r *http.Request) {
-	if stealthmode(serverUID, r) {
+	user := getserveruser()
+	if stealthmode(user.ID, r) {
 		http.NotFound(w, r)
 		return
 	}
-	user := getserveruser()
 	j := junkuser(user)
 	w.Write(j)
 }
@@ -977,6 +982,7 @@ func tracker() {
 	timeout := 4 * time.Minute
 	sleeper := time.NewTimer(timeout)
 	tracks := make(map[string][]string)
+	workinprogress++
 	for {
 		select {
 		case track := <-trackchan:
@@ -1108,6 +1114,7 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 
 func saveuser(w http.ResponseWriter, r *http.Request) {
 	whatabout := r.FormValue("whatabout")
+	whatabout = strings.Replace(whatabout, "\r", "", -1)
 	u := login.GetUserInfo(r)
 	user, _ := butwhatabout(u.Username)
 	db := opendatabase()
@@ -1117,11 +1124,17 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		options.SkinnyCSS = false
 	}
+	if r.FormValue("omitimages") == "omitimages" {
+		options.OmitImages = true
+	} else {
+		options.OmitImages = false
+	}
 	if r.FormValue("maps") == "apple" {
 		options.MapLink = "apple"
 	} else {
 		options.MapLink = ""
 	}
+	options.Reaction = r.FormValue("reaction")
 	if ava := re_avatar.FindString(whatabout); ava != "" {
 		whatabout = re_avatar.ReplaceAllString(whatabout, "")
 		ava = ava[7:]
@@ -1253,6 +1266,21 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("error unsaving: %s", err)
 			}
+		}
+		return
+	}
+
+	if wherefore == "react" {
+		if user.Options.Reaction == "none" {
+			return
+		}
+		xonk := getxonk(userinfo.UserID, what)
+		if xonk != nil {
+			_, err := stmtUpdateFlags.Exec(flagIsReacted, xonk.ID)
+			if err != nil {
+				log.Printf("error saving: %s", err)
+			}
+			sendzonkofsorts(xonk, user, "react")
 		}
 		return
 	}
@@ -1408,6 +1436,14 @@ func submitwebhonk(w http.ResponseWriter, r *http.Request) {
 func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	rid := r.FormValue("rid")
 	noise := r.FormValue("noise")
+	format := r.FormValue("format")
+	if format == "" {
+		format = "markdown"
+	}
+	if !(format == "markdown" || format == "html") {
+		http.Error(w, "unknown format", 500)
+		return
+	}
 
 	userinfo := login.GetUserInfo(r)
 	user, _ := butwhatabout(userinfo.Username)
@@ -1423,7 +1459,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		}
 		honk.Date = dt
 		honk.What = "update"
-		honk.Format = "markdown"
+		honk.Format = format
 	} else {
 		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, xfiltrate())
 		what := "honk"
@@ -1437,7 +1473,7 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 			Honker:   user.URL,
 			XID:      xid,
 			Date:     dt,
-			Format:   "markdown",
+			Format:   format,
 		}
 	}
 
@@ -1451,16 +1487,14 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	var convoy string
 	if rid != "" {
 		xonk := getxonk(userinfo.UserID, rid)
-		if xonk != nil {
-			if xonk.Public {
-				honk.Audience = append(honk.Audience, xonk.Audience...)
-			}
-			convoy = xonk.Convoy
-		} else {
-			xonkaud, c := whosthere(rid)
-			honk.Audience = append(honk.Audience, xonkaud...)
-			convoy = c
+		if xonk == nil {
+			http.Error(w, "replyto disappeared", http.StatusNotFound)
+			return
 		}
+		if xonk.Public {
+			honk.Audience = append(honk.Audience, xonk.Audience...)
+		}
+		convoy = xonk.Convoy
 		for i, a := range honk.Audience {
 			if a == thewholeworld {
 				honk.Audience[0], honk.Audience[i] = honk.Audience[i], honk.Audience[0]
@@ -1478,9 +1512,9 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		honk.Audience = []string{thewholeworld}
 	}
 	if honk.Noise != "" && honk.Noise[0] == '@' {
-		honk.Audience = append(grapevine(honk.Noise), honk.Audience...)
+		honk.Audience = append(grapevine(bunchofgrapes(honk.Noise)), honk.Audience...)
 	} else {
-		honk.Audience = append(honk.Audience, grapevine(honk.Noise)...)
+		honk.Audience = append(honk.Audience, grapevine(bunchofgrapes(honk.Noise))...)
 	}
 
 	if convoy == "" {
@@ -1761,7 +1795,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 		if goodbye == "X" {
 			var owner string
 			db := opendatabase()
-			row := db.QueryRow("select xid, owner from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep')",
+			row := db.QueryRow("select xid, owner from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep', 'presub', 'sub')",
 				honkerid, u.UserID)
 			err := row.Scan(&url, &owner)
 			if err != nil {
@@ -1963,7 +1997,7 @@ func fingerlicker(w http.ResponseWriter, r *http.Request) {
 		idx = strings.IndexByte(name, '@')
 		if idx != -1 {
 			name = name[:idx]
-			if name+"@"+serverName != orig {
+			if !(name+"@"+serverName == orig || name+"@"+masqName == orig) {
 				log.Printf("foreign request rejected")
 				name = ""
 			}
@@ -1980,7 +2014,7 @@ func fingerlicker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	j := junk.New()
-	j["subject"] = fmt.Sprintf("acct:%s@%s", user.Name, serverName)
+	j["subject"] = fmt.Sprintf("acct:%s@%s", user.Name, masqName)
 	j["aliases"] = []string{user.URL}
 	l := junk.New()
 	l["rel"] = "self"
@@ -2074,9 +2108,10 @@ func servefile(w http.ResponseWriter, r *http.Request) {
 func nomoroboto(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "User-agent: *\n")
 	io.WriteString(w, "Disallow: /a\n")
-	io.WriteString(w, "Disallow: /d\n")
-	io.WriteString(w, "Disallow: /meme\n")
+	io.WriteString(w, "Disallow: /d/\n")
+	io.WriteString(w, "Disallow: /meme/\n")
 	io.WriteString(w, "Disallow: /o\n")
+	io.WriteString(w, "Disallow: /o/\n")
 	for _, u := range allusers() {
 		fmt.Fprintf(w, "Disallow: /%s/%s/%s/\n", userSep, u.Username, honkSep)
 	}
@@ -2210,25 +2245,19 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 
 var endoftheworld = make(chan bool)
 var readyalready = make(chan bool)
+var workinprogress = 0
 
 func enditall() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
 	signal.Notify(sig, syscall.SIGTERM)
 	<-sig
-	count := 0
 	log.Printf("stopping...")
-sendloop:
-	for {
-		select {
-		case endoftheworld <- true:
-			count++
-		default:
-			break sendloop
-		}
+	for i := 0; i < workinprogress; i++ {
+		endoftheworld <- true
 	}
 	log.Printf("waiting...")
-	for i := 0; i < count; i++ {
+	for i := 0; i < workinprogress; i++ {
 		<-readyalready
 	}
 	log.Printf("apocalypse")
@@ -2312,6 +2341,7 @@ func serve() {
 
 	getters.HandleFunc("/server", serveractor)
 	posters.HandleFunc("/server/inbox", serverinbox)
+	posters.HandleFunc("/inbox", serverinbox)
 
 	getters.HandleFunc("/style.css", serveasset)
 	getters.HandleFunc("/local.css", serveasset)

@@ -10,6 +10,16 @@
 </div>
 {{ if .HonkCSRF }}
 {{ template "honkform.html" . }}
+<script>
+var csrftoken = {{ .HonkCSRF }}
+var honksforpage = { }
+var curpagestate = { name: "{{ .PageName }}", arg : "{{ .PageArg }}" }
+var tophid = { }
+tophid[curpagestate.name + ":" + curpagestate.arg] = "{{ .TopHID }}"
+var servermsgs = { }
+servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
+</script>
+<script src="/honkpage.js{{ .JSParam }}"></script>
 {{ end }}
 </div>
 {{ if and .HonkCSRF (not .IsPreview) }}
@@ -17,6 +27,7 @@
 <p><button onclick="refreshhonks(this)">refresh</button><span></span>
 <button onclick="oldestnewest(this)">scroll down</button>
 </div>
+{{ if eq .ServerMessage "one honk maybe more" }} <script> hideelement("refreshbox")</script> {{ end }}
 {{ end }}
 <div id="honksonpage">
 <div>
@@ -29,16 +40,3 @@
 </div>
 </div>
 </main>
-{{ if .HonkCSRF }}
-<script>
-var csrftoken = {{ .HonkCSRF }}
-var honksforpage = { }
-var curpagestate = { name: "{{ .PageName }}", arg : "{{ .PageArg }}" }
-var tophid = { }
-tophid[curpagestate.name + ":" + curpagestate.arg] = "{{ .TopHID }}"
-var servermsgs = { }
-servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
-
-</script>
-<script src="/honkpage.js{{ .JSParam }}"></script>
-{{ end }}

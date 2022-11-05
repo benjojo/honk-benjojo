@@ -209,12 +209,10 @@ func rejectorigin(userid int64, origin string, isannounce bool) bool {
 	for _, f := range filts {
 		if isannounce && f.IsAnnounce {
 			if f.AnnounceOf == origin {
-				log.Printf("rejecting announce: %s", origin)
 				return true
 			}
 		}
 		if f.Actor == origin {
-			log.Printf("rejecting origin: %s", origin)
 			return true
 		}
 	}
@@ -330,9 +328,12 @@ func rejectxonk(xonk *Honk) bool {
 	rejectcache.Get(xonk.UserID, &m)
 	filts := m[rejectAnyKey]
 	filts = append(filts, m[xonk.Honker]...)
+	filts = append(filts, m[originate(xonk.Honker)]...)
 	filts = append(filts, m[xonk.Oonker]...)
+	filts = append(filts, m[originate(xonk.Oonker)]...)
 	for _, a := range xonk.Audience {
 		filts = append(filts, m[a]...)
+		filts = append(filts, m[originate(a)]...)
 	}
 	for _, f := range filts {
 		if cause := matchfilterX(xonk, f); cause != "" {
