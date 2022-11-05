@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2019 Ted Unangst
+  
+   Permission to use, copy, modify, and distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+  
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+   -->
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
+  <title>HONK(3)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">HONK(3)</td>
+    <td class="head-vol">Library Functions Manual</td>
+    <td class="head-rtitle">HONK(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">honk</code> &#x2014; <span class="Nd">API
+    access</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">In addition to the standard web interface, some functionality is
+    available via the <code class="Nm">honk</code> HTTP API.</p>
+<p class="Pp">With the exception of login, all requests should contain the
+    following form values.</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">action</var></dt>
+  <dd>The desired action. See below.</dd>
+  <dt><var class="Fa">token</var></dt>
+  <dd>An authorization token. Alternatively, may be passed in the
+      &#x201C;Authorization&#x201D; HTTP header.</dd>
+</dl>
+<p class="Pp">The API URL for all actions other than login and logout is
+    <span class="Pa">/api</span>.</p>
+<section class="Ss">
+<h2 class="Ss" id="login"><a class="permalink" href="#login">login</a></h2>
+<p class="Pp">Send a POST request to <span class="Pa">/dologin</span> with the
+    following form values.</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">username</var></dt>
+  <dd>User name.</dd>
+  <dt><var class="Fa">password</var></dt>
+  <dd>Pass phrase.</dd>
+  <dt><var class="Fa">gettoken</var></dt>
+  <dd>Must be &#x201C;1&#x201D;.</dd>
+</dl>
+<p class="Pp">This will return a token to be used for future requests. The token
+    is valid for one year.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="logout"><a class="permalink" href="#logout">logout</a></h2>
+<p class="Pp">Send a request to <span class="Pa">/logout</span> with the
+    <var class="Fa">token</var> to be expired.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="honk"><a class="permalink" href="#honk">honk</a></h2>
+<p class="Pp">The <var class="Fa">action</var> value should be
+    &#x201C;honk&#x201D;. The following values are recognized:</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">noise</var></dt>
+  <dd>The contents of the honk in markdown format.</dd>
+  <dt><var class="Fa">donk</var></dt>
+  <dd>A file to attach.</dd>
+  <dt><var class="Fa">donkdesc</var></dt>
+  <dd>A description for the attached file.</dd>
+  <dt><var class="Fa">placename</var></dt>
+  <dd>The name of an associated location.</dd>
+  <dt><var class="Fa">placeurl</var></dt>
+  <dd>The url of an associated location.</dd>
+  <dt><var class="Fa">placelat</var></dt>
+  <dd>The latitude of an associated location.</dd>
+  <dt><var class="Fa">placelong</var></dt>
+  <dd>The longitude of an associated location.</dd>
+  <dt><var class="Fa">timestart</var></dt>
+  <dd>The start time of an event.</dd>
+  <dt><var class="Fa">rid</var></dt>
+  <dd>The ActivityPub ID that this honk is in reply to.</dd>
+</dl>
+<p class="Pp">Upon success, the honk action will return the URL for the created
+    honk.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="gethonks"><a class="permalink" href="#gethonks">gethonks</a></h2>
+<p class="Pp">The &#x201C;gethonks&#x201D; <var class="Fa">action</var> can be
+    used to query for honks. The following parameters are used.</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">page</var></dt>
+  <dd>Should be one of &#x201C;home&#x201D; or &#x201C;atme&#x201D;.</dd>
+  <dt><var class="Fa">after</var></dt>
+  <dd>Only return honks after the specified ID.</dd>
+  <dt><var class="Fa">wait</var></dt>
+  <dd>If there are no results, wait this many seconds for something to
+    appear.</dd>
+</dl>
+<p class="Pp">The result will be returned as json.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Refer to the sample code in the <span class="Pa">toys</span>
+    directory.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="vim.3.html">vim(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 13, 2019</td>
+    <td class="foot-os">OpenBSD 6.6</td>
+  </tr>
+</table>
+</body>
+</html>

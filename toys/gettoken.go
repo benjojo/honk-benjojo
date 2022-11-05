@@ -1,0 +1,53 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+)
+
+func main() {
+	server := ""
+	username := ""
+	password := ""
+
+	flag.StringVar(&server, "server", server, "server to connnect")
+	flag.StringVar(&username, "username", username, "username to use")
+	flag.StringVar(&password, "password", password, "password to use")
+	flag.Parse()
+
+	if server == "" || username == "" || password == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	form := make(url.Values)
+	form.Add("username", username)
+	form.Add("password", password)
+	form.Add("gettoken", "1")
+	loginurl := fmt.Sprintf("https://%s/dologin", server)
+	req, err := http.NewRequest("POST", loginurl, strings.NewReader(form.Encode()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	answer, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		log.Fatalf("status: %d: %s", resp.StatusCode, answer)
+	}
+	fmt.Println(string(answer))
+}

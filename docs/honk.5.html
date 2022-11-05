@@ -42,7 +42,7 @@
     honking time&#x201D; to activate the honk form.</p>
 <p class="Pp">Honks are posted publicly.</p>
 <section class="Ss">
-<h2 class="Ss" id="BASICS"><a class="permalink" href="#BASICS">BASICS</a></h2>
+<h2 class="Ss" id="Basics"><a class="permalink" href="#Basics">Basics</a></h2>
 <p class="Pp">A subset of markdown is supported.</p>
 <dl class="Bl-tag">
   <dt>bold</dt>
@@ -62,6 +62,9 @@ int main() { return 0; }
     </pre>
     </div>
   </dd>
+  <dt>lists</dt>
+  <dd>Lists of items starting with either &#x2018;+&#x2019; or
+      &#x2018;-&#x2019;.</dd>
   <dt>images</dt>
   <dd>Inline images with img tags.
     <div class="Bd Pp">
@@ -73,10 +76,12 @@ int main() { return 0; }
   <dt>links</dt>
   <dd>URLs beginning with &#x201C;http&#x201D; or &#x201C;https&#x201D; will be
       autolinked.</dd>
+  <dt>rules</dt>
+  <dd>Exactly three dashes on a line, &#x201C;---&#x201D;, will become a
+      horizontal rule.</dd>
 </dl>
-</section>
-<section class="Ss">
-<h2 class="Ss" id="EXTRAS"><a class="permalink" href="#EXTRAS">EXTRAS</a></h2>
+<p class="Pp">If the first line of a honk begins with &#x201C;DZ:&#x201D;
+    (danger zone) it will be used a summary and the post marked sensitive.</p>
 <p class="Pp">Mentioning a specfic user such as (@user@example.social) will send
     a copy of the message to them. Several forms are supported.
     &#x2018;<code class="Li">@name</code>&#x2019; will work using the short name
@@ -86,6 +91,9 @@ int main() { return 0; }
     &#x2018;<code class="Li">@https://example.com</code>&#x2019; works as well.
     When honking back, the author of the parent post is automatically
   mentioned.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Extras"><a class="permalink" href="#Extras">Extras</a></h2>
 <p class="Pp">Threads from the tiny bird site may be included as quotes in a
     post via the <var class="Ar">hoot</var> operator followed by the URL.</p>
 <div class="Bd Bd-indent"><code class="Li">hoot:
@@ -140,7 +148,7 @@ A full list of emoji and memes may be found in the
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">November 7, 2019</td>
+    <td class="foot-date">November 13, 2019</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>

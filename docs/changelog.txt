@@ -1,5 +1,21 @@
 changelog
 
+-- 0.8.2
+
+++ Import command to preserve those embarssassing old posts from Twitter.
+
+++ Add a limited /api for the robotrons.
+
++ Resource usage stats on about page.
+
++ Unveil and pledge restrictions on OpenBSD.
+
++ Lists supported in markdown.
+
++ Rewrite admin console to avoid large dependencies.
+
++ "Bug" fixes.
+
 -- 0.8.1
 
 ++ Make it easier to upgrade by decoupling data dir from ".".

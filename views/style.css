@@ -75,6 +75,12 @@ header > details[open] {
 	margin-bottom: 1em;
 	opacity: 1.0;
 }
+header > details summary span {
+	display: none;
+}
+header > details[open] summary span {
+	display: inline;
+}
 header > details li {
 	margin: 1em 0em 1em 0em;
 }

@@ -9,6 +9,7 @@ create table doovers(dooverid integer primary key, dt text, tries integer, useri
 create table onts (ontology text, honkid integer);
 create table honkmeta (honkid integer, genus text, json text);
 create table hfcs (hfcsid integer primary key, userid integer, json text);
+create table tracks (xid text, fetches text);
 
 create index idx_honksxid on honks(xid);
 create index idx_honksconvoy on honks(convoy);
@@ -23,6 +24,7 @@ create index idx_ontology on onts(ontology);
 create index idx_onthonkid on onts(honkid);
 create index idx_honkmetaid on honkmeta(honkid);
 create index idx_hfcsuser on hfcs(userid);
+create index idx_trackhonkid on tracks(xid);
 
 create table config (key text, value text);
 

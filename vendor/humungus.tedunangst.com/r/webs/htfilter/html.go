@@ -36,16 +36,19 @@ import (
 type Filter struct {
 	Imager      func(node *html.Node) string
 	SpanClasses map[string]bool
+	BaseURL     *url.URL
 }
 
 var permittedtags = map[string]bool{
 	"div": true, "hr": true,
 	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
-	"table": true, "thead": true, "tbody": true, "th": true,
-	"tr": true, "td": true, "colgroup": true, "col": true,
+	"table": true, "thead": true, "tbody": true, "th": true, "tfoot": true,
+	"tr": true, "td": true, "colgroup": true, "col": true, "caption": true,
 	"p": true, "br": true, "pre": true, "code": true, "blockquote": true, "q": true,
+	"kbd": true, "time": true, "wbr": true, "aside": true,
+	"ruby": true, "rtc": true, "rb": true, "rt": true,
 	"samp": true, "mark": true, "ins": true, "dfn": true, "cite": true,
-	"abbr": true, "address": true,
+	"abbr": true, "address": true, "details": true, "summary": true,
 	"strong": true, "em": true, "b": true, "i": true, "s": true, "u": true,
 	"sub": true, "sup": true, "del": true, "tt": true, "small": true,
 	"ol": true, "ul": true, "li": true, "dl": true, "dt": true, "dd": true,
@@ -54,13 +57,23 @@ var permittedattr = map[string]bool{"colspan": true, "rowspan": true}
 var bannedtags = map[string]bool{"script": true, "style": true}
 
 // Returns the value for a node attribute.
-func GetAttr(node *html.Node, attr string) string {
+func GetAttr(node *html.Node, name string) string {
 	for _, a := range node.Attr {
-		if a.Key == attr {
+		if a.Key == name {
 			return a.Val
 		}
 	}
 	return ""
+}
+
+func SetAttr(node *html.Node, name string, value string) {
+	for _, a := range node.Attr {
+		if a.Key == name {
+			a.Val = value
+			return
+		}
+	}
+	node.Attr = append(node.Attr, html.Attribute{Key: name, Val: value})
 }
 
 // Returns true if this node has specified class
@@ -140,10 +153,21 @@ func (filt *Filter) render(w writer, node *html.Node) {
 			if err != nil {
 				href = "#BROKEN-" + href
 			} else {
+				if filt.BaseURL != nil {
+					hrefurl = filt.BaseURL.ResolveReference(hrefurl)
+				}
 				href = hrefurl.String()
 			}
 			templates.Fprintf(w, `<a href="%s" rel=noreferrer>`, href)
 		case tag == "img":
+			if filt.BaseURL != nil {
+				src := GetAttr(node, "src")
+				srcurl, err := url.Parse(src)
+				if err == nil {
+					srcurl = filt.BaseURL.ResolveReference(srcurl)
+					SetAttr(node, "src", srcurl.String())
+				}
+			}
 			if filt.Imager != nil {
 				div := filt.Imager(node)
 				w.WriteString(div)

@@ -17,8 +17,16 @@
 package gate
 
 import (
+	"context"
+	"errors"
 	"sync"
+	"time"
+	notrand "math/rand"
 )
+
+func init() {
+	notrand.Seed(time.Now().Unix())
+}
 
 // Limiter limits the number of concurrent outstanding operations.
 // Typical usage: limiter.Start(); defer limiter.Finish()
@@ -64,21 +72,35 @@ type result struct {
 // Saved results from the first call are returned.
 // (To only download a resource a single time.)
 type Serializer struct {
-	gates map[interface{}][]chan result
-	lock  sync.Mutex
+	gates   map[interface{}][]chan<- result
+	serials map[interface{}]*bool
+	cancels map[interface{}]context.CancelFunc
+	lock    sync.Mutex
 }
 
 // Create a new Serializer
 func NewSerializer() *Serializer {
 	g := new(Serializer)
-	g.gates = make(map[interface{}][]chan result)
+	g.gates = make(map[interface{}][]chan<- result)
+	g.serials = make(map[interface{}]*bool)
+	g.cancels = make(map[interface{}]context.CancelFunc)
 	return g
 }
+
+// Cancelled. Try again. Maybe.
+var Cancelled = errors.New("cancelled")
 
 // Call fn, gated by key.
 // Subsequent calls with the same key will wait until the first returns,
 // then all functions return the same result.
 func (g *Serializer) Call(key interface{}, fn func() (interface{}, error)) (interface{}, error) {
+	ctxfn := func(context.Context) (interface{}, error) {
+		return fn()
+	}
+	return g.CallWithContext(key, context.Background(), ctxfn)
+}
+
+func (g *Serializer) CallWithContext(key interface{}, ctx context.Context, fn func(context.Context) (interface{}, error)) (interface{}, error) {
 	g.lock.Lock()
 	inflight, ok := g.gates[key]
 	if ok {
@@ -86,25 +108,76 @@ func (g *Serializer) Call(key interface{}, fn func() (interface{}, error)) (inte
 		g.gates[key] = append(inflight, c)
 		g.lock.Unlock()
 		r := <-c
-		close(c)
 		return r.res, r.err
 	}
 	g.gates[key] = inflight
+	var dead bool
+	g.serials[key] = &dead
+	ctx, cancel := context.WithCancel(ctx)
+	g.cancels[key] = cancel
 	g.lock.Unlock()
 
-	res, err := fn()
+	res, err := fn(ctx)
 
 	g.lock.Lock()
+	cancel()
+	// serial check, we may not know why ctx is cancelled
+	if dead {
+		return nil, Cancelled
+	}
+	// we won, clear space for next call and send results
 	inflight = g.gates[key]
 	delete(g.gates, key)
+	delete(g.serials, key)
+	delete(g.cancels, key)
+	sendresults(res, err, inflight)
 	g.lock.Unlock()
-	if len(inflight) > 0 {
+	return res, err
+}
+
+func sendresults(res interface{}, err error, chans []chan<- result) {
+	if len(chans) > 0 {
 		r := result{res: res, err: err}
 		go func() {
-			for _, c := range inflight {
+			for _, c := range chans {
 				c <- r
+				close(c)
 			}
 		}()
 	}
-	return res, err
+}
+
+func (g *Serializer) cancel(key interface{}) {
+	dead, ok := g.serials[key]
+	if ok {
+		*dead = true
+		delete(g.serials, key)
+	} else {
+		return
+	}
+	if cancel := g.cancels[key]; cancel != nil {
+		cancel()
+		delete(g.cancels, key)
+	}
+	if inflight := g.gates[key]; inflight != nil {
+		sendresults(nil, Cancelled, inflight)
+		delete(g.gates, key)
+	}
+}
+
+// Cancel any operations in progress.
+// The calling function may block, but waiters will return immediately.
+func (g *Serializer) Cancel(key interface{}) {
+	g.lock.Lock()
+	g.cancel(key)
+	g.lock.Unlock()
+}
+
+// Cancel everything.
+func (g *Serializer) CancelAll() {
+	g.lock.Lock()
+	for key := range g.serials {
+		g.cancel(key)
+	}
+	g.lock.Unlock()
 }

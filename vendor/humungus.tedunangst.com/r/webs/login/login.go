@@ -61,6 +61,7 @@ func Checker(handler http.Handler) http.Handler {
 }
 
 // Check for auth cookie. On failure redirects to /login.
+// Must already be wrapped in Checker.
 func Required(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ok := GetUserInfo(r) != nil
@@ -69,6 +70,20 @@ func Required(handler http.Handler) http.Handler {
 			return
 		}
 		handler.ServeHTTP(w, r)
+	})
+}
+
+// Check that the form value "token" is valid auth token
+func TokenRequired(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userinfo, ok := checkformtoken(r)
+		if ok {
+			ctx := context.WithValue(r.Context(), thekey, userinfo)
+			r = r.WithContext(ctx)
+			handler.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "valid token required", http.StatusForbidden)
+		}
 	})
 }
 
@@ -158,6 +173,7 @@ var authregex = regexp.MustCompile("^[[:alnum:]]+$")
 var authlen = 32
 
 var stmtUserName, stmtUserAuth, stmtUpdateUser, stmtSaveAuth, stmtDeleteAuth *sql.Stmt
+var stmtDeleteOneAuth *sql.Stmt
 var csrfkey string
 var securecookies bool
 
@@ -193,6 +209,10 @@ func Init(db *sql.DB) {
 		log.Panic(err)
 	}
 	stmtDeleteAuth, err = db.Prepare("delete from auth where userid = ?")
+	if err != nil {
+		log.Panic(err)
+	}
+	stmtDeleteOneAuth, err = db.Prepare("delete from auth where hash = ?")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -234,6 +254,21 @@ func getauthcookie(r *http.Request) string {
 	return auth
 }
 
+func getformtoken(r *http.Request) string {
+	token := r.FormValue("token")
+	if token == "" {
+		token = r.Header.Get("Authorization")
+	}
+	if token == "" {
+		return ""
+	}
+	if !(len(token) == authlen && authregex.MatchString(token)) {
+		log.Printf("login: bad token: %s", token)
+		return ""
+	}
+	return token
+}
+
 var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInfo, bool) {
 	hasher := sha512.New512_256()
 	hasher.Write([]byte(cookie))
@@ -260,6 +295,16 @@ func checkauthcookie(r *http.Request) (*UserInfo, bool) {
 	}
 	var userinfo *UserInfo
 	ok := validcookies.Get(cookie, &userinfo)
+	return userinfo, ok
+}
+
+func checkformtoken(r *http.Request) (*UserInfo, bool) {
+	token := getformtoken(r)
+	if token == "" {
+		return nil, false
+	}
+	var userinfo *UserInfo
+	ok := validcookies.Get(token, &userinfo)
 	return userinfo, ok
 }
 
@@ -293,12 +338,17 @@ func hexsum(h hash.Hash) string {
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
+	gettoken := r.FormValue("gettoken") == "1"
 
 	if len(username) == 0 || len(username) > userlen ||
 		!userregex.MatchString(username) || len(password) == 0 ||
 		len(password) > passlen {
 		log.Printf("login: invalid password attempt")
-		loginredirect(w, r)
+		if gettoken {
+			http.Error(w, "incorrect", http.StatusForbidden)
+		} else {
+			loginredirect(w, r)
+		}
 		return
 	}
 	userid, hash, ok := loaduser(username)
@@ -308,14 +358,22 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !rateandwait(username) {
-		loginredirect(w, r)
+		if gettoken {
+			http.Error(w, "incorrect", http.StatusForbidden)
+		} else {
+			loginredirect(w, r)
+		}
 		return
 	}
 
 	err := bcrypt.CompareHashAndPassword(hash, []byte(password))
 	if err != nil {
 		log.Printf("login: incorrect password")
-		loginredirect(w, r)
+		if gettoken {
+			http.Error(w, "incorrect", http.StatusForbidden)
+		} else {
+			loginredirect(w, r)
+		}
 		return
 	}
 	hasher := sha512.New512_256()
@@ -324,14 +382,18 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 
 	maxage := 3600 * 24 * 30
 
-	// but when do we expire out of the database?
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth",
-		Value:    auth,
-		MaxAge:   maxage,
-		Secure:   securecookies,
-		HttpOnly: true,
-	})
+	if gettoken {
+		maxage = 3600 * 24 * 30 * 12
+	} else {
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth",
+			Value:    auth,
+			MaxAge:   maxage,
+			Secure:   securecookies,
+			HttpOnly: true,
+		})
+	}
 
 	hasher.Reset()
 	hasher.Write([]byte(auth))
@@ -344,12 +406,25 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("login: successful login")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	if gettoken {
+		w.Write([]byte(auth))
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
 }
 
 func deleteauth(userid int64) error {
 	defer validcookies.Flush()
 	_, err := stmtDeleteAuth.Exec(userid)
+	return err
+}
+
+func deleteoneauth(auth string) error {
+	defer validcookies.Flush()
+	hasher := sha512.New512_256()
+	hasher.Write([]byte(auth))
+	authhash := hexsum(hasher)
+	_, err := stmtDeleteOneAuth.Exec(authhash)
 	return err
 }
 
@@ -370,6 +445,12 @@ func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 			Secure:   securecookies,
 			HttpOnly: true,
 		})
+	}
+	_, ok = checkformtoken(r)
+	if ok {
+		auth := getformtoken(r)
+		deleteoneauth(auth)
+		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

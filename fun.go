@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -95,6 +96,7 @@ func reverbolate(userid int64, honks []*Honk) {
 			var htf htfilter.Filter
 			htf.Imager = replaceimgsand(zap, false)
 			htf.SpanClasses = allowedclasses
+			htf.BaseURL, _ = url.Parse(h.XID)
 			p, _ := htf.String(h.Precis)
 			n, _ := htf.String(h.Noise)
 			h.Precis = string(p)
@@ -183,6 +185,7 @@ func inlineimgsfor(honk *Honk) func(node *html.Node) string {
 func imaginate(honk *Honk) {
 	var htf htfilter.Filter
 	htf.Imager = inlineimgsfor(honk)
+	htf.BaseURL, _ = url.Parse(honk.XID)
 	htf.String(honk.Noise)
 }
 
@@ -204,7 +207,6 @@ func translate(honk *Honk, redoimages bool) {
 	honk.Precis = markitzero(strings.TrimSpace(honk.Precis))
 
 	noise = strings.TrimSpace(noise)
-	noise = quickrename(noise, honk.UserID)
 	noise = markitzero(noise)
 	honk.Noise = noise
 	honk.Onts = oneofakind(ontologies(honk.Noise))
@@ -256,7 +258,7 @@ func xfiltrate() string {
 	return xcelerate(b[:])
 }
 
-var re_hashes = regexp.MustCompile(`(?:^| )#[[:alnum:]]*[[:alpha:]][[:alnum:]_-]*`)
+var re_hashes = regexp.MustCompile(`(?:^| |>)#[[:alnum:]]*[[:alpha:]][[:alnum:]_-]*`)
 
 func ontologies(s string) []string {
 	m := re_hashes.FindAllString(s, -1)
@@ -375,7 +377,7 @@ func memetize(honk *Honk) {
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-var re_quickmention = regexp.MustCompile("(^| )@[[:alnum:]]+( |$)")
+var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]]+([ \n]|$)")
 
 func quickrename(s string, userid int64) string {
 	nonstop := true
@@ -383,13 +385,15 @@ func quickrename(s string, userid int64) string {
 		nonstop = false
 		s = re_quickmention.ReplaceAllStringFunc(s, func(m string) string {
 			prefix := ""
-			if m[0] == ' ' {
-				prefix = " "
+			if m[0] == ' ' || m[0] == '\n' {
+				prefix = m[:1]
 				m = m[1:]
 			}
 			prefix += "@"
 			m = m[1:]
-			if m[len(m)-1] == ' ' {
+			tail := ""
+			if m[len(m)-1] == ' ' || m[len(m)-1] == '\n' {
+				tail = m[len(m)-1:]
 				m = m[:len(m)-1]
 			}
 
@@ -402,7 +406,7 @@ func quickrename(s string, userid int64) string {
 					m = name
 				}
 			}
-			return prefix + m + " "
+			return prefix + m + tail
 		})
 	}
 	return s
@@ -490,10 +494,11 @@ func originate(u string) string {
 }
 
 var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool) {
-	row := stmtGetXonker.QueryRow(xid, "handle")
 	var handle string
+	row := stmtGetXonker.QueryRow(xid, "handle")
 	err := row.Scan(&handle)
 	if err != nil {
+		log.Printf("need to get a handle: %s", xid)
 		info, err := investigate(xid)
 		if err != nil {
 			m := re_unurl.FindStringSubmatch(xid)
@@ -504,10 +509,6 @@ var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool)
 			}
 		} else {
 			handle = info.Name
-			_, err = stmtSaveXonker.Exec(xid, handle, "handle")
-			if err != nil {
-				log.Printf("error saving handle: %s", err)
-			}
 		}
 	}
 	return handle, true
@@ -524,10 +525,6 @@ func handles(xid string) (string, string) {
 		return xid, xid
 	}
 	return handle, handle + "@" + originate(xid)
-}
-
-func prepend(s string, x []string) []string {
-	return append([]string{s}, x...)
 }
 
 func butnottooloud(aud []string) {
@@ -584,9 +581,20 @@ func ziggy(userid int64) *KeyInfo {
 }
 
 var zaggies = cache.New(cache.Options{Filler: func(keyname string) (*rsa.PublicKey, bool) {
-	row := stmtGetXonker.QueryRow(keyname, "pubkey")
 	var data string
+	row := stmtGetXonker.QueryRow(keyname, "pubkey")
 	err := row.Scan(&data)
+	if err != nil {
+		log.Printf("hitting the webs for missing pubkey: %s", keyname)
+		j, err := GetJunk(keyname)
+		if err != nil {
+			log.Printf("error getting %s pubkey: %s", keyname, err)
+			return nil, true
+		}
+		allinjest(originate(keyname), j)
+		row = stmtGetXonker.QueryRow(keyname, "pubkey")
+		err = row.Scan(&data)
+	}
 	if err == nil {
 		_, key, err := httpsig.DecodeKey(data)
 		if err != nil {
@@ -594,37 +602,8 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (*rsa.PublicK
 		}
 		return key, true
 	}
-	log.Printf("hitting the webs for missing pubkey: %s", keyname)
-	j, err := GetJunk(keyname)
-	if err != nil {
-		log.Printf("error getting %s pubkey: %s", keyname, err)
-		return nil, true
-	}
-	keyobj, ok := j.GetMap("publicKey")
-	if ok {
-		j = keyobj
-	}
-	data, ok = j.GetString("publicKeyPem")
-	if !ok {
-		log.Printf("error finding %s pubkey", keyname)
-		return nil, true
-	}
-	_, ok = j.GetString("owner")
-	if !ok {
-		log.Printf("error finding %s pubkey owner", keyname)
-		return nil, true
-	}
-	_, key, err := httpsig.DecodeKey(data)
-	if err != nil {
-		log.Printf("error decoding %s pubkey: %s", keyname, err)
-		return nil, true
-	}
-	_, err = stmtSaveXonker.Exec(keyname, data, "pubkey")
-	if err != nil {
-		log.Printf("error saving key: %s", err)
-	}
-	return key, true
-}})
+	return nil, true
+}, Limit: 512})
 
 func zaggy(keyname string) *rsa.PublicKey {
 	var key *rsa.PublicKey

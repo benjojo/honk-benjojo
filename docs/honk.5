@@ -29,7 +29,7 @@ The process begins by pressing the button marked
 to activate the honk form.
 .Pp
 Honks are posted publicly.
-.Ss BASICS
+.Ss Basics
 A subset of markdown is supported.
 .Bl -tag -width tenletters
 .It bold
@@ -46,6 +46,11 @@ Inline `code fragments` with single ticks.
 int main() { return 0; }
 ```
 .Ed
+.It lists
+Lists of items starting with either
+.Sq +
+or
+.Sq - .
 .It images
 Inline images with img tags.
 .Bd -literal
@@ -57,8 +62,16 @@ URLs beginning with
 or
 .Dq https
 will be autolinked.
+.It rules
+Exactly three dashes on a line,
+.Dq --- ,
+will become a horizontal rule.
 .El
-.Ss EXTRAS
+.Pp
+If the first line of a honk begins with
+.Dq DZ:
+(danger zone) it will be used a summary and the post marked sensitive. 
+.Pp
 Mentioning a specfic user such as
 .Pq @user@example.social
 will send a copy of the message to them.
@@ -72,7 +85,7 @@ will work for anyone.
 .Ql @https://example.com
 works as well.
 When honking back, the author of the parent post is automatically mentioned.
-.Pp
+.Ss Extras
 Threads from the tiny bird site may be included as quotes in a post via the
 .Ar hoot
 operator followed by the URL.

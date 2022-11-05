@@ -150,7 +150,7 @@ func initdb() {
 	setconfig("dbversion", myVersion)
 
 	setconfig("servermsg", "<h2>Things happen.</h2>")
-	setconfig("aboutmsg", "<h3>What is honk?</h3>\n<p>Honk is amazing!")
+	setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
 	setconfig("loginmsg", "<h2>login</h2>")
 	setconfig("debug", 0)
 

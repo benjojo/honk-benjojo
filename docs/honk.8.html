@@ -40,7 +40,7 @@
     other federated servers. This is the admin manual. For user operation, see
     <a class="Xr" href="honk.1.html">honk(1)</a>.</p>
 <section class="Ss">
-<h2 class="Ss" id="SETUP"><a class="permalink" href="#SETUP">SETUP</a></h2>
+<h2 class="Ss" id="Setup"><a class="permalink" href="#Setup">Setup</a></h2>
 <p class="Pp">Set up a TLS reverse proxy. <code class="Nm">honk</code> can
     listen on TCP or unix sockets, but will not terminate TLS. https is a
     required component for federation.</p>
@@ -53,7 +53,7 @@ proxy_set_header Host $http_host;
 </div>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="BUILD"><a class="permalink" href="#BUILD">BUILD</a></h2>
+<h2 class="Ss" id="Build"><a class="permalink" href="#Build">Build</a></h2>
 <p class="Pp">Building <code class="Nm">honk</code> requires a go compiler and
     libsqlite. On <span class="Ux">OpenBSD</span> this is the go and sqlite3
     packages. Other platforms may require additional development libraries or
@@ -61,7 +61,7 @@ proxy_set_header Host $http_host;
     building from source can take several seconds.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h2>
+<h2 class="Ss" id="Options"><a class="permalink" href="#Options">Options</a></h2>
 <p class="Pp">The following options control where <code class="Nm">honk</code>
     looks for data.</p>
 <dl class="Bl-tag">
@@ -74,17 +74,18 @@ proxy_set_header Host $http_host;
 </dl>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="INIT"><a class="permalink" href="#INIT">INIT</a></h2>
+<h2 class="Ss" id="Init"><a class="permalink" href="#Init">Init</a></h2>
 <p class="Pp">Run the <code class="Ic">init</code> command. This will create the
-    database and ask four questions, as well as creating the initial user.</p>
+    database and ask four questions, as well as creating the initial user. See
+    below about importing existing data.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="OPERATION"><a class="permalink" href="#OPERATION">OPERATION</a></h2>
+<h2 class="Ss" id="Operation"><a class="permalink" href="#Operation">Operation</a></h2>
 <p class="Pp">Run honk. Log messages are sent to stderr and should probably be
     redirected to a file.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="CUSTOMIZATION"><a class="permalink" href="#CUSTOMIZATION">CUSTOMIZATION</a></h2>
+<h2 class="Ss" id="Customization"><a class="permalink" href="#Customization">Customization</a></h2>
 <p class="Pp">Add custom memes (stickers) to the <span class="Pa">memes</span>
     data directory. Image and video files are supported.</p>
 <p class="Pp">Add custom emus (emoji) to the <span class="Pa">emus</span> data
@@ -105,22 +106,22 @@ proxy_set_header Host $http_host;
 </dl>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="USER_ADMIN"><a class="permalink" href="#USER_ADMIN">USER
-  ADMIN</a></h2>
+<h2 class="Ss" id="User_Admin"><a class="permalink" href="#User_Admin">User
+  Admin</a></h2>
 <p class="Pp">New users can be added with the <code class="Ic">adduser</code>
     command. This is discouraged.</p>
 <p class="Pp">Passwords may be reset with the <code class="Ic">chpass</code>
     <var class="Ar">username</var> command.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="MAINTENANCE"><a class="permalink" href="#MAINTENANCE">MAINTENANCE</a></h2>
+<h2 class="Ss" id="Maintenance"><a class="permalink" href="#Maintenance">Maintenance</a></h2>
 <p class="Pp">The database may grow large over time. The
     <code class="Ic">cleanup</code> [<var class="Ar">days</var>] command exists
     to purge old data, by default 30 days. This removes unreferenced, unsaved
     posts and attachments. It does not remove any original content.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="UPGRADE"><a class="permalink" href="#UPGRADE">UPGRADE</a></h2>
+<h2 class="Ss" id="Upgrade"><a class="permalink" href="#Upgrade">Upgrade</a></h2>
 <p class="Pp">Stop the old honk process. Backup the database. Perform the
     upgrade with the <code class="Ic">upgrade</code> command. Restart.</p>
 <p class="Pp">There's also a <span class="Pa">blob.db</span> file which is
@@ -129,16 +130,27 @@ proxy_set_header Host $http_host;
     <code class="Ic">version</code> command.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="SECURITY"><a class="permalink" href="#SECURITY">SECURITY</a></h2>
+<h2 class="Ss" id="Security"><a class="permalink" href="#Security">Security</a></h2>
 <p class="Pp"><code class="Nm">honk</code> is not currently hardened against
     SSRF, server side request forgery. Be mindful of what other services may be
     exposed via localhost or the local network.</p>
 </section>
 <section class="Ss">
-<h2 class="Ss" id="DEBUG"><a class="permalink" href="#DEBUG">DEBUG</a></h2>
+<h2 class="Ss" id="Debug"><a class="permalink" href="#Debug">Debug</a></h2>
 <p class="Pp">Debug mode may be enabled or disabled by running
     <code class="Ic">debug</code> <var class="Ar">on|off</var>. In debug mode,
     secure cookies are disabled and templates are reloaded every request.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Import"><a class="permalink" href="#Import">Import</a></h2>
+<p class="Pp">Data may be imported and converted from other services using the
+    <code class="Ic">import</code> command. Posts are imported and backdated to
+    appear as old honks. No other information is imported.</p>
+<p class="Pp">Currently limited to Twitter import. This requires a Twitter data
+    archive. After unzipping the data archive, navigate to the tweet_media
+    directory and unzip any zip files contained within.</p>
+<div class="Bd Bd-indent"><code class="Li">./honk import username twitter
+  source-directory</code></div>
 </section>
 </section>
 <section class="Sh">
@@ -212,7 +224,7 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">November 7, 2019</td>
+    <td class="foot-date">November 13, 2019</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>

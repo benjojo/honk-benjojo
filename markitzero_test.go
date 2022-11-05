@@ -94,3 +94,15 @@ func TestImagelink(t *testing.T) {
 	output := `an image <img alt="caption" src="https://example.com/wherever"> and linked <a href="example.com"><img src="there"></a>`
 	doonezerotest(t, input, output)
 }
+
+func TestLists(t *testing.T) {
+	input := `hello
++ a list
++ the list
+
+para
+
+- singleton`
+	output := `hello<ul><li>a list<li>the list</ul><p>para<ul><li>singleton</ul><p>`
+	doonezerotest(t, input, output)
+}

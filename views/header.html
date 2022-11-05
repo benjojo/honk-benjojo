@@ -17,7 +17,7 @@
 <header>
 {{ if .UserInfo }}
 <details id="topmenu">
-<summary>menu</summary>
+<summary>menu<span> {{ .UserInfo.Username }}</span></summary>
 <ul>
 <li><a id="homelink" href="/">home</a>
 <li><a id="atmelink" href="/atme">@me</a>

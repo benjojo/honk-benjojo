@@ -15,16 +15,25 @@
 
 package main
 
+/*
+#include <termios.h>
+*/
+import "C"
 import (
+	"bufio"
+	"fmt"
 	"io/ioutil"
 	"log"
-
-	"github.com/gdamore/tcell"
-	"github.com/rivo/tview"
+	"os"
+	"os/signal"
 )
 
 func adminscreen() {
 	log.SetOutput(ioutil.Discard)
+	stdout := bufio.NewWriter(os.Stdout)
+	esc := "\x1b"
+	smcup := esc + "[?1049h"
+	rmcup := esc + "[?1049l"
 
 	messages := []*struct {
 		name  string
@@ -47,129 +56,159 @@ func adminscreen() {
 			text:  string(loginMsg),
 		},
 	}
+	cursel := 0
 
-	app := tview.NewApplication()
-	var maindriver func(event *tcell.EventKey) *tcell.EventKey
-
-	table := tview.NewTable().SetFixed(1, 0).SetSelectable(true, false).
-		SetSelectedStyle(tcell.ColorBlack, tcell.ColorPurple, 0)
-
-	mainframe := tview.NewFrame(table)
-	mainframe.AddText(tview.Escape("honk admin - [q] quit"),
-		true, 0, tcell.ColorPurple)
-	mainframe.SetBorders(1, 0, 1, 0, 4, 0)
-
-	dupecell := func(base *tview.TableCell) *tview.TableCell {
-		rv := new(tview.TableCell)
-		*rv = *base
-		return rv
+	hidecursor := func() {
+		stdout.WriteString(esc + "[?25l")
+	}
+	showcursor := func() {
+		stdout.WriteString(esc + "[?12;25h")
+	}
+	movecursor := func(x, y int) {
+		stdout.WriteString(fmt.Sprintf(esc+"[%d;%dH", y, x))
+	}
+	moveleft := func() {
+		stdout.WriteString(esc + "[1D")
+	}
+	clearscreen := func() {
+		stdout.WriteString(esc + "[2J")
+	}
+	clearline := func() {
+		stdout.WriteString(esc + "[2K")
+	}
+	colorfn := func(code int) func(string) string {
+		return func(s string) string {
+			return fmt.Sprintf(esc+"[%dm"+"%s"+esc+"[0m", code, s)
+		}
+	}
+	reverse := colorfn(7)
+	magenta := colorfn(35)
+	readchar := func() byte {
+		var buf [1]byte
+		os.Stdin.Read(buf[:])
+		c := buf[0]
+		return c
 	}
 
-	showtable := func() {
-		table.Clear()
+	savedtio := new(C.struct_termios)
+	C.tcgetattr(1, savedtio)
+	restore := func() {
+		stdout.WriteString(rmcup)
+		showcursor()
+		stdout.Flush()
+		C.tcsetattr(1, C.TCSAFLUSH, savedtio)
+	}
+	defer restore()
+	go func() {
+		sig := make(chan os.Signal)
+		signal.Notify(sig, os.Interrupt)
+		<-sig
+		restore()
+		os.Exit(0)
+	}()
 
-		row := 0
-		{
-			col := 0
-			headcell := tview.TableCell{
-				Color:         tcell.ColorWhite,
-				NotSelectable: true,
+	init := func() {
+		tio := new(C.struct_termios)
+		C.tcgetattr(1, tio)
+		tio.c_lflag = tio.c_lflag & ^C.uint(C.ECHO|C.ICANON)
+		C.tcsetattr(1, C.TCSADRAIN, tio)
+
+		hidecursor()
+		stdout.WriteString(smcup)
+		clearscreen()
+		movecursor(1, 1)
+		stdout.Flush()
+	}
+
+	msglineno := func(idx int) int {
+		return 4 + idx*2
+	}
+
+	drawmessage := func(idx int) {
+		line := msglineno(idx)
+		movecursor(4, line)
+		label := messages[idx].label
+		if idx == cursel {
+			label = reverse(label)
+		}
+		stdout.WriteString(fmt.Sprintf("%s %s", label, messages[idx].text))
+	}
+
+	drawscreen := func() {
+		clearscreen()
+		movecursor(4, msglineno(-1))
+		stdout.WriteString(magenta(serverName + " admin panel"))
+		for i := range messages {
+			drawmessage(i)
+		}
+		movecursor(4, msglineno(len(messages)))
+		stdout.WriteString(magenta("j/k to move - q to quit - enter to edit"))
+		stdout.Flush()
+	}
+
+	selectnext := func() {
+		if cursel < len(messages)-1 {
+			cursel++
+		}
+		drawscreen()
+	}
+	selectprev := func() {
+		if cursel > 0 {
+			cursel--
+		}
+		drawscreen()
+	}
+	editsel := func() {
+		movecursor(4, msglineno(cursel))
+		clearline()
+		m := messages[cursel]
+		stdout.WriteString(reverse(magenta(m.label)))
+		text := m.text
+		stdout.WriteString(" ")
+		stdout.WriteString(text)
+		showcursor()
+		stdout.Flush()
+	loop:
+		for {
+			c := readchar()
+			switch c {
+			case '\n':
+				break loop
+			case 127:
+				if len(text) > 0 {
+					moveleft()
+					stdout.WriteString(" ")
+					moveleft()
+					text = text[:len(text)-1]
+				}
+			default:
+				text = text + string(c)
+				stdout.WriteString(string(c))
 			}
-			cell := dupecell(&headcell)
-			cell.Text = "which       "
-			table.SetCell(row, col, cell)
-			col++
-			cell = dupecell(&headcell)
-			cell.Text = "message"
-			table.SetCell(row, col, cell)
-
-			row++
+			stdout.Flush()
 		}
-		for i := 0; i < 3; i++ {
-			col := 0
-			msg := messages[i]
-			headcell := tview.TableCell{
-				Color: tcell.ColorWhite,
-			}
-			cell := dupecell(&headcell)
-			cell.Text = msg.label
-			table.SetCell(row, col, cell)
-			col++
-			cell = dupecell(&headcell)
-			cell.Text = tview.Escape(msg.text)
-			table.SetCell(row, col, cell)
-
-			row++
-		}
-
-		app.SetInputCapture(maindriver)
-		app.SetRoot(mainframe, true)
+		m.text = text
+		updateconfig(m.name, m.text)
+		hidecursor()
+		drawscreen()
 	}
 
-	arrowadapter := func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyDown:
-			return tcell.NewEventKey(tcell.KeyTab, '\t', tcell.ModNone)
-		case tcell.KeyUp:
-			return tcell.NewEventKey(tcell.KeyBacktab, '\t', tcell.ModNone)
-		}
-		return event
-	}
+	init()
+	drawscreen()
 
-	editform := tview.NewForm()
-	descbox := tview.NewInputField().SetLabel("msg: ").SetFieldWidth(60)
-	editform.AddButton("save", nil)
-	editform.AddButton("cancel", nil)
-	savebutton := editform.GetButton(0)
-	editform.SetFieldTextColor(tcell.ColorBlack)
-	editform.SetFieldBackgroundColor(tcell.ColorPurple)
-	editform.SetLabelColor(tcell.ColorWhite)
-	editform.SetButtonTextColor(tcell.ColorPurple)
-	editform.SetButtonBackgroundColor(tcell.ColorBlack)
-	editform.GetButton(1).SetSelectedFunc(showtable)
-	editform.SetCancelFunc(showtable)
-
-	editframe := tview.NewFrame(editform)
-	editframe.SetBorders(1, 0, 1, 0, 4, 0)
-
-	showform := func() {
-		editform.Clear(false)
-		editform.AddFormItem(descbox)
-		app.SetInputCapture(arrowadapter)
-		app.SetRoot(editframe, true)
-	}
-
-	editmsg := func(which int) {
-		msg := messages[which]
-		editframe.Clear()
-		editframe.AddText(tview.Escape("edit "+msg.label+" message"),
-			true, 0, tcell.ColorPurple)
-		descbox.SetText(msg.text)
-		savebutton.SetSelectedFunc(func() {
-			msg.text = descbox.GetText()
-			updateconfig(msg.name, msg.text)
-			showtable()
-		})
-		showform()
-	}
-
-	table.SetSelectedFunc(func(row, col int) {
-		editmsg(row - 1)
-	})
-
-	maindriver = func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'e':
-			r, _ := table.GetSelection()
-			r--
-			editmsg(r)
+	for {
+		c := readchar()
+		switch c {
 		case 'q':
-			app.Stop()
-			return nil
-		}
-		return event
-	}
+			return
+		case 'j':
+			selectnext()
+		case 'k':
+			selectprev()
+		case '\n':
+			editsel()
+		default:
 
-	showtable()
-	app.Run()
+		}
+	}
 }

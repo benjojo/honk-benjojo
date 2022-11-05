@@ -1,0 +1,9 @@
+These are all standalone programs, meant to be compiled individually.
+
+A little of this, a little of that.
+
+gettoken.go - obtains an authorization token
+
+saytheday.go - posts a new honk
+
+youvegothonks.go - polls for new mesages

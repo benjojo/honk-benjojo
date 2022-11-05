@@ -2,6 +2,7 @@
 <main>
 <div class="info">
 <p>account - <a href="/logout?CSRF={{ .LogoutCSRF }}">logout</a>
+<p>username: {{ .User.Name }}
 <div>
 <form id="aboutform" action="/saveuser" method="POST">
 <input type="hidden" name="CSRF" value="{{ .UserCSRF }}">

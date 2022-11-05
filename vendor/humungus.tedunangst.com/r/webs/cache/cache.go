@@ -36,10 +36,12 @@ type Filler func(key interface{}) (interface{}, bool)
 // The cache will consider itself stale after Duration passes from
 // the first fill.
 // Invalidator allows invalidating multiple dependent caches.
+// Limit is max entries, fifo fashion.
 type Options struct {
 	Filler      interface{}
 	Duration    time.Duration
 	Invalidator *Invalidator
+	Limit       int
 }
 
 // The cache object
@@ -50,6 +52,9 @@ type Cache struct {
 	stale      time.Time
 	duration   time.Duration
 	serializer *gate.Serializer
+	serialno int
+	fifo       []interface{}
+	fifopos    int
 }
 
 // An Invalidator is a collection of caches to be cleared or flushed together.
@@ -63,18 +68,20 @@ func New(options Options) *Cache {
 	c := new(Cache)
 	c.cache = make(map[interface{}]interface{})
 	fillfn := options.Filler
-	ftype := reflect.TypeOf(fillfn)
-	if ftype.Kind() != reflect.Func {
-		panic("cache filler is not function")
-	}
-	if ftype.NumIn() != 1 || ftype.NumOut() != 2 {
-		panic("cache filler has wrong argument count")
-	}
-	c.filler = func(key interface{}) (interface{}, bool) {
-		vfn := reflect.ValueOf(fillfn)
-		args := []reflect.Value{reflect.ValueOf(key)}
-		rv := vfn.Call(args)
-		return rv[0].Interface(), rv[1].Bool()
+	if fillfn != nil {
+		ftype := reflect.TypeOf(fillfn)
+		if ftype.Kind() != reflect.Func {
+			panic("cache filler is not function")
+		}
+		if ftype.NumIn() != 1 || ftype.NumOut() != 2 {
+			panic("cache filler has wrong argument count")
+		}
+		c.filler = func(key interface{}) (interface{}, bool) {
+			vfn := reflect.ValueOf(fillfn)
+			args := []reflect.Value{reflect.ValueOf(key)}
+			rv := vfn.Call(args)
+			return rv[0].Interface(), rv[1].Bool()
+		}
 	}
 	if options.Duration != 0 {
 		c.duration = options.Duration
@@ -84,6 +91,9 @@ func New(options Options) *Cache {
 		options.Invalidator.caches = append(options.Invalidator.caches, c)
 	}
 	c.serializer = gate.NewSerializer()
+	if options.Limit != 0 {
+		c.fifo = make([]interface{}, options.Limit)
+	}
 	return c
 }
 
@@ -96,8 +106,14 @@ func (cache *Cache) GetAndLock(key interface{}, value interface{}) bool {
 		cache.stale = time.Now().Add(cache.duration)
 		cache.cache = make(map[interface{}]interface{})
 	}
+recheck:
 	v, ok := cache.cache[key]
 	if !ok {
+		if cache.filler == nil {
+			return false
+		}
+		serial := cache.serialno
+		cache.lock.Unlock()
 		r, err := cache.serializer.Call(key, func() (interface{}, error) {
 			v, ok := cache.filler(key)
 			if !ok {
@@ -105,11 +121,15 @@ func (cache *Cache) GetAndLock(key interface{}, value interface{}) bool {
 			}
 			return v, nil
 		})
+		cache.lock.Lock()
+		if err == gate.Cancelled || serial != cache.serialno {
+			goto recheck
+		}
 		if err == nil {
 			v, ok = r, true
 		}
 		if ok {
-			cache.cache[key] = v
+			cache.set(key, v)
 		}
 	}
 	if ok {
@@ -122,8 +142,29 @@ func (cache *Cache) GetAndLock(key interface{}, value interface{}) bool {
 // Get a value for a key. Returns true for success.
 // Will automatically fill the cache.
 func (cache *Cache) Get(key interface{}, value interface{}) bool {
-	defer cache.lock.Unlock()
-	return cache.GetAndLock(key, value)
+	rv := cache.GetAndLock(key, value)
+	cache.lock.Unlock()
+	return rv
+}
+
+func (cache *Cache) set(key interface{}, value interface{}) {
+	cache.cache[key] = value
+	if cache.fifo != nil {
+		pos := cache.fifopos + 1
+		if pos == len(cache.fifo) {
+			pos = 0
+		}
+		delete(cache.cache, cache.fifo[pos])
+		cache.fifo[pos] = key
+		cache.fifopos = pos
+	}
+}
+
+// Manually set a cached value.
+func (cache *Cache) Set(key interface{}, value interface{}) {
+	cache.lock.Lock()
+	cache.set(key, value)
+	cache.lock.Unlock()
 }
 
 // Unlock the cache, iff lock is held.
@@ -134,15 +175,28 @@ func (cache *Cache) Unlock() {
 // Clear one key from the cache
 func (cache *Cache) Clear(key interface{}) {
 	cache.lock.Lock()
-	defer cache.lock.Unlock()
+	cache.serialno++
 	delete(cache.cache, key)
+	for i, k := range cache.fifo {
+		if k == key {
+			cache.fifo[i] = nil
+			break
+		}
+	}
+	cache.serializer.Cancel(key)
+	cache.lock.Unlock()
 }
 
 // Flush all values from the cache
 func (cache *Cache) Flush() {
 	cache.lock.Lock()
-	defer cache.lock.Unlock()
+	cache.serialno++
 	cache.cache = make(map[interface{}]interface{})
+	for i, _ := range cache.fifo {
+		cache.fifo[i] = nil
+	}
+	cache.serializer.CancelAll()
+	cache.lock.Unlock()
 }
 
 // Clear one key from associated caches

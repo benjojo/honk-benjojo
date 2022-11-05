@@ -26,7 +26,7 @@ daemon processes messages from other federated servers.
 This is the admin manual.
 For user operation, see
 .Xr honk 1 .
-.Ss SETUP
+.Ss Setup
 .Pp
 Set up a TLS reverse proxy.
 .Nm
@@ -37,7 +37,7 @@ Make sure to pass the Host header, if necessary (as for nginx).
 .Bd -literal -offset indent
 proxy_set_header Host $http_host;
 .Ed
-.Ss BUILD
+.Ss Build
 Building
 .Nm
 requires a go compiler and libsqlite.
@@ -49,7 +49,7 @@ to be installed.
 Run make.
 Please be patient.
 Even on fast machines, building from source can take several seconds.
-.Ss OPTIONS
+.Ss Options
 The following options control where
 .Nm
 looks for data.
@@ -63,16 +63,17 @@ The root view directory, where html and other templates are stored.
 Read only.
 Defaults to ".".
 .El
-.Ss INIT
+.Ss Init
 Run the
 .Ic init
 command.
 This will create the database and ask four questions, as well as creating
 the initial user.
-.Ss OPERATION
+See below about importing existing data.
+.Ss Operation
 Run honk.
 Log messages are sent to stderr and should probably be redirected to a file.
-.Ss CUSTOMIZATION
+.Ss Customization
 Add custom memes (stickers) to the
 .Pa memes
 data directory.
@@ -101,7 +102,7 @@ Displayed on the about page.
 Displayed about the login form.
 .El
 .Pp
-.Ss USER ADMIN
+.Ss User Admin
 New users can be added with the
 .Ic adduser
 command.
@@ -110,14 +111,14 @@ This is discouraged.
 Passwords may be reset with the
 .Ic chpass Ar username
 command.
-.Ss MAINTENANCE
+.Ss Maintenance
 The database may grow large over time.
 The
 .Ic cleanup Op Ar days
 command exists to purge old data, by default 30 days.
 This removes unreferenced, unsaved posts and attachments.
 It does not remove any original content.
-.Ss UPGRADE
+.Ss Upgrade
 Stop the old honk process.
 Backup the database.
 Perform the upgrade with the
@@ -132,16 +133,28 @@ file which is important to backup and restore.
 The current version of the honk binary may be printed with the
 .Ic version
 command.
-.Ss SECURITY
+.Ss Security
 .Nm
 is not currently hardened against SSRF, server side request forgery.
 Be mindful of what other services may be exposed via localhost or the
 local network.
-.Ss DEBUG
+.Ss Debug
 Debug mode may be enabled or disabled by running
 .Ic debug Ar on|off .
 In debug mode, secure cookies are disabled and templates are reloaded
 every request.
+.Ss Import
+Data may be imported and converted from other services using the
+.Ic import
+command.
+Posts are imported and backdated to appear as old honks.
+No other information is imported.
+.Pp
+Currently limited to Twitter import.
+This requires a Twitter data archive.
+After unzipping the data archive, navigate to the tweet_media directory
+and unzip any zip files contained within.
+.Dl ./honk import username twitter source-directory
 .Sh FILES
 .Nm
 files are split between the data directory and the view directory.

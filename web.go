@@ -26,16 +26,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
 	"humungus.tedunangst.com/r/webs/cache"
 	"humungus.tedunangst.com/r/webs/httpsig"
-	"humungus.tedunangst.com/r/webs/image"
 	"humungus.tedunangst.com/r/webs/junk"
 	"humungus.tedunangst.com/r/webs/login"
 	"humungus.tedunangst.com/r/webs/rss"
@@ -108,7 +109,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 			honks = osmosis(honks, userid, true)
 		case "/first":
 			templinfo["PageName"] = "first"
-			honks = gethonksforuser(userid, 0)
+			honks = gethonksforuserfirstclass(userid, 0)
 			honks = osmosis(honks, userid, true)
 		case "/saved":
 			templinfo["ServerMessage"] = "saved honks"
@@ -159,9 +160,6 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 		honks = gethonksbyuser(name, false, 0)
 	} else {
 		honks = getpublichonks()
-	}
-	if len(honks) > 20 {
-		honks = honks[0:20]
 	}
 	reverbolate(-1, honks)
 
@@ -295,7 +293,8 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var buf bytes.Buffer
-	io.Copy(&buf, r.Body)
+	limiter := io.LimitReader(r.Body, 1*1024*1024)
+	io.Copy(&buf, limiter)
 	payload := buf.Bytes()
 	j, err := junk.FromBytes(payload)
 	if err != nil {
@@ -352,9 +351,9 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("updating honker follow: %s", who)
 
+		var x string
 		db := opendatabase()
 		row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('dub', 'undub')", who, user.ID)
-		var x string
 		err = row.Scan(&x)
 		if err != sql.ErrNoRows {
 			log.Printf("duplicate follow request: %s", who)
@@ -368,10 +367,10 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		go rubadubdub(user, j)
 	case "Accept":
 		log.Printf("updating honker accept: %s", who)
+		var name string
 		db := opendatabase()
 		row := db.QueryRow("select name from honkers where userid = ? and xid = ? and flavor in ('presub')",
 			user.ID, who)
-		var name string
 		err := row.Scan(&name)
 		if err != nil {
 			log.Printf("can't get honker name: %s", err)
@@ -487,9 +486,9 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		}
 		ont := "#" + m[1]
 		log.Printf("%s wants to follow %s", who, ont)
+		var x string
 		db := opendatabase()
 		row := db.QueryRow("select xid from honkers where name = ? and xid = ? and userid = ? and flavor in ('dub', 'undub')", ont, who, user.ID)
-		var x string
 		err = row.Scan(&x)
 		if err != sql.ErrNoRows {
 			log.Printf("duplicate follow request: %s", who)
@@ -552,6 +551,7 @@ func ximport(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error getting external object: %s", err)
 			return
 		}
+		allinjest(originate(xid), j)
 		log.Printf("importing %s", xid)
 		user, _ := butwhatabout(u.Username)
 
@@ -651,6 +651,23 @@ func outbox(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var oldempties = cache.New(cache.Options{Filler: func(url string) ([]byte, bool) {
+	colname := "/followers"
+	if strings.HasSuffix(url, "/following") {
+		colname = "/following"
+	}
+	user := fmt.Sprintf("https://%s%s", serverName, url[:len(url)-10])
+	j := junk.New()
+	j["@context"] = itiswhatitis
+	j["id"] = user + colname
+	j["attributedTo"] = user
+	j["type"] = "OrderedCollection"
+	j["totalItems"] = 0
+	j["orderedItems"] = []junk.Junk{}
+
+	return j.ToBytes(), true
+}})
+
 func emptiness(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	user, err := butwhatabout(name)
@@ -662,20 +679,14 @@ func emptiness(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	colname := "/followers"
-	if strings.HasSuffix(r.URL.Path, "/following") {
-		colname = "/following"
+	var j []byte
+	ok := oldempties.Get(r.URL.Path, &j)
+	if ok {
+		w.Header().Set("Content-Type", theonetruename)
+		w.Write(j)
+	} else {
+		http.NotFound(w, r)
 	}
-	j := junk.New()
-	j["@context"] = itiswhatitis
-	j["id"] = user.URL + colname
-	j["attributedTo"] = user.URL
-	j["type"] = "OrderedCollection"
-	j["totalItems"] = 0
-	j["orderedItems"] = []junk.Junk{}
-
-	w.Header().Set("Content-Type", theonetruename)
-	j.Write(w)
 }
 
 func showuser(w http.ResponseWriter, r *http.Request) {
@@ -854,6 +865,102 @@ func thelistingoftheontologies(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type Track struct {
+	xid string
+	who string
+}
+
+func savetracks(tracks map[string][]string) {
+	db := opendatabase()
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("savetracks begin error: %s", err)
+		return
+	}
+	defer func() {
+		err := tx.Commit()
+		if err != nil {
+			log.Printf("savetracks commit error: %s", err)
+		}
+
+	}()
+	stmtGetTracks, err := tx.Prepare("select fetches from tracks where xid = ?")
+	if err != nil {
+		log.Printf("savetracks error: %s", err)
+		return
+	}
+	stmtNewTracks, err := tx.Prepare("insert into tracks (xid, fetches) values (?, ?)")
+	if err != nil {
+		log.Printf("savetracks error: %s", err)
+		return
+	}
+	stmtUpdateTracks, err := tx.Prepare("update tracks set fetches = ? where xid = ?")
+	if err != nil {
+		log.Printf("savetracks error: %s", err)
+		return
+	}
+	count := 0
+	for xid, f := range tracks {
+		count += len(f)
+		var prev string
+		row := stmtGetTracks.QueryRow(xid)
+		err := row.Scan(&prev)
+		if err == sql.ErrNoRows {
+			f = oneofakind(f)
+			stmtNewTracks.Exec(xid, strings.Join(f, " "))
+		} else if err == nil {
+			all := append(strings.Split(prev, " "), f...)
+			all = oneofakind(all)
+			stmtUpdateTracks.Exec(strings.Join(all, " "))
+		} else {
+			log.Printf("savetracks error: %s", err)
+		}
+	}
+	log.Printf("saved %d new fetches", count)
+}
+
+var trackchan = make(chan Track)
+
+func tracker() {
+	timeout := 4 * time.Minute
+	sleeper := time.NewTimer(timeout)
+	tracks := make(map[string][]string)
+	for {
+		select {
+		case track := <-trackchan:
+			tracks[track.xid] = append(tracks[track.xid], track.who)
+		case <-sleeper.C:
+			if len(tracks) > 0 {
+				go savetracks(tracks)
+				tracks = make(map[string][]string)
+			}
+			sleeper.Reset(timeout)
+		case <-endoftheworld:
+			if len(tracks) > 0 {
+				savetracks(tracks)
+			}
+			readyalready <- true
+		}
+	}
+}
+
+var re_keyholder = regexp.MustCompile(`keyId="([^"]+)"`)
+
+func trackback(xid string, r *http.Request) {
+	agent := r.UserAgent()
+	who := originate(agent)
+	sig := r.Header.Get("Signature")
+	if sig != "" {
+		m := re_keyholder.FindStringSubmatch(sig)
+		if len(m) == 2 {
+			who = m[1]
+		}
+	}
+	if who != "" {
+		trackchan <- Track{xid: xid, who: who}
+	}
+}
+
 func showonehonk(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	user, err := butwhatabout(name)
@@ -870,6 +977,7 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 	if friendorfoe(r.Header.Get("Accept")) {
 		j, ok := gimmejonk(xid)
 		if ok {
+			trackback(xid, r)
 			w.Header().Set("Content-Type", theonetruename)
 			w.Write(j)
 		} else {
@@ -1208,8 +1316,12 @@ func canedithonk(user *WhatAbout, honk *Honk) bool {
 	return true
 }
 
+func submitwebhonk(w http.ResponseWriter, r *http.Request) {
+	submithonk(w, r, false)
+}
+
 // what a hot mess this function is
-func submithonk(w http.ResponseWriter, r *http.Request) {
+func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	rid := r.FormValue("rid")
 	noise := r.FormValue("noise")
 
@@ -1245,6 +1357,8 @@ func submithonk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	noise = strings.Replace(noise, "\r", "", -1)
+	noise = quickrename(noise, userinfo.UserID)
 	noise = hooterize(noise)
 	honk.Noise = noise
 	translate(honk, false)
@@ -1301,7 +1415,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) {
 			data := buf.Bytes()
 			xid := xfiltrate()
 			var media, name string
-			img, err := image.Vacuum(&buf, image.Params{MaxWidth: 2048, MaxHeight: 2048})
+			img, err := shrinkit(data)
 			if err == nil {
 				data = img.Data
 				format := img.Format
@@ -1446,6 +1560,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) {
 		templinfo["Noise"] = r.FormValue("noise")
 		templinfo["SavedFile"] = donkxid
 		templinfo["IsPreview"] = true
+		templinfo["UpdateXID"] = updatexid
 		templinfo["ServerMessage"] = "honk preview"
 		err := readviews.Execute(w, "honkpage.html", templinfo)
 		if err != nil {
@@ -1471,7 +1586,11 @@ func submithonk(w http.ResponseWriter, r *http.Request) {
 
 	go honkworldwide(user, honk)
 
-	http.Redirect(w, r, honk.XID[len(serverName)+8:], http.StatusSeeOther)
+	if isAPI {
+		w.Write([]byte(honk.XID))
+	} else {
+		http.Redirect(w, r, honk.XID[len(serverName)+8:], http.StatusSeeOther)
+	}
 }
 
 func showhonkers(w http.ResponseWriter, r *http.Request) {
@@ -1612,9 +1731,9 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	}
 	url = info.XID
 
+	var x string
 	db := opendatabase()
 	row := db.QueryRow("select xid from honkers where xid = ? and userid = ? and flavor in ('sub', 'unsub', 'peep')", url, u.UserID)
-	var x string
 	err = row.Scan(&x)
 	if err != sql.ErrNoRows {
 		http.Error(w, "it seems you are already subscribed to them", http.StatusInternalServerError)
@@ -1803,7 +1922,10 @@ func servehtml(w http.ResponseWriter, r *http.Request) {
 	templinfo := getInfo(r)
 	templinfo["AboutMsg"] = aboutMsg
 	templinfo["LoginMsg"] = loginMsg
-	templinfo["HonkVersion"] = honkVersion
+	templinfo["HonkVersion"] = softwareVersion
+	if r.URL.Path == "/about" {
+		templinfo["Sensors"] = getSensors()
+	}
 	if u == nil {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
@@ -1825,9 +1947,9 @@ func servememe(w http.ResponseWriter, r *http.Request) {
 
 func servefile(w http.ResponseWriter, r *http.Request) {
 	xid := mux.Vars(r)["xid"]
-	row := stmtGetFileData.QueryRow(xid)
 	var media string
 	var data []byte
+	row := stmtGetFileData.QueryRow(xid)
 	err := row.Scan(&media, &data)
 	if err != nil {
 		log.Printf("error loading file: %s", err)
@@ -1913,6 +2035,93 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var honkline = make(chan bool)
+
+func honkhonkline() {
+	for {
+		select {
+		case honkline <- true:
+		default:
+			return
+		}
+	}
+}
+
+func apihandler(w http.ResponseWriter, r *http.Request) {
+	u := login.GetUserInfo(r)
+	userid := u.UserID
+	action := r.FormValue("action")
+	wait, _ := strconv.ParseInt(r.FormValue("wait"), 10, 0)
+	log.Printf("api request '%s' on behalf of %s", action, u.Username)
+	switch action {
+	case "honk":
+		submithonk(w, r, true)
+	case "gethonks":
+		var honks []*Honk
+		wanted, _ := strconv.ParseInt(r.FormValue("after"), 10, 0)
+		page := r.FormValue("page")
+		var waitchan <-chan time.Time
+	requery:
+		switch page {
+		case "atme":
+			honks = gethonksforme(userid, wanted)
+			honks = osmosis(honks, userid, false)
+		case "home":
+			honks = gethonksforuser(userid, wanted)
+			honks = osmosis(honks, userid, true)
+		default:
+			http.Error(w, "unknown page", http.StatusNotFound)
+			return
+		}
+		if len(honks) == 0 && wait > 0 {
+			if waitchan == nil {
+				waitchan = time.After(time.Duration(wait) * time.Second)
+			}
+			select {
+			case <-honkline:
+				goto requery
+			case <-waitchan:
+			}
+		}
+		reverbolate(userid, honks)
+		j := junk.New()
+		j["honks"] = honks
+		j.Write(w)
+	default:
+		http.Error(w, "unknown action", http.StatusNotFound)
+		return
+	}
+}
+
+var endoftheworld = make(chan bool)
+var readyalready = make(chan bool)
+
+func enditall() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt)
+	signal.Notify(sig, syscall.SIGTERM)
+	<-sig
+	count := 0
+	log.Printf("stopping...")
+sendloop:
+	for {
+		select {
+		case endoftheworld <- true:
+			count++
+		default:
+			break sendloop
+		}
+	}
+	log.Printf("waiting...")
+	for i := 0; i < count; i++ {
+		<-readyalready
+	}
+	log.Printf("apocalypse")
+	os.Exit(0)
+}
+
+var preservehooks []func()
+
 func serve() {
 	db := opendatabase()
 	login.Init(db)
@@ -1921,7 +2130,10 @@ func serve() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	startBackendServer()
+	go enditall()
 	go redeliverator()
+	go tracker()
 
 	debug := false
 	getconfig("debug", &debug)
@@ -1950,8 +2162,14 @@ func serve() {
 		}
 	}
 
+	for _, h := range preservehooks {
+		h()
+	}
+
 	mux := mux.NewRouter()
 	mux.Use(login.Checker)
+
+	mux.Handle("/api", login.TokenRequired(http.HandlerFunc(apihandler)))
 
 	posters := mux.Methods("POST").Subrouter()
 	getters := mux.Methods("GET").Subrouter()
@@ -2001,7 +2219,7 @@ func serve() {
 	loggedin.HandleFunc("/xzone", xzone)
 	loggedin.HandleFunc("/newhonk", newhonkpage)
 	loggedin.HandleFunc("/edit", edithonkpage)
-	loggedin.Handle("/honk", login.CSRFWrap("honkhonk", http.HandlerFunc(submithonk)))
+	loggedin.Handle("/honk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitwebhonk)))
 	loggedin.Handle("/bonk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitbonk)))
 	loggedin.Handle("/zonkit", login.CSRFWrap("honkhonk", http.HandlerFunc(zonkit)))
 	loggedin.Handle("/savehfcs", login.CSRFWrap("filter", http.HandlerFunc(savehfcs)))

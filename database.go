@@ -166,11 +166,11 @@ func getbonk(userid int64, xid string) *Honk {
 
 func getpublichonks() []*Honk {
 	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
-	rows, err := stmtPublicHonks.Query(dt)
+	rows, err := stmtPublicHonks.Query(dt, 100)
 	return getsomehonks(rows, err)
 }
 func geteventhonks(userid int64) []*Honk {
-	rows, err := stmtEventHonks.Query(userid)
+	rows, err := stmtEventHonks.Query(userid, 25)
 	honks := getsomehonks(rows, err)
 	sort.Slice(honks, func(i, j int) bool {
 		var t1, t2 time.Time
@@ -198,11 +198,12 @@ func geteventhonks(userid int64) []*Honk {
 }
 func gethonksbyuser(name string, includeprivate bool, wanted int64) []*Honk {
 	dt := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(dbtimeformat)
+	limit := 50
 	whofore := 2
 	if includeprivate {
 		whofore = 3
 	}
-	rows, err := stmtUserHonks.Query(wanted, whofore, name, dt)
+	rows, err := stmtUserHonks.Query(wanted, whofore, name, dt, limit)
 	return getsomehonks(rows, err)
 }
 func gethonksforuser(userid int64, wanted int64) []*Honk {
@@ -474,6 +475,7 @@ func savehonk(h *Honk) error {
 	if err != nil {
 		log.Printf("error saving honk: %s", err)
 	}
+	honkhonkline()
 	return err
 }
 
@@ -711,13 +713,14 @@ func prepareStatements(db *sql.DB) {
 
 	selecthonks := "select honks.honkid, honks.userid, username, what, honker, oonker, honks.xid, rid, dt, url, audience, noise, precis, format, convoy, whofore, flags from honks join users on honks.userid = users.userid "
 	limit := " order by honks.honkid desc limit 250"
+	smalllimit := " order by honks.honkid desc limit ?"
 	butnotthose := " and convoy not in (select name from zonkers where userid = ? and wherefore = 'zonvoy' order by zonkerid desc limit 100)"
 	stmtOneXonk = preparetodie(db, selecthonks+"where honks.userid = ? and xid = ?")
 	stmtAnyXonk = preparetodie(db, selecthonks+"where xid = ? order by honks.honkid asc")
 	stmtOneBonk = preparetodie(db, selecthonks+"where honks.userid = ? and xid = ? and what = 'bonk' and whofore = 2")
-	stmtPublicHonks = preparetodie(db, selecthonks+"where whofore = 2 and dt > ?"+limit)
-	stmtEventHonks = preparetodie(db, selecthonks+"where (whofore = 2 or honks.userid = ?) and what = 'event'"+limit)
-	stmtUserHonks = preparetodie(db, selecthonks+"where honks.honkid > ? and (whofore = 2 or whofore = ?) and username = ? and dt > ?"+limit)
+	stmtPublicHonks = preparetodie(db, selecthonks+"where whofore = 2 and dt > ?"+smalllimit)
+	stmtEventHonks = preparetodie(db, selecthonks+"where (whofore = 2 or honks.userid = ?) and what = 'event'"+smalllimit)
+	stmtUserHonks = preparetodie(db, selecthonks+"where honks.honkid > ? and (whofore = 2 or whofore = ?) and username = ? and dt > ?"+smalllimit)
 	myhonkers := " and honker in (select xid from honkers where userid = ? and (flavor = 'sub' or flavor = 'peep' or flavor = 'presub') and combos not like '% - %')"
 	stmtHonksForUser = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
 	stmtHonksForUserFirstClass = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (what <> 'tonk')"+myhonkers+butnotthose+limit)

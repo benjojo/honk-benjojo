@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var honkVersion = "honk 0.8.1"
+var softwareVersion = "0.8.2"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -213,7 +213,7 @@ func main() {
 	case "upgrade":
 		upgradedb()
 	case "version":
-		fmt.Println(honkVersion)
+		fmt.Println(softwareVersion)
 		os.Exit(0)
 	}
 	db := opendatabase()
@@ -232,6 +232,11 @@ func main() {
 	switch cmd {
 	case "admin":
 		adminscreen()
+	case "import":
+		if len(args) != 4 {
+			log.Fatal("import username twitter [srcdir]")
+		}
+		importMain(args[1], args[2], args[3])
 	case "debug":
 		if len(args) != 2 {
 			log.Fatal("need an argument: debug (on|off)")
@@ -269,6 +274,8 @@ func main() {
 		ping(user, targ)
 	case "run":
 		serve()
+	case "backend":
+		backendServer()
 	case "test":
 		ElaborateUnitTests()
 	default:
