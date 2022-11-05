@@ -70,7 +70,8 @@ type KeyInfo struct {
 
 const serverUID int64 = -2
 
-type Honk struct {
+// ActivityPubActivity used to be a Xonk
+type ActivityPubActivity struct {
 	ID       int64
 	UserID   int64
 	Username string
@@ -91,7 +92,7 @@ type Honk struct {
 	Audience []string
 	Public   bool
 	Whofore  int64
-	Replies  []*Honk
+	Replies  []*ActivityPubActivity
 	Flags    int64
 	HTPrecis template.HTML
 	HTML     template.HTML
@@ -159,27 +160,27 @@ const (
 	flagIsWonked   = 32
 )
 
-func (honk *Honk) IsAcked() bool {
+func (honk *ActivityPubActivity) IsAcked() bool {
 	return honk.Flags&flagIsAcked != 0
 }
 
-func (honk *Honk) IsBonked() bool {
+func (honk *ActivityPubActivity) IsBonked() bool {
 	return honk.Flags&flagIsBonked != 0
 }
 
-func (honk *Honk) IsSaved() bool {
+func (honk *ActivityPubActivity) IsSaved() bool {
 	return honk.Flags&flagIsSaved != 0
 }
 
-func (honk *Honk) IsUntagged() bool {
+func (honk *ActivityPubActivity) IsUntagged() bool {
 	return honk.Flags&flagIsUntagged != 0
 }
 
-func (honk *Honk) IsReacted() bool {
+func (honk *ActivityPubActivity) IsReacted() bool {
 	return honk.Flags&flagIsReacted != 0
 }
 
-func (honk *Honk) IsWonked() bool {
+func (honk *ActivityPubActivity) IsWonked() bool {
 	return honk.Flags&flagIsWonked != 0
 }
 
@@ -314,25 +315,25 @@ func main() {
 	}
 	db := opendatabase()
 	dbversion := 0
-	getconfig("dbversion", &dbversion)
+	getConfigValue("dbversion", &dbversion)
 	if dbversion != myVersion {
 		elog.Fatal("incorrect database version. run upgrade.")
 	}
-	getconfig("servermsg", &serverMsg)
-	getconfig("aboutmsg", &aboutMsg)
-	getconfig("loginmsg", &loginMsg)
-	getconfig("servername", &serverName)
-	getconfig("masqname", &masqName)
+	getConfigValue("servermsg", &serverMsg)
+	getConfigValue("aboutmsg", &aboutMsg)
+	getConfigValue("loginmsg", &loginMsg)
+	getConfigValue("servername", &serverName)
+	getConfigValue("masqname", &masqName)
 	if masqName == "" {
 		masqName = serverName
 	}
 	serverPrefix = fmt.Sprintf("https://%s/", serverName)
-	getconfig("usersep", &userSep)
-	getconfig("honksep", &honkSep)
-	getconfig("devel", &develMode)
-	getconfig("fasttimeout", &fastTimeout)
-	getconfig("slowtimeout", &slowTimeout)
-	getconfig("signgets", &signGets)
+	getConfigValue("usersep", &userSep)
+	getConfigValue("honksep", &honkSep)
+	getConfigValue("devel", &develMode)
+	getConfigValue("fasttimeout", &fastTimeout)
+	getConfigValue("slowtimeout", &slowTimeout)
+	getConfigValue("signgets", &signGets)
 	prepareStatements(db)
 	switch cmd {
 	case "admin":
@@ -348,9 +349,9 @@ func main() {
 		}
 		switch args[1] {
 		case "on":
-			setconfig("devel", 1)
+			setConfigValue("devel", 1)
 		case "off":
-			setconfig("devel", 0)
+			setConfigValue("devel", 0)
 		default:
 			elog.Fatal("argument must be on or off")
 		}
@@ -363,7 +364,7 @@ func main() {
 		if val, err = strconv.Atoi(args[2]); err != nil {
 			val = args[2]
 		}
-		setconfig(args[1], val)
+		setConfigValue(args[1], val)
 	case "adduser":
 		adduser()
 	case "deluser":
@@ -393,7 +394,7 @@ func main() {
 			return
 		}
 		name := args[1]
-		svalbard(name)
+		backupDatabase(name)
 	case "ping":
 		if len(args) < 3 {
 			fmt.Printf("usage: honk ping (from username) (to username or url)\n")
@@ -411,8 +412,6 @@ func main() {
 		serve()
 	case "backend":
 		backendServer()
-	case "test":
-		ElaborateUnitTests()
 	default:
 		elog.Fatal("unknown command")
 	}

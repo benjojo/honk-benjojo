@@ -93,7 +93,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 		var filterid int64
 		err = rows.Scan(&filterid, &j)
 		if err == nil {
-			err = unjsonify(j, filt)
+			err = decodeJson(j, filt)
 		}
 		if err != nil {
 			elog.Printf("error scanning filter: %s", err)
@@ -277,11 +277,11 @@ func stealthmode(userid int64, r *http.Request) bool {
 	return false
 }
 
-func matchfilter(h *Honk, f *Filter) bool {
+func matchfilter(h *ActivityPubActivity, f *Filter) bool {
 	return matchfilterX(h, f) != ""
 }
 
-func matchfilterX(h *Honk, f *Filter) string {
+func matchfilterX(h *ActivityPubActivity, f *Filter) string {
 	rv := ""
 	match := true
 	if match && f.Actor != "" {
@@ -340,7 +340,7 @@ func matchfilterX(h *Honk, f *Filter) string {
 	return ""
 }
 
-func rejectxonk(xonk *Honk) bool {
+func rejectxonk(xonk *ActivityPubActivity) bool {
 	var m arejectmap
 	rejectcache.Get(xonk.UserID, &m)
 	filts := m[rejectAnyKey]
@@ -361,7 +361,7 @@ func rejectxonk(xonk *Honk) bool {
 	return false
 }
 
-func skipMedia(xonk *Honk) bool {
+func skipMedia(xonk *ActivityPubActivity) bool {
 	filts := getfilters(xonk.UserID, filtSkipMedia)
 	for _, f := range filts {
 		if matchfilter(xonk, f) {
@@ -371,7 +371,7 @@ func skipMedia(xonk *Honk) bool {
 	return false
 }
 
-func unsee(honks []*Honk, userid int64) {
+func unsee(honks []*ActivityPubActivity, userid int64) {
 	if userid != -1 {
 		colfilts := getfilters(userid, filtCollapse)
 		rwfilts := getfilters(userid, filtRewrite)
@@ -429,7 +429,7 @@ var untagged = cache.New(cache.Options{Filler: func(userid int64) (map[string]bo
 	return bad, true
 }})
 
-func osmosis(honks []*Honk, userid int64, withfilt bool) []*Honk {
+func osmosis(honks []*ActivityPubActivity, userid int64, withfilt bool) []*ActivityPubActivity {
 	var badparents map[string]bool
 	untagged.GetAndLock(userid, &badparents)
 	j := 0

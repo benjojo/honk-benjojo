@@ -56,12 +56,12 @@ func loadLingo() {
 	for _, l := range []string{"honked", "bonked", "honked back", "qonked", "evented"} {
 		v := l
 		k := "lingo-" + strings.ReplaceAll(l, " ", "")
-		getconfig(k, &v)
+		getConfigValue(k, &v)
 		relingo[l] = v
 	}
 }
 
-func reverbolate(userid int64, honks []*Honk) {
+func reverbolate(userid int64, honks []*ActivityPubActivity) {
 	var user *WhatAbout
 	somenumberedusers.Get(userid, &user)
 	for _, h := range honks {
@@ -257,9 +257,7 @@ func filterchonk(ch *Chonk) {
 	}
 	ch.Donks = ch.Donks[:j]
 
-	if strings.HasPrefix(noise, "<p>") {
-		noise = noise[3:]
-	}
+	noise = strings.TrimPrefix(noise, "<p>")
 	ch.HTML = template.HTML(noise)
 	if short := shortname(ch.UserID, ch.Who); short != "" {
 		ch.Handle = short
@@ -269,7 +267,7 @@ func filterchonk(ch *Chonk) {
 
 }
 
-func inlineimgsfor(honk *Honk) func(node *html.Node) string {
+func inlineimgsfor(honk *ActivityPubActivity) func(node *html.Node) string {
 	return func(node *html.Node) string {
 		src := htfilter.GetAttr(node, "src")
 		alt := htfilter.GetAttr(node, "alt")
@@ -282,14 +280,14 @@ func inlineimgsfor(honk *Honk) func(node *html.Node) string {
 	}
 }
 
-func imaginate(honk *Honk) {
+func imaginate(honk *ActivityPubActivity) {
 	var htf htfilter.Filter
 	htf.Imager = inlineimgsfor(honk)
 	htf.BaseURL, _ = url.Parse(honk.XID)
 	htf.String(honk.Noise)
 }
 
-func translate(honk *Honk) {
+func translate(honk *ActivityPubActivity) {
 	if honk.Format == "html" {
 		return
 	}
@@ -312,11 +310,11 @@ func translate(honk *Honk) {
 	noise = strings.TrimSpace(noise)
 	noise = marker.Mark(noise)
 	honk.Noise = noise
-	honk.Onts = oneofakind(marker.HashTags)
+	honk.Onts = stringArrayTrimUntilDupe(marker.HashTags)
 	honk.Mentions = bunchofgrapes(marker.Mentions)
 }
 
-func redoimages(honk *Honk) {
+func redoimages(honk *ActivityPubActivity) {
 	zap := make(map[string]bool)
 	{
 		var htf htfilter.Filter
@@ -404,7 +402,7 @@ var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
 
 func herdofemus(noise string) []Emu {
 	m := re_emus.FindAllString(noise, -1)
-	m = oneofakind(m)
+	m = stringArrayTrimUntilDupe(m)
 	var emus []Emu
 	for _, e := range m {
 		var emu Emu
@@ -421,7 +419,7 @@ var re_memes = regexp.MustCompile("meme: ?([^\n]+)")
 var re_avatar = regexp.MustCompile("avatar: ?([^\n]+)")
 var re_banner = regexp.MustCompile("banner: ?([^\n]+)")
 
-func memetize(honk *Honk) {
+func memetize(honk *ActivityPubActivity) {
 	repl := func(x string) string {
 		name := x[5:]
 		if name[0] == ' ' {
@@ -574,7 +572,7 @@ var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool)
 
 // handle, handle@host
 func handles(xid string) (string, string) {
-	if xid == "" || xid == thewholeworld || strings.HasSuffix(xid, "/followers") {
+	if xid == "" || xid == activitystreamsPublicString || strings.HasSuffix(xid, "/followers") {
 		return "", ""
 	}
 	var handle string
@@ -595,18 +593,18 @@ func butnottooloud(aud []string) {
 
 func loudandproud(aud []string) bool {
 	for _, a := range aud {
-		if a == thewholeworld {
+		if a == activitystreamsPublicString {
 			return true
 		}
 	}
 	return false
 }
 
-func firstclass(honk *Honk) bool {
-	return honk.Audience[0] == thewholeworld
+func firstclass(honk *ActivityPubActivity) bool {
+	return honk.Audience[0] == activitystreamsPublicString
 }
 
-func oneofakind(a []string) []string {
+func stringArrayTrimUntilDupe(a []string) []string {
 	seen := make(map[string]bool)
 	seen[""] = true
 	j := 0
@@ -632,7 +630,7 @@ var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool
 	return ki, true
 }})
 
-func ziggy(userid int64) *KeyInfo {
+func getPrivateKey(userid int64) *KeyInfo {
 	var ki *KeyInfo
 	ziggies.Get(userid, &ki)
 	return ki
@@ -670,7 +668,7 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.Publ
 	return key, true
 }, Limit: 512})
 
-func zaggy(keyname string) (httpsig.PublicKey, error) {
+func getPubKey(keyname string) (httpsig.PublicKey, error) {
 	var key httpsig.PublicKey
 	zaggies.Get(keyname, &key)
 	return key, nil

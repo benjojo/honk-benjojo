@@ -42,7 +42,7 @@ func adminscreen() {
 	rmcup := esc + "[?1049l"
 
 	var avatarColors string
-	getconfig("avatarcolors", &avatarColors)
+	getConfigValue("avatarcolors", &avatarColors)
 	loadLingo()
 
 	type adminfield struct {
@@ -125,7 +125,7 @@ func adminscreen() {
 	}
 	defer restore()
 	go func() {
-		sig := make(chan os.Signal)
+		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt)
 		<-sig
 		restore()
@@ -273,7 +273,7 @@ func adminscreen() {
 			stdout.Flush()
 		}
 		editing = false
-		setconfig(m.name, m.text)
+		setConfigValue(m.name, m.text)
 		hidecursor()
 		drawscreen()
 	}

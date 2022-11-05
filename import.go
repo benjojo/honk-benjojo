@@ -130,7 +130,7 @@ func importMastotoots(user *WhatAbout, source string) {
 		if havetoot(xid) {
 			continue
 		}
-		honk := Honk{
+		honk := ActivityPubActivity{
 			UserID:   user.ID,
 			What:     "honk",
 			Honker:   user.URL,
@@ -199,7 +199,7 @@ func importMastotooters(user *WhatAbout, source string) {
 	fd.Close()
 
 	var meta HonkerMeta
-	mj, _ := jsonify(&meta)
+	mj, _ := encodeJson(&meta)
 
 	for i, d := range data {
 		if i == 0 {
@@ -294,8 +294,8 @@ func importTwitter(username, source string) {
 				what = "tonk"
 			}
 		}
-		audience := []string{thewholeworld}
-		honk := Honk{
+		audience := []string{activitystreamsPublicString}
+		honk := ActivityPubActivity{
 			UserID:   user.ID,
 			Username: user.Name,
 			What:     what,

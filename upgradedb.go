@@ -28,7 +28,7 @@ type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
-func doordie(db dbexecer, s string, args ...interface{}) {
+func sqlMustQuery(db dbexecer, s string, args ...interface{}) {
 	_, err := db.Exec(s, args...)
 	if err != nil {
 		elog.Fatalf("can't run %s: %s", s, err)
@@ -38,54 +38,54 @@ func doordie(db dbexecer, s string, args ...interface{}) {
 func upgradedb() {
 	db := opendatabase()
 	dbversion := 0
-	getconfig("dbversion", &dbversion)
-	getconfig("servername", &serverName)
+	getConfigValue("dbversion", &dbversion)
+	getConfigValue("servername", &serverName)
 
 	if dbversion < 13 {
 		elog.Fatal("database is too old to upgrade")
 	}
 	switch dbversion {
 	case 25:
-		doordie(db, "delete from auth")
-		doordie(db, "alter table auth add column expiry text")
-		doordie(db, "update config set value = 26 where key = 'dbversion'")
+		sqlMustQuery(db, "delete from auth")
+		sqlMustQuery(db, "alter table auth add column expiry text")
+		sqlMustQuery(db, "update config set value = 26 where key = 'dbversion'")
 		fallthrough
 	case 26:
 		s := ""
-		getconfig("servermsg", &s)
+		getConfigValue("servermsg", &s)
 		if s == "" {
-			setconfig("servermsg", "<h2>Things happen.</h2>")
+			setConfigValue("servermsg", "<h2>Things happen.</h2>")
 		}
 		s = ""
-		getconfig("aboutmsg", &s)
+		getConfigValue("aboutmsg", &s)
 		if s == "" {
-			setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
+			setConfigValue("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
 		}
 		s = ""
-		getconfig("loginmsg", &s)
+		getConfigValue("loginmsg", &s)
 		if s == "" {
-			setconfig("loginmsg", "<h2>login</h2>")
+			setConfigValue("loginmsg", "<h2>login</h2>")
 		}
 		d := -1
-		getconfig("devel", &d)
+		getConfigValue("devel", &d)
 		if d == -1 {
-			setconfig("devel", 0)
+			setConfigValue("devel", 0)
 		}
-		doordie(db, "update config set value = 27 where key = 'dbversion'")
+		sqlMustQuery(db, "update config set value = 27 where key = 'dbversion'")
 		fallthrough
 	case 27:
 		createserveruser(db)
-		doordie(db, "update config set value = 28 where key = 'dbversion'")
+		sqlMustQuery(db, "update config set value = 28 where key = 'dbversion'")
 		fallthrough
 	case 28:
-		doordie(db, "drop table doovers")
-		doordie(db, "create table doovers(dooverid integer primary key, dt text, tries integer, userid integer, rcpt text, msg blob)")
-		doordie(db, "update config set value = 29 where key = 'dbversion'")
+		sqlMustQuery(db, "drop table doovers")
+		sqlMustQuery(db, "create table doovers(dooverid integer primary key, dt text, tries integer, userid integer, rcpt text, msg blob)")
+		sqlMustQuery(db, "update config set value = 29 where key = 'dbversion'")
 		fallthrough
 	case 29:
-		doordie(db, "alter table honkers add column owner text")
-		doordie(db, "update honkers set owner = xid")
-		doordie(db, "update config set value = 30 where key = 'dbversion'")
+		sqlMustQuery(db, "alter table honkers add column owner text")
+		sqlMustQuery(db, "update honkers set owner = xid")
+		sqlMustQuery(db, "update config set value = 30 where key = 'dbversion'")
 		fallthrough
 	case 30:
 		tx, err := db.Begin()
@@ -106,7 +106,7 @@ func upgradedb() {
 			}
 			var uo UserOptions
 			uo.SkinnyCSS = strings.Contains(options, " skinny ")
-			m[userid], err = jsonify(uo)
+			m[userid], err = encodeJson(uo)
 			if err != nil {
 				elog.Fatal(err)
 			}
@@ -122,54 +122,54 @@ func upgradedb() {
 		if err != nil {
 			elog.Fatal(err)
 		}
-		doordie(db, "update config set value = 31 where key = 'dbversion'")
+		sqlMustQuery(db, "update config set value = 31 where key = 'dbversion'")
 		fallthrough
 	case 31:
-		doordie(db, "create table tracks (xid text, fetches text)")
-		doordie(db, "create index idx_trackhonkid on tracks(xid)")
-		doordie(db, "update config set value = 32 where key = 'dbversion'")
+		sqlMustQuery(db, "create table tracks (xid text, fetches text)")
+		sqlMustQuery(db, "create index idx_trackhonkid on tracks(xid)")
+		sqlMustQuery(db, "update config set value = 32 where key = 'dbversion'")
 		fallthrough
 	case 32:
-		doordie(db, "alter table xonkers add column dt text")
-		doordie(db, "update xonkers set dt = ?", time.Now().UTC().Format(dbtimeformat))
-		doordie(db, "update config set value = 33 where key = 'dbversion'")
+		sqlMustQuery(db, "alter table xonkers add column dt text")
+		sqlMustQuery(db, "update xonkers set dt = ?", time.Now().UTC().Format(dbtimeformat))
+		sqlMustQuery(db, "update config set value = 33 where key = 'dbversion'")
 		fallthrough
 	case 33:
-		doordie(db, "alter table honkers add column meta text")
-		doordie(db, "update honkers set meta = '{}'")
-		doordie(db, "update config set value = 34 where key = 'dbversion'")
+		sqlMustQuery(db, "alter table honkers add column meta text")
+		sqlMustQuery(db, "update honkers set meta = '{}'")
+		sqlMustQuery(db, "update config set value = 34 where key = 'dbversion'")
 		fallthrough
 	case 34:
-		doordie(db, "create table chonks (chonkid integer primary key, userid integer, xid text, who txt, target text, dt text, noise text, format text)")
-		doordie(db, "update config set value = 35 where key = 'dbversion'")
+		sqlMustQuery(db, "create table chonks (chonkid integer primary key, userid integer, xid text, who txt, target text, dt text, noise text, format text)")
+		sqlMustQuery(db, "update config set value = 35 where key = 'dbversion'")
 		fallthrough
 	case 35:
-		doordie(db, "alter table donks add column chonkid integer")
-		doordie(db, "update donks set chonkid = -1")
-		doordie(db, "create index idx_donkshonk on donks(honkid)")
-		doordie(db, "create index idx_donkschonk on donks(chonkid)")
-		doordie(db, "update config set value = 36 where key = 'dbversion'")
+		sqlMustQuery(db, "alter table donks add column chonkid integer")
+		sqlMustQuery(db, "update donks set chonkid = -1")
+		sqlMustQuery(db, "create index idx_donkshonk on donks(honkid)")
+		sqlMustQuery(db, "create index idx_donkschonk on donks(chonkid)")
+		sqlMustQuery(db, "update config set value = 36 where key = 'dbversion'")
 		fallthrough
 	case 36:
-		doordie(db, "alter table honkers add column folxid text")
-		doordie(db, "update honkers set folxid = 'lostdata'")
-		doordie(db, "update config set value = 37 where key = 'dbversion'")
+		sqlMustQuery(db, "alter table honkers add column folxid text")
+		sqlMustQuery(db, "update honkers set folxid = 'lostdata'")
+		sqlMustQuery(db, "update config set value = 37 where key = 'dbversion'")
 		fallthrough
 	case 37:
-		doordie(db, "update honkers set combos = '' where combos is null")
-		doordie(db, "update honkers set owner = '' where owner is null")
-		doordie(db, "update honkers set meta = '' where meta is null")
-		doordie(db, "update honkers set folxid = '' where folxid is null")
-		doordie(db, "update config set value = 38 where key = 'dbversion'")
+		sqlMustQuery(db, "update honkers set combos = '' where combos is null")
+		sqlMustQuery(db, "update honkers set owner = '' where owner is null")
+		sqlMustQuery(db, "update honkers set meta = '' where meta is null")
+		sqlMustQuery(db, "update honkers set folxid = '' where folxid is null")
+		sqlMustQuery(db, "update config set value = 38 where key = 'dbversion'")
 		fallthrough
 	case 38:
-		doordie(db, "update honkers set folxid = abs(random())")
-		doordie(db, "update config set value = 39 where key = 'dbversion'")
+		sqlMustQuery(db, "update honkers set folxid = abs(random())")
+		sqlMustQuery(db, "update config set value = 39 where key = 'dbversion'")
 		fallthrough
 	case 39:
 		blobdb := openblobdb()
-		doordie(blobdb, "alter table filedata add column hash text")
-		doordie(blobdb, "create index idx_filehash on filedata(hash)")
+		sqlMustQuery(blobdb, "alter table filedata add column hash text")
+		sqlMustQuery(blobdb, "create index idx_filehash on filedata(hash)")
 		rows, err := blobdb.Query("select xid, content from filedata")
 		if err != nil {
 			elog.Fatal(err)
@@ -191,19 +191,19 @@ func upgradedb() {
 			elog.Fatal(err)
 		}
 		for xid, hash := range m {
-			doordie(tx, "update filedata set hash = ? where xid = ?", hash, xid)
+			sqlMustQuery(tx, "update filedata set hash = ? where xid = ?", hash, xid)
 		}
 		err = tx.Commit()
 		if err != nil {
 			elog.Fatal(err)
 		}
-		doordie(db, "update config set value = 40 where key = 'dbversion'")
+		sqlMustQuery(db, "update config set value = 40 where key = 'dbversion'")
 		fallthrough
 	case 40:
-		doordie(db, "PRAGMA journal_mode=WAL")
+		sqlMustQuery(db, "PRAGMA journal_mode=WAL")
 		blobdb := openblobdb()
-		doordie(blobdb, "PRAGMA journal_mode=WAL")
-		doordie(db, "update config set value = 41 where key = 'dbversion'")
+		sqlMustQuery(blobdb, "PRAGMA journal_mode=WAL")
+		sqlMustQuery(db, "update config set value = 41 where key = 'dbversion'")
 		fallthrough
 	case 41:
 

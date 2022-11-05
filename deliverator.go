@@ -28,7 +28,7 @@ type Doover struct {
 	When time.Time
 }
 
-func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
+func calculateExpBackoff(goarounds int64, userid int64, rcpt string, msg []byte) {
 	var drift time.Duration
 	switch goarounds {
 	case 1:
@@ -90,7 +90,7 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 		ok := boxofboxes.Get(rcpt, &box)
 		if !ok {
 			ilog.Printf("failed getting inbox for %s", rcpt)
-			sayitagain(goarounds+1, userid, rcpt, msg)
+			calculateExpBackoff(goarounds+1, userid, rcpt, msg)
 			return
 		}
 		inbox = box.In
@@ -99,7 +99,7 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 	if err != nil {
 		ilog.Printf("failed to post json to %s: %s", inbox, err)
 		if prio {
-			sayitagain(goarounds+1, userid, rcpt, msg)
+			calculateExpBackoff(goarounds+1, userid, rcpt, msg)
 		}
 		return
 	}
@@ -130,7 +130,7 @@ func getdoovers() []Doover {
 	return doovers
 }
 
-func redeliverator() {
+func redeliveryLoop() {
 	sleeper := time.NewTimer(5 * time.Second)
 	for {
 		select {

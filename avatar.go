@@ -39,7 +39,7 @@ var avatarcolors = [4][4]byte{
 
 func loadAvatarColors() {
 	var colors string
-	getconfig("avatarcolors", &colors)
+	getConfigValue("avatarcolors", &colors)
 	if colors == "" {
 		return
 	}
@@ -182,7 +182,7 @@ func showflag(writer http.ResponseWriter, req *http.Request) {
 
 var re_flags = regexp.MustCompile("flag:[[:alnum:],]+")
 
-func fixupflags(h *Honk) []Emu {
+func fixupflags(h *ActivityPubActivity) []Emu {
 	var emus []Emu
 	count := 0
 	h.Noise = re_flags.ReplaceAllStringFunc(h.Noise, func(m string) string {
@@ -196,7 +196,7 @@ func fixupflags(h *Honk) []Emu {
 	return emus
 }
 
-func renderflags(h *Honk) {
+func renderflags(h *ActivityPubActivity) {
 	h.Noise = re_flags.ReplaceAllStringFunc(h.Noise, func(m string) string {
 		code := m[5:]
 		src := fmt.Sprintf("https://%s/flag/%s", serverName, code)

@@ -15,23 +15,6 @@
 
 package main
 
-/*
-#include <termios.h>
-
-void
-termecho(int on)
-{
-	struct termios t;
-	tcgetattr(1, &t);
-	if (on)
-		t.c_lflag |= ECHO;
-	else
-		t.c_lflag &= ~ECHO;
-	tcsetattr(1, TCSADRAIN, &t);
-}
-*/
-import "C"
-
 import (
 	"bufio"
 	"crypto/rand"
@@ -94,7 +77,6 @@ func initdb() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		C.termecho(1)
 		fmt.Printf("\n")
 		os.Remove(dbname)
 		os.Exit(1)
@@ -141,7 +123,7 @@ func initdb() {
 		elog.Print("that's way too short")
 		return
 	}
-	setconfig("listenaddr", addr)
+	setConfigValue("listenaddr", addr)
 	fmt.Printf("server name: ")
 	addr, err = r.ReadString('\n')
 	if err != nil {
@@ -153,17 +135,17 @@ func initdb() {
 		elog.Print("that's way too short")
 		return
 	}
-	setconfig("servername", addr)
+	setConfigValue("servername", addr)
 	var randbytes [16]byte
 	rand.Read(randbytes[:])
 	key := fmt.Sprintf("%x", randbytes)
-	setconfig("csrfkey", key)
-	setconfig("dbversion", myVersion)
+	setConfigValue("csrfkey", key)
+	setConfigValue("dbversion", myVersion)
 
-	setconfig("servermsg", "<h2>Things happen.</h2>")
-	setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
-	setconfig("loginmsg", "<h2>login</h2>")
-	setconfig("devel", 0)
+	setConfigValue("servermsg", "<h2>Things happen.</h2>")
+	setConfigValue("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
+	setConfigValue("loginmsg", "<h2>login</h2>")
+	setConfigValue("devel", 0)
 
 	db.Close()
 	fmt.Printf("done.\n")
@@ -213,7 +195,6 @@ func adduser() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		C.termecho(1)
 		fmt.Printf("\n")
 		os.Exit(1)
 	}()
@@ -239,20 +220,20 @@ func deluser(username string) {
 	db := opendatabase()
 
 	where := " where honkid in (select honkid from honks where userid = ?)"
-	doordie(db, "delete from donks"+where, userid)
-	doordie(db, "delete from onts"+where, userid)
-	doordie(db, "delete from honkmeta"+where, userid)
+	sqlMustQuery(db, "delete from donks"+where, userid)
+	sqlMustQuery(db, "delete from onts"+where, userid)
+	sqlMustQuery(db, "delete from honkmeta"+where, userid)
 	where = " where chonkid in (select chonkid from chonks where userid = ?)"
-	doordie(db, "delete from donks"+where, userid)
+	sqlMustQuery(db, "delete from donks"+where, userid)
 
-	doordie(db, "delete from honks where userid = ?", userid)
-	doordie(db, "delete from chonks where userid = ?", userid)
-	doordie(db, "delete from honkers where userid = ?", userid)
-	doordie(db, "delete from zonkers where userid = ?", userid)
-	doordie(db, "delete from doovers where userid = ?", userid)
-	doordie(db, "delete from hfcs where userid = ?", userid)
-	doordie(db, "delete from auth where userid = ?", userid)
-	doordie(db, "delete from users where userid = ?", userid)
+	sqlMustQuery(db, "delete from honks where userid = ?", userid)
+	sqlMustQuery(db, "delete from chonks where userid = ?", userid)
+	sqlMustQuery(db, "delete from honkers where userid = ?", userid)
+	sqlMustQuery(db, "delete from zonkers where userid = ?", userid)
+	sqlMustQuery(db, "delete from doovers where userid = ?", userid)
+	sqlMustQuery(db, "delete from hfcs where userid = ?", userid)
+	sqlMustQuery(db, "delete from auth where userid = ?", userid)
+	sqlMustQuery(db, "delete from users where userid = ?", userid)
 }
 
 func chpass() {
@@ -271,7 +252,6 @@ func chpass() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		C.termecho(1)
 		fmt.Printf("\n")
 		os.Exit(1)
 	}()
@@ -296,10 +276,8 @@ func chpass() {
 }
 
 func askpassword(r *bufio.Reader) (string, error) {
-	C.termecho(0)
 	fmt.Printf("password: ")
 	pass, err := r.ReadString('\n')
-	C.termecho(1)
 	fmt.Printf("\n")
 	if err != nil {
 		return "", err
@@ -412,7 +390,7 @@ func openblobdb() *sql.DB {
 	return db
 }
 
-func getconfig(key string, value interface{}) error {
+func getConfigValue(key string, value interface{}) error {
 	m, ok := value.(*map[string]bool)
 	if ok {
 		rows, err := stmtConfig.Query(key)
@@ -438,7 +416,7 @@ func getconfig(key string, value interface{}) error {
 	return err
 }
 
-func setconfig(key string, val interface{}) error {
+func setConfigValue(key string, val interface{}) error {
 	db := opendatabase()
 	db.Exec("delete from config where key = ?", key)
 	_, err := db.Exec("insert into config (key, value) values (?, ?)", key, val)
@@ -447,7 +425,7 @@ func setconfig(key string, val interface{}) error {
 
 func openListener() (net.Listener, error) {
 	var listenAddr string
-	err := getconfig("listenaddr", &listenAddr)
+	err := getConfigValue("listenaddr", &listenAddr)
 	if err != nil {
 		return nil, err
 	}

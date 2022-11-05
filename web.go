@@ -17,10 +17,13 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	notrand "math/rand"
 	"net/http"
 	"net/url"
@@ -35,6 +38,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/acme/autocert"
 	"humungus.tedunangst.com/r/webs/cache"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/junk"
@@ -96,7 +100,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 func homepage(w http.ResponseWriter, r *http.Request) {
 	templinfo := getInfo(r)
 	u := login.GetUserInfo(r)
-	var honks []*Honk
+	var honks []*ActivityPubActivity
 	var userid int64 = -1
 
 	templinfo["ServerMessage"] = serverMsg
@@ -181,7 +185,7 @@ func showfunzone(w http.ResponseWriter, r *http.Request) {
 func showrss(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 
-	var honks []*Honk
+	var honks []*ActivityPubActivity
 	if name != "" {
 		honks = gethonksbyuser(name, false, 0)
 	} else {
@@ -281,12 +285,12 @@ func ping(user *WhatAbout, who string) {
 	}
 	ilog.Printf("sending ping to %s", box.In)
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["type"] = "Ping"
 	j["id"] = user.URL + "/ping/" + xfiltrate()
 	j["actor"] = user.URL
 	j["to"] = who
-	ki := ziggy(user.ID)
+	ki := getPrivateKey(user.ID)
 	if ki == nil {
 		return
 	}
@@ -306,13 +310,13 @@ func pong(user *WhatAbout, who string, obj string) {
 		return
 	}
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["type"] = "Pong"
 	j["id"] = user.URL + "/pong/" + xfiltrate()
 	j["actor"] = user.URL
 	j["to"] = who
 	j["object"] = obj
-	ki := ziggy(user.ID)
+	ki := getPrivateKey(user.ID)
 	if ki == nil {
 		return
 	}
@@ -359,10 +363,10 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyname, err := httpsig.VerifyRequest(r, payload, zaggy)
+	keyname, err := httpsig.VerifyRequest(r, payload, getPubKey)
 	if err != nil && keyname != "" {
 		savingthrow(keyname)
-		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
+		keyname, err = httpsig.VerifyRequest(r, payload, getPubKey)
 	}
 	if err != nil {
 		ilog.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
@@ -439,7 +443,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		obj, ok := j.GetString("object")
 		if ok {
 			content, _ := j.GetString("content")
-			addreaction(user, obj, who, content)
+			addReaction(user, obj, who, content)
 		}
 	default:
 		go xonksaver(user, j, origin)
@@ -465,10 +469,10 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 	if crappola(j) {
 		return
 	}
-	keyname, err := httpsig.VerifyRequest(r, payload, zaggy)
+	keyname, err := httpsig.VerifyRequest(r, payload, getPubKey)
 	if err != nil && keyname != "" {
 		savingthrow(keyname)
-		keyname, err = httpsig.VerifyRequest(r, payload, zaggy)
+		keyname, err = httpsig.VerifyRequest(r, payload, getPubKey)
 	}
 	if err != nil {
 		ilog.Printf("inbox message failed signature for %s from %s: %s", keyname, r.Header.Get("X-Forwarded-For"), err)
@@ -545,7 +549,7 @@ func serveractor(w http.ResponseWriter, r *http.Request) {
 func ximport(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	xid := strings.TrimSpace(r.FormValue("xid"))
-	xonk := getxonk(u.UserID, xid)
+	xonk := getActivityPubActivity(u.UserID, xid)
 	if xonk == nil {
 		p, _ := investigate(xid)
 		if p != nil {
@@ -626,7 +630,7 @@ var oldoutbox = cache.New(cache.Options{Filler: func(name string) ([]byte, bool)
 	}
 
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL + "/outbox"
 	j["attributedTo"] = user.URL
 	j["type"] = "OrderedCollection"
@@ -650,7 +654,7 @@ func outbox(w http.ResponseWriter, r *http.Request) {
 	var j []byte
 	ok := oldoutbox.Get(name, &j)
 	if ok {
-		w.Header().Set("Content-Type", theonetruename)
+		w.Header().Set("Content-Type", ldjsonContentType)
 		w.Write(j)
 	} else {
 		http.NotFound(w, r)
@@ -664,7 +668,7 @@ var oldempties = cache.New(cache.Options{Filler: func(url string) ([]byte, bool)
 	}
 	user := fmt.Sprintf("https://%s%s", serverName, url[:len(url)-10])
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user + colname
 	j["attributedTo"] = user
 	j["type"] = "OrderedCollection"
@@ -688,7 +692,7 @@ func emptiness(w http.ResponseWriter, r *http.Request) {
 	var j []byte
 	ok := oldempties.Get(r.URL.Path, &j)
 	if ok {
-		w.Header().Set("Content-Type", theonetruename)
+		w.Header().Set("Content-Type", ldjsonContentType)
 		w.Write(j)
 	} else {
 		http.NotFound(w, r)
@@ -710,7 +714,7 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	if friendorfoe(r.Header.Get("Accept")) {
 		j, ok := asjonker(name)
 		if ok {
-			w.Header().Set("Content-Type", theonetruename)
+			w.Header().Set("Content-Type", ldjsonContentType)
 			w.Write(j)
 		} else {
 			http.NotFound(w, r)
@@ -732,7 +736,7 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 func showhonker(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	name := mux.Vars(r)["name"]
-	var honks []*Honk
+	var honks []*ActivityPubActivity
 	if name == "" {
 		name = r.FormValue("xid")
 		honks = gethonksbyxonker(u.UserID, name, 0)
@@ -813,7 +817,7 @@ func showontology(w http.ResponseWriter, r *http.Request) {
 		user := getserveruser()
 
 		j := junk.New()
-		j["@context"] = itiswhatitis
+		j["@context"] = atContextString
 		j["id"] = fmt.Sprintf("https://%s/o/%s", serverName, name)
 		j["name"] = "#" + name
 		j["attributedTo"] = user.URL
@@ -945,11 +949,11 @@ func savetracks(tracks map[string][]string) {
 		row := stmtGetTracks.QueryRow(xid)
 		err := row.Scan(&prev)
 		if err == sql.ErrNoRows {
-			f = oneofakind(f)
+			f = stringArrayTrimUntilDupe(f)
 			stmtNewTracks.Exec(xid, strings.Join(f, " "))
 		} else if err == nil {
 			all := append(strings.Split(prev, " "), f...)
-			all = oneofakind(all)
+			all = stringArrayTrimUntilDupe(all)
 			stmtUpdateTracks.Exec(strings.Join(all, " "))
 		} else {
 			elog.Printf("savetracks error: %s", err)
@@ -1025,14 +1029,14 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 		j, ok := gimmejonk(xid)
 		if ok {
 			trackback(xid, r)
-			w.Header().Set("Content-Type", theonetruename)
+			w.Header().Set("Content-Type", ldjsonContentType)
 			w.Write(j)
 		} else {
 			http.NotFound(w, r)
 		}
 		return
 	}
-	honk := getxonk(user.ID, xid)
+	honk := getActivityPubActivity(user.ID, xid)
 	if honk == nil {
 		http.NotFound(w, r)
 		return
@@ -1047,7 +1051,7 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 			return
 
 		}
-		honks := []*Honk{honk}
+		honks := []*ActivityPubActivity{honk}
 		donksforhonks(honks)
 		templinfo := getInfo(r)
 		templinfo["ServerMessage"] = "one honk maybe more"
@@ -1057,7 +1061,7 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 	}
 	rawhonks := gethonksbyconvoy(honk.UserID, honk.Convoy, 0)
 	reversehonks(rawhonks)
-	var honks []*Honk
+	var honks []*ActivityPubActivity
 	for _, h := range rawhonks {
 		if h.XID == xid && len(honks) != 0 {
 			h.Style += " glow"
@@ -1073,7 +1077,7 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 	honkpage(w, u, honks, templinfo)
 }
 
-func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo map[string]interface{}) {
+func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*ActivityPubActivity, templinfo map[string]interface{}) {
 	var userid int64 = -1
 	if u != nil {
 		userid = u.UserID
@@ -1164,7 +1168,7 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	if whatabout != user.About {
 		sendupdate = true
 	}
-	j, err := jsonify(options)
+	j, err := encodeJson(options)
 	if err == nil {
 		_, err = db.Exec("update users set about = ?, options = ? where username = ?", whatabout, j, u.Username)
 	}
@@ -1185,7 +1189,7 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 func bonkit(xid string, user *WhatAbout) {
 	dlog.Printf("bonking %s", xid)
 
-	xonk := getxonk(user.ID, xid)
+	xonk := getActivityPubActivity(user.ID, xid)
 	if xonk == nil {
 		return
 	}
@@ -1195,7 +1199,7 @@ func bonkit(xid string, user *WhatAbout) {
 	if xonk.IsBonked() {
 		return
 	}
-	donksforhonks([]*Honk{xonk})
+	donksforhonks([]*ActivityPubActivity{xonk})
 
 	_, err := stmtUpdateFlags.Exec(flagIsBonked, xonk.ID)
 	if err != nil {
@@ -1207,7 +1211,7 @@ func bonkit(xid string, user *WhatAbout) {
 		oonker = xonk.Honker
 	}
 	dt := time.Now().UTC()
-	bonk := &Honk{
+	bonk := &ActivityPubActivity{
 		UserID:   user.ID,
 		Username: user.Name,
 		What:     "bonk",
@@ -1222,7 +1226,7 @@ func bonkit(xid string, user *WhatAbout) {
 		Donks:    xonk.Donks,
 		Whofore:  2,
 		Convoy:   xonk.Convoy,
-		Audience: []string{thewholeworld, oonker},
+		Audience: []string{activitystreamsPublicString, oonker},
 		Public:   true,
 		Format:   xonk.Format,
 		Place:    xonk.Place,
@@ -1256,12 +1260,12 @@ func submitbonk(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func sendzonkofsorts(xonk *Honk, user *WhatAbout, what string, aux string) {
-	zonk := &Honk{
+func sendzonkofsorts(xonk *ActivityPubActivity, user *WhatAbout, what string, aux string) {
+	zonk := &ActivityPubActivity{
 		What:     what,
 		XID:      xonk.XID,
 		Date:     time.Now().UTC(),
-		Audience: oneofakind(xonk.Audience),
+		Audience: stringArrayTrimUntilDupe(xonk.Audience),
 		Noise:    aux,
 	}
 	zonk.Public = loudandproud(zonk.Audience)
@@ -1277,7 +1281,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	user, _ := butwhatabout(userinfo.Username)
 
 	if wherefore == "save" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
 			_, err := stmtUpdateFlags.Exec(flagIsSaved, xonk.ID)
 			if err != nil {
@@ -1288,7 +1292,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "unsave" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
 			_, err := stmtClearFlags.Exec(flagIsSaved, xonk.ID)
 			if err != nil {
@@ -1306,7 +1310,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 		if reaction == "none" {
 			return
 		}
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
 			_, err := stmtUpdateFlags.Exec(flagIsReacted, xonk.ID)
 			if err != nil {
@@ -1318,7 +1322,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "wonk" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
 			_, err := stmtUpdateFlags.Exec(flagIsWonked, xonk.ID)
 			if err == nil {
@@ -1336,7 +1340,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	defer oldjonks.Flush()
 
 	if wherefore == "ack" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil && !xonk.IsAcked() {
 			_, err := stmtUpdateFlags.Exec(flagIsAcked, xonk.ID)
 			if err != nil {
@@ -1348,7 +1352,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "deack" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil && xonk.IsAcked() {
 			_, err := stmtClearFlags.Exec(flagIsAcked, xonk.ID)
 			if err != nil {
@@ -1368,8 +1372,8 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	if wherefore == "unbonk" {
 		xonk := getbonk(userinfo.UserID, what)
 		if xonk != nil {
-			deletehonk(xonk.ID)
-			xonk = getxonk(userinfo.UserID, what)
+			deleteHonk(xonk.ID)
+			xonk = getActivityPubActivity(userinfo.UserID, what)
 			_, err := stmtClearFlags.Exec(flagIsBonked, xonk.ID)
 			if err != nil {
 				elog.Printf("error unbonking: %s", err)
@@ -1380,7 +1384,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "untag" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
 			_, err := stmtUpdateFlags.Exec(flagIsUntagged, xonk.ID)
 			if err != nil {
@@ -1396,9 +1400,9 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 
 	ilog.Printf("zonking %s %s", wherefore, what)
 	if wherefore == "zonk" {
-		xonk := getxonk(userinfo.UserID, what)
+		xonk := getActivityPubActivity(userinfo.UserID, what)
 		if xonk != nil {
-			deletehonk(xonk.ID)
+			deleteHonk(xonk.ID)
 			if xonk.Whofore == 2 || xonk.Whofore == 3 {
 				sendzonkofsorts(xonk, user, "zonk", "")
 			}
@@ -1415,7 +1419,7 @@ func edithonkpage(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	user, _ := butwhatabout(u.Username)
 	xid := r.FormValue("xid")
-	honk := getxonk(u.UserID, xid)
+	honk := getActivityPubActivity(u.UserID, xid)
 	if !canedithonk(user, honk) {
 		http.Error(w, "no editing that please", http.StatusInternalServerError)
 		return
@@ -1423,7 +1427,7 @@ func edithonkpage(w http.ResponseWriter, r *http.Request) {
 
 	noise := honk.Noise
 
-	honks := []*Honk{honk}
+	honks := []*ActivityPubActivity{honk}
 	donksforhonks(honks)
 	reverbolate(u.UserID, honks)
 	templinfo := getInfo(r)
@@ -1456,7 +1460,7 @@ func newhonkpage(w http.ResponseWriter, r *http.Request) {
 	rid := r.FormValue("rid")
 	noise := ""
 
-	xonk := getxonk(u.UserID, rid)
+	xonk := getActivityPubActivity(u.UserID, rid)
 	if xonk != nil {
 		_, replto := handles(xonk.Honker)
 		if replto != "" {
@@ -1476,7 +1480,7 @@ func newhonkpage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func canedithonk(user *WhatAbout, honk *Honk) bool {
+func canedithonk(user *WhatAbout, honk *ActivityPubActivity) bool {
 	if honk == nil || honk.Honker != user.URL || honk.What == "bonk" {
 		return false
 	}
@@ -1574,7 +1578,7 @@ func submitwebhonk(w http.ResponseWriter, r *http.Request) {
 }
 
 // what a hot mess this function is
-func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
+func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 	rid := r.FormValue("rid")
 	noise := r.FormValue("noise")
 	format := r.FormValue("format")
@@ -1591,9 +1595,9 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 
 	dt := time.Now().UTC()
 	updatexid := r.FormValue("updatexid")
-	var honk *Honk
+	var honk *ActivityPubActivity
 	if updatexid != "" {
-		honk = getxonk(userinfo.UserID, updatexid)
+		honk = getActivityPubActivity(userinfo.UserID, updatexid)
 		if !canedithonk(user, honk) {
 			http.Error(w, "no editing that please", http.StatusInternalServerError)
 			return nil
@@ -1611,7 +1615,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		if wonkles != "" {
 			what = "wonk"
 		}
-		honk = &Honk{
+		honk = &ActivityPubActivity{
 			UserID:   userinfo.UserID,
 			Username: userinfo.Username,
 			What:     what,
@@ -1631,7 +1635,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 
 	var convoy string
 	if rid != "" {
-		xonk := getxonk(userinfo.UserID, rid)
+		xonk := getActivityPubActivity(userinfo.UserID, rid)
 		if xonk == nil {
 			http.Error(w, "replyto disappeared", http.StatusNotFound)
 			return nil
@@ -1641,7 +1645,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		}
 		convoy = xonk.Convoy
 		for i, a := range honk.Audience {
-			if a == thewholeworld {
+			if a == activitystreamsPublicString {
 				honk.Audience[0], honk.Audience[i] = honk.Audience[i], honk.Audience[0]
 				break
 			}
@@ -1654,7 +1658,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 			}
 		}
 	} else {
-		honk.Audience = []string{thewholeworld}
+		honk.Audience = []string{activitystreamsPublicString}
 	}
 	if honk.Noise != "" && honk.Noise[0] == '@' {
 		honk.Audience = append(grapevine(honk.Mentions), honk.Audience...)
@@ -1666,7 +1670,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		convoy = "data:,electrichonkytonk-" + xfiltrate()
 	}
 	butnottooloud(honk.Audience)
-	honk.Audience = oneofakind(honk.Audience)
+	honk.Audience = stringArrayTrimUntilDupe(honk.Audience)
 	if len(honk.Audience) == 0 {
 		ilog.Printf("honk to nowhere")
 		http.Error(w, "honk to nowhere...", http.StatusNotFound)
@@ -1745,7 +1749,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	honk.Noise = noise
 
 	if r.FormValue("preview") == "preview" {
-		honks := []*Honk{honk}
+		honks := []*ActivityPubActivity{honk}
 		reverbolate(userinfo.UserID, honks)
 		templinfo := getInfo(r)
 		templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
@@ -1772,7 +1776,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	}
 
 	if updatexid != "" {
-		updatehonk(honk)
+		updateHonk(honk)
 		oldjonks.Clear(honk.XID)
 	} else {
 		err := savehonk(honk)
@@ -1784,7 +1788,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 
 	// reload for consistency
 	honk.Donks = nil
-	donksforhonks([]*Honk{honk})
+	donksforhonks([]*ActivityPubActivity{honk})
 
 	go honkworldwide(user, honk)
 
@@ -1875,7 +1879,7 @@ var combocache = cache.New(cache.Options{Filler: func(userid int64) ([]string, b
 			combos[i] = ""
 		}
 	}
-	combos = oneofakind(combos)
+	combos = stringArrayTrimUntilDupe(combos)
 	sort.Strings(combos)
 	return combos, true
 }, Invalidator: &honkerinvalidator})
@@ -1909,7 +1913,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 
 	var meta HonkerMeta
 	meta.Notes = strings.TrimSpace(r.FormValue("notes"))
-	mj, _ := jsonify(&meta)
+	mj, _ := encodeJson(&meta)
 
 	defer honkerinvalidator.Clear(u.UserID)
 
@@ -2007,7 +2011,7 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j, err := jsonify(filt)
+	j, err := encodeJson(filt)
 	if err == nil {
 		_, err = stmtSaveFilter.Exec(userinfo.UserID, j)
 	}
@@ -2183,7 +2187,7 @@ func servefile(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func nomoroboto(w http.ResponseWriter, r *http.Request) {
+func robotsTxtHandler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "User-agent: *\n")
 	io.WriteString(w, "Disallow: /a\n")
 	io.WriteString(w, "Disallow: /d/\n")
@@ -2215,7 +2219,7 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 
 	var hydra Hydration
 
-	var honks []*Honk
+	var honks []*ActivityPubActivity
 	switch page {
 	case "atme":
 		honks = gethonksforme(userid, wanted)
@@ -2288,7 +2292,7 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	hydra.MeCount = user.Options.MeCount
 	hydra.ChatCount = user.Options.ChatCount
 	w.Header().Set("Content-Type", "application/json")
-	j, _ := jsonify(&hydra)
+	j, _ := encodeJson(&hydra)
 	io.WriteString(w, j)
 }
 
@@ -2331,7 +2335,7 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 	case "zonkit":
 		zonkit(w, r)
 	case "gethonks":
-		var honks []*Honk
+		var honks []*ActivityPubActivity
 		wanted, _ := strconv.ParseInt(r.FormValue("after"), 10, 0)
 		page := r.FormValue("page")
 		var waitchan <-chan time.Time
@@ -2383,7 +2387,7 @@ var endoftheworld = make(chan bool)
 var readyalready = make(chan bool)
 var workinprogress = 0
 
-func enditall() {
+func exitSignalHandler() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	<-sig
@@ -2413,20 +2417,48 @@ func bgmonitor() {
 	}
 }
 
+func extractViewsToTmpDir() {
+	layouts, err := viewsDir.ReadDir("views")
+	if err != nil {
+		log.Fatal(err)
+	}
+	targetDir, err := os.MkdirTemp(os.TempDir(), "honk*")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	os.MkdirAll(fmt.Sprintf("%s/views/", targetDir), 0777)
+	// Generate our templates map from our layouts/ and includes/ directories
+	for _, file := range layouts {
+		log.Printf("Loading %v -> %s", file.Name(), targetDir)
+		f, _ := viewsDir.Open("views/" + file.Name())
+		ff, err := os.Create(fmt.Sprintf("%s/views/%s", targetDir, file.Name()))
+		if err != nil {
+			log.Fatalf("cannot unpack views %v", err)
+		}
+		io.Copy(ff, f)
+		ff.Close()
+	}
+
+	viewDir = targetDir
+}
+
 func serve() {
 	db := opendatabase()
 	login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: develMode})
+	// login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: true})
 
-	listener, err := openListener()
-	if err != nil {
-		elog.Fatal(err)
-	}
+	// listener, err := openListener()
+	// if err != nil {
+	// 	elog.Fatal(err)
+	// }
 	runBackendServer()
-	go enditall()
-	go redeliverator()
+	go exitSignalHandler()
+	go redeliveryLoop()
 	go tracker()
 	go bgmonitor()
 	loadLingo()
+	extractViewsToTmpDir()
 
 	readviews = templates.Load(develMode,
 		viewDir+"/views/honkpage.html",
@@ -2465,89 +2497,157 @@ func serve() {
 	}
 
 	mux := mux.NewRouter()
+	mux.NotFoundHandler = http.HandlerFunc(serveBenjojoCoUk)
 	mux.Use(login.Checker)
-
 	mux.Handle("/api", login.TokenRequired(http.HandlerFunc(apihandler)))
 
-	posters := mux.Methods("POST").Subrouter()
-	getters := mux.Methods("GET").Subrouter()
+	PostSubRouter := mux.Methods("POST").Subrouter()
+	GetSubrouter := mux.Methods("GET").Subrouter()
 
-	getters.HandleFunc("/", homepage)
-	getters.HandleFunc("/home", homepage)
-	getters.HandleFunc("/front", homepage)
-	getters.HandleFunc("/events", homepage)
-	getters.HandleFunc("/robots.txt", nomoroboto)
-	getters.HandleFunc("/rss", showrss)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}", showuser)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/"+honkSep+"/{xid:[\\pL[:digit:]]+}", showonehonk)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/rss", showrss)
-	posters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/inbox", inbox)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/outbox", outbox)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/followers", emptiness)
-	getters.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/following", emptiness)
-	getters.HandleFunc("/a", avatate)
-	getters.HandleFunc("/o", thelistingoftheontologies)
-	getters.HandleFunc("/o/{name:.+}", showontology)
-	getters.HandleFunc("/d/{xid:[\\pL[:digit:].]+}", servefile)
-	getters.HandleFunc("/emu/{emu:[^.]*[^/]+}", serveemu)
-	getters.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
-	getters.HandleFunc("/.well-known/webfinger", fingerlicker)
+	GetSubrouter.HandleFunc("/honk", homepage)
+	GetSubrouter.HandleFunc("/home", homepage)
+	GetSubrouter.HandleFunc("/front", homepage)
+	GetSubrouter.HandleFunc("/events", homepage)
+	GetSubrouter.HandleFunc("/robots.txt", robotsTxtHandler)
+	GetSubrouter.HandleFunc("/rss", showrss)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}", showuser)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/"+honkSep+"/{xid:[\\pL[:digit:]]+}", showonehonk)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/rss", showrss)
+	PostSubRouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/inbox", inbox)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/outbox", outbox)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/followers", emptiness)
+	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/following", emptiness)
+	GetSubrouter.HandleFunc("/a", avatate)
+	GetSubrouter.HandleFunc("/o", thelistingoftheontologies)
+	GetSubrouter.HandleFunc("/o/{name:.+}", showontology)
+	GetSubrouter.HandleFunc("/d/{xid:[\\pL[:digit:].]+}", servefile)
+	GetSubrouter.HandleFunc("/emu/{emu:[^.]*[^/]+}", serveemu)
+	GetSubrouter.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
+	GetSubrouter.HandleFunc("/.well-known/webfinger", fingerlicker)
 
-	getters.HandleFunc("/flag/{code:.+}", showflag)
+	GetSubrouter.HandleFunc("/flag/{code:.+}", showflag)
 
-	getters.HandleFunc("/server", serveractor)
-	posters.HandleFunc("/server/inbox", serverinbox)
-	posters.HandleFunc("/inbox", serverinbox)
+	GetSubrouter.HandleFunc("/server", serveractor)
+	PostSubRouter.HandleFunc("/server/inbox", serverinbox)
+	PostSubRouter.HandleFunc("/inbox", serverinbox)
 
-	getters.HandleFunc("/style.css", serveviewasset)
-	getters.HandleFunc("/honkpage.js", serveviewasset)
-	getters.HandleFunc("/wonk.js", serveviewasset)
-	getters.HandleFunc("/local.css", servedataasset)
-	getters.HandleFunc("/local.js", servedataasset)
-	getters.HandleFunc("/icon.png", servedataasset)
-	getters.HandleFunc("/favicon.ico", servedataasset)
+	GetSubrouter.HandleFunc("/style.css", serveviewasset)
+	GetSubrouter.HandleFunc("/honkpage.js", serveviewasset)
+	GetSubrouter.HandleFunc("/wonk.js", serveviewasset)
+	GetSubrouter.HandleFunc("/local.css", servedataasset)
+	GetSubrouter.HandleFunc("/local.js", servedataasset)
+	GetSubrouter.HandleFunc("/icon.png", servedataasset)
+	GetSubrouter.HandleFunc("/favicon.ico", servedataasset)
 
-	getters.HandleFunc("/about", servehtml)
-	getters.HandleFunc("/login", servehtml)
-	posters.HandleFunc("/dologin", login.LoginFunc)
-	getters.HandleFunc("/logout", login.LogoutFunc)
-	getters.HandleFunc("/help/{name:[\\pL[:digit:]_.-]+}", servehelp)
+	GetSubrouter.HandleFunc("/about", servehtml)
+	GetSubrouter.HandleFunc("/login", servehtml)
+	PostSubRouter.HandleFunc("/dologin", login.LoginFunc)
+	GetSubrouter.HandleFunc("/logout", login.LogoutFunc)
+	GetSubrouter.HandleFunc("/help/{name:[\\pL[:digit:]_.-]+}", servehelp)
 
-	getters.HandleFunc("/bloat/wonkles", servewonkles)
+	GetSubrouter.HandleFunc("/bloat/wonkles", serveWordList)
 
-	loggedin := mux.NewRoute().Subrouter()
-	loggedin.Use(login.Required)
-	loggedin.HandleFunc("/first", homepage)
-	loggedin.HandleFunc("/chatter", showchatter)
-	loggedin.Handle("/sendchonk", login.CSRFWrap("sendchonk", http.HandlerFunc(submitchonk)))
-	loggedin.HandleFunc("/saved", homepage)
-	loggedin.HandleFunc("/account", accountpage)
-	loggedin.HandleFunc("/funzone", showfunzone)
-	loggedin.HandleFunc("/chpass", dochpass)
-	loggedin.HandleFunc("/atme", homepage)
-	loggedin.HandleFunc("/longago", homepage)
-	loggedin.HandleFunc("/hfcs", hfcspage)
-	loggedin.HandleFunc("/xzone", xzone)
-	loggedin.HandleFunc("/newhonk", newhonkpage)
-	loggedin.HandleFunc("/edit", edithonkpage)
-	loggedin.Handle("/honk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitwebhonk)))
-	loggedin.Handle("/bonk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitbonk)))
-	loggedin.Handle("/zonkit", login.CSRFWrap("honkhonk", http.HandlerFunc(zonkit)))
-	loggedin.Handle("/savehfcs", login.CSRFWrap("filter", http.HandlerFunc(savehfcs)))
-	loggedin.Handle("/saveuser", login.CSRFWrap("saveuser", http.HandlerFunc(saveuser)))
-	loggedin.Handle("/ximport", login.CSRFWrap("ximport", http.HandlerFunc(ximport)))
-	loggedin.HandleFunc("/honkers", showhonkers)
-	loggedin.HandleFunc("/h/{name:[\\pL[:digit:]_.-]+}", showhonker)
-	loggedin.HandleFunc("/h", showhonker)
-	loggedin.HandleFunc("/c/{name:[\\pL[:digit:]_.-]+}", showcombo)
-	loggedin.HandleFunc("/c", showcombos)
-	loggedin.HandleFunc("/t", showconvoy)
-	loggedin.HandleFunc("/q", showsearch)
-	loggedin.HandleFunc("/hydra", webhydra)
-	loggedin.Handle("/submithonker", login.CSRFWrap("submithonker", http.HandlerFunc(submithonker)))
+	LoggedInRouter := mux.NewRoute().Subrouter()
+	LoggedInRouter.Use(login.Required)
+	LoggedInRouter.HandleFunc("/first", homepage)
+	LoggedInRouter.HandleFunc("/chatter", showchatter)
+	LoggedInRouter.Handle("/sendchonk", login.CSRFWrap("sendchonk", http.HandlerFunc(submitchonk)))
+	LoggedInRouter.HandleFunc("/saved", homepage)
+	LoggedInRouter.HandleFunc("/account", accountpage)
+	LoggedInRouter.HandleFunc("/funzone", showfunzone)
+	LoggedInRouter.HandleFunc("/chpass", dochpass)
+	LoggedInRouter.HandleFunc("/atme", homepage)
+	LoggedInRouter.HandleFunc("/longago", homepage)
+	LoggedInRouter.HandleFunc("/hfcs", hfcspage)
+	LoggedInRouter.HandleFunc("/xzone", xzone)
+	LoggedInRouter.HandleFunc("/newhonk", newhonkpage)
+	LoggedInRouter.HandleFunc("/edit", edithonkpage)
+	LoggedInRouter.Handle("/honk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitwebhonk)))
+	LoggedInRouter.Handle("/bonk", login.CSRFWrap("honkhonk", http.HandlerFunc(submitbonk)))
+	LoggedInRouter.Handle("/zonkit", login.CSRFWrap("honkhonk", http.HandlerFunc(zonkit)))
+	LoggedInRouter.Handle("/savehfcs", login.CSRFWrap("filter", http.HandlerFunc(savehfcs)))
+	LoggedInRouter.Handle("/saveuser", login.CSRFWrap("saveuser", http.HandlerFunc(saveuser)))
+	LoggedInRouter.Handle("/ximport", login.CSRFWrap("ximport", http.HandlerFunc(ximport)))
+	LoggedInRouter.HandleFunc("/honkers", showhonkers)
+	LoggedInRouter.HandleFunc("/h/{name:[\\pL[:digit:]_.-]+}", showhonker)
+	LoggedInRouter.HandleFunc("/h", showhonker)
+	LoggedInRouter.HandleFunc("/c/{name:[\\pL[:digit:]_.-]+}", showcombo)
+	LoggedInRouter.HandleFunc("/c", showcombos)
+	LoggedInRouter.HandleFunc("/t", showconvoy)
+	LoggedInRouter.HandleFunc("/q", showsearch)
+	LoggedInRouter.HandleFunc("/hydra", webhydra)
+	LoggedInRouter.Handle("/submithonker", login.CSRFWrap("submithonker", http.HandlerFunc(submithonker)))
 
-	err = http.Serve(listener, mux)
-	if err != nil {
-		elog.Fatal(err)
+	httpHandler := http.NewServeMux()
+	httpHandler.HandleFunc("/", redirect)
+
+	hserver := &http.Server{
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 300 * time.Second,
+		IdleTimeout:  120 * time.Second,
+		Handler:      mux,
+		Addr:         ":443",
 	}
+
+	hListener := setupSSLConfig(hserver, httpHandler)
+	go func() {
+		s := &http.Server{
+			Handler: hListener,
+			Addr:    fmt.Sprintf(":%d", 80),
+		}
+
+		go s.ListenAndServe()
+	}()
+
+	err := hserver.ListenAndServeTLS("", "")
+	if err != nil {
+		elog.Fatalf("httpsSrv.ListendAndServeTLS() failed with %s", err)
+	}
+}
+
+func redirect(w http.ResponseWriter, req *http.Request) {
+	// remove/add not default ports from req.Host
+	target := "https://" + req.Host + req.URL.Path
+	if len(req.URL.RawQuery) > 0 {
+		target += "?" + req.URL.RawQuery
+	}
+
+	http.Redirect(w, req, target,
+		// see @andreiavrammsd comment: often 307 > 301
+		http.StatusTemporaryRedirect)
+}
+
+func serveBenjojoCoUk(w http.ResponseWriter, r *http.Request) {
+	http.FileServer(http.FS(os.DirFS("/var/www/benjojo.co.uk"))).ServeHTTP(w, r)
+}
+
+func setupSSLConfig(httpsSrv *http.Server, httpMux *http.ServeMux) (handler http.Handler) {
+	getcertFunction, httpHandler := getNormalACMEConfig(httpMux)
+
+	//Only enable cert failover logic where a cert is provided.
+	httpsSrv.TLSConfig = &tls.Config{GetCertificate: getcertFunction, MinVersion: tls.VersionTLS12}
+	return httpHandler
+}
+
+func getNormalACMEConfig(httpMux *http.ServeMux) (h func(*tls.ClientHelloInfo) (*tls.Certificate, error), handler http.Handler) {
+	// Note: use a sensible value for data directory
+	// this is where cached certificates are stored
+	dataDir := "."
+	hostPolicy := func(ctx context.Context, host string) error {
+
+		if host == "benjojo.co.uk" || host == "www.benjojo.co.uk" {
+			return nil
+		}
+
+		return fmt.Errorf("acme/autocert: only benjojo.co.uk or www.benjojo.co.uk host is allowed")
+	}
+
+	m := &autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: hostPolicy,
+		Cache:      autocert.DirCache(dataDir),
+		Email:      "www@benjojo.co.uk",
+	}
+
+	return m.GetCertificate, m.HTTPHandler(httpMux)
 }

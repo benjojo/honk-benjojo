@@ -22,12 +22,12 @@ import (
 	"humungus.tedunangst.com/r/webs/junk"
 )
 
-func servewonkles(w http.ResponseWriter, r *http.Request) {
+func serveWordList(w http.ResponseWriter, r *http.Request) {
 	url := r.FormValue("w")
 	dlog.Printf("getting wordlist: %s", url)
 	wonkles := getxonker(url, "wonkles")
 	if wonkles == "" {
-		wonkles = savewonkles(url)
+		wonkles = saveWordList(url)
 		if wonkles == "" {
 			http.NotFound(w, r)
 			return
@@ -46,7 +46,7 @@ func servewonkles(w http.ResponseWriter, r *http.Request) {
 	j.Write(w)
 }
 
-func savewonkles(url string) string {
+func saveWordList(url string) string {
 	w := getxonker(url, "wonkles")
 	if w != "" {
 		return w

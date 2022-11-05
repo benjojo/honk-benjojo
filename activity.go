@@ -37,14 +37,14 @@ import (
 	"humungus.tedunangst.com/r/webs/templates"
 )
 
-var theonetruename = `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`
-var thefakename = `application/activity+json`
+var ldjsonContentType = `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`
+var activityJsonContentType = `application/activity+json`
 var falsenames = []string{
 	`application/ld+json`,
 	`application/activity+json`,
 }
-var itiswhatitis = "https://www.w3.org/ns/activitystreams"
-var thewholeworld = "https://www.w3.org/ns/activitystreams#Public"
+var atContextString = "https://www.w3.org/ns/activitystreams"
+var activitystreamsPublicString = "https://www.w3.org/ns/activitystreams#Public"
 
 var fastTimeout time.Duration = 5
 var slowTimeout time.Duration = 30
@@ -81,7 +81,7 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 		return err
 	}
 	req.Header.Set("User-Agent", "honksnonk/5.0; "+serverName)
-	req.Header.Set("Content-Type", theonetruename)
+	req.Header.Set("Content-Type", ldjsonContentType)
 	httpsig.SignRequest(keyname, key, req, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*slowTimeout*time.Second)
 	defer cancel()
@@ -177,7 +177,7 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 		client = develClient
 	}
 	fn := func() (interface{}, error) {
-		at := thefakename
+		at := activityJsonContentType
 		if strings.Contains(url, ".well-known/webfinger?resource") {
 			at = "application/jrd+json"
 		}
@@ -301,16 +301,16 @@ func iszonked(userid int64, xid string) bool {
 	return false
 }
 
-func needxonk(user *WhatAbout, x *Honk) bool {
+func needActivityPubActivity(user *WhatAbout, x *ActivityPubActivity) bool {
 	if rejectxonk(x) {
 		return false
 	}
-	return needxonkid(user, x.XID)
+	return needActivityPubActivityID(user, x.XID)
 }
 func needbonkid(user *WhatAbout, xid string) bool {
 	return needxonkidX(user, xid, true)
 }
-func needxonkid(user *WhatAbout, xid string) bool {
+func needActivityPubActivityID(user *WhatAbout, xid string) bool {
 	return needxonkidX(user, xid, false)
 }
 func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
@@ -340,10 +340,10 @@ func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
 	return true
 }
 
-func eradicatexonk(userid int64, xid string) {
-	xonk := getxonk(userid, xid)
+func deleteActivityPubActivity(userid int64, xid string) {
+	xonk := getActivityPubActivity(userid, xid)
 	if xonk != nil {
-		deletehonk(xonk.ID)
+		deleteHonk(xonk.ID)
 	}
 	_, err := stmtSaveZonker.Exec(userid, xid, "zonk")
 	if err != nil {
@@ -351,7 +351,7 @@ func eradicatexonk(userid int64, xid string) {
 	}
 }
 
-func savexonk(x *Honk) {
+func saveActivityPubActivity(x *ActivityPubActivity) {
 	ilog.Printf("saving xonk: %s", x.XID)
 	go handles(x.Honker)
 	go handles(x.Oonker)
@@ -432,7 +432,7 @@ func gimmexonks(user *WhatAbout, outbox string) {
 			}
 			xid, ok := item.(string)
 			if ok {
-				if !needxonkid(user, xid) {
+				if !needActivityPubActivityID(user, xid) {
 					continue
 				}
 				obj, err = GetJunk(user.ID, xid)
@@ -506,12 +506,12 @@ func firstofmany(obj junk.Junk, key string) string {
 	return ""
 }
 
-func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
+func xonksaver(user *WhatAbout, item junk.Junk, origin string) *ActivityPubActivity {
 	depth := 0
 	maxdepth := 10
 	currenttid := ""
 	goingup := 0
-	var xonkxonkfn func(item junk.Junk, origin string, isUpdate bool) *Honk
+	var xonkxonkfn func(item junk.Junk, origin string, isUpdate bool) *ActivityPubActivity
 
 	saveonemore := func(xid string) {
 		dlog.Printf("getting onemore: %s", xid)
@@ -529,7 +529,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		depth--
 	}
 
-	xonkxonkfn = func(item junk.Junk, origin string, isUpdate bool) *Honk {
+	xonkxonkfn = func(item junk.Junk, origin string, isUpdate bool) *ActivityPubActivity {
 		id, _ := item.GetString("id")
 		what := firstofmany(item, "type")
 		dt, ok := item.GetString("published")
@@ -557,7 +557,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return nil
 			}
 			ilog.Printf("eradicating %s", xid)
-			eradicatexonk(user.ID, xid)
+			deleteActivityPubActivity(user.ID, xid)
 			return nil
 		case "Remove":
 			xid, _ = item.GetString("object")
@@ -574,7 +574,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return nil
 			}
 			ilog.Printf("eradicating %s", xid)
-			eradicatexonk(user.ID, xid)
+			deleteActivityPubActivity(user.ID, xid)
 			return nil
 		case "Announce":
 			obj, ok = item.GetMap("object")
@@ -618,7 +618,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		case "Read":
 			xid, ok = item.GetString("object")
 			if ok {
-				if !needxonkid(user, xid) {
+				if !needActivityPubActivityID(user, xid) {
 					dlog.Printf("don't need read obj: %s", xid)
 					return nil
 				}
@@ -634,7 +634,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			xid, ok = item.GetString("object")
 			if ok {
 				// check target...
-				if !needxonkid(user, xid) {
+				if !needActivityPubActivityID(user, xid) {
 					dlog.Printf("don't need added obj: %s", xid)
 					return nil
 				}
@@ -693,7 +693,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			return nil
 		}
 
-		var xonk Honk
+		var xonk ActivityPubActivity
 		// early init
 		xonk.XID = xid
 		xonk.UserID = user.ID
@@ -712,7 +712,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			xonk.Audience = newphone(nil, obj)
 		}
 		xonk.Audience = append(xonk.Audience, xonk.Honker)
-		xonk.Audience = oneofakind(xonk.Audience)
+		xonk.Audience = stringArrayTrimUntilDupe(xonk.Audience)
 		xonk.Public = loudandproud(xonk.Audience)
 
 		var mentions []Mention
@@ -779,7 +779,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				what = "wonk"
 				content, _ = obj.GetString("content")
 				xonk.Wonkles, _ = obj.GetString("wordlist")
-				go savewonkles(xonk.Wonkles)
+				go saveWordList(xonk.Wonkles)
 			}
 			if what == "honk" && rid != "" {
 				what = "tonk"
@@ -935,7 +935,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				}
 			}
 
-			xonk.Onts = oneofakind(xonk.Onts)
+			xonk.Onts = stringArrayTrimUntilDupe(xonk.Onts)
 			replyobj, ok := obj.GetMap("replies")
 			if ok {
 				items, ok := replyobj.GetArray("items")
@@ -991,24 +991,24 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 
 		if isUpdate {
 			dlog.Printf("something has changed! %s", xonk.XID)
-			prev := getxonk(user.ID, xonk.XID)
+			prev := getActivityPubActivity(user.ID, xonk.XID)
 			if prev == nil {
 				ilog.Printf("didn't find old version for update: %s", xonk.XID)
 				isUpdate = false
 			} else {
 				xonk.ID = prev.ID
-				updatehonk(&xonk)
+				updateHonk(&xonk)
 			}
 		}
-		if !isUpdate && needxonk(user, &xonk) {
+		if !isUpdate && needActivityPubActivity(user, &xonk) {
 			if rid != "" && xonk.Public {
-				if needxonkid(user, rid) {
+				if needActivityPubActivityID(user, rid) {
 					goingup++
 					saveonemore(rid)
 					goingup--
 				}
 				if convoy == "" {
-					xx := getxonk(user.ID, rid)
+					xx := getActivityPubActivity(user.ID, rid)
 					if xx != nil {
 						convoy = xx.Convoy
 					}
@@ -1022,11 +1022,11 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				currenttid = convoy
 			}
 			xonk.Convoy = convoy
-			savexonk(&xonk)
+			saveActivityPubActivity(&xonk)
 		}
 		if goingup == 0 {
 			for _, replid := range replies {
-				if needxonkid(user, replid) {
+				if needActivityPubActivityID(user, replid) {
 					dlog.Printf("missing a reply: %s", replid)
 					saveonemore(replid)
 				}
@@ -1052,7 +1052,7 @@ func dumpactivity(item junk.Junk) {
 func rubadubdub(user *WhatAbout, req junk.Junk) {
 	actor, _ := req.GetString("actor")
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL + "/dub/" + xfiltrate()
 	j["type"] = "Accept"
 	j["actor"] = user.URL
@@ -1065,7 +1065,7 @@ func rubadubdub(user *WhatAbout, req junk.Junk) {
 
 func itakeitallback(user *WhatAbout, xid string, owner string, folxid string) {
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL + "/unsub/" + folxid
 	j["type"] = "Undo"
 	j["actor"] = user.URL
@@ -1088,7 +1088,7 @@ func subsub(user *WhatAbout, xid string, owner string, folxid string) {
 		return
 	}
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL + "/sub/" + folxid
 	j["type"] = "Follow"
 	j["actor"] = user.URL
@@ -1117,7 +1117,7 @@ func activatedonks(donks []*Donk) []junk.Junk {
 }
 
 // returns activity, object
-func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
+func jonkjonk(user *WhatAbout, h *ActivityPubActivity) (junk.Junk, junk.Junk) {
 	dt := h.Date.Format(time.RFC3339)
 	var jo junk.Junk
 	j := junk.New()
@@ -1326,9 +1326,9 @@ var oldjonks = cache.New(cache.Options{Filler: func(xid string) ([]byte, bool) {
 			honk.Replies = append(honk.Replies, h)
 		}
 	}
-	donksforhonks([]*Honk{honk})
+	donksforhonks([]*ActivityPubActivity{honk})
 	_, j := jonkjonk(user, honk)
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 
 	return j.ToBytes(), true
 }, Limit: 128})
@@ -1342,7 +1342,7 @@ func gimmejonk(xid string) ([]byte, bool) {
 func boxuprcpts(user *WhatAbout, addresses []string, useshared bool) map[string]bool {
 	rcpts := make(map[string]bool)
 	for _, a := range addresses {
-		if a == "" || a == thewholeworld || a == user.URL || strings.HasSuffix(a, "/followers") {
+		if a == "" || a == activitystreamsPublicString || a == user.URL || strings.HasSuffix(a, "/followers") {
 			continue
 		}
 		if a[0] == '%' {
@@ -1393,7 +1393,7 @@ func chonkifymsg(user *WhatAbout, ch *Chonk) []byte {
 	}
 
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL + "/" + "honk" + "/" + shortxid(ch.XID)
 	j["type"] = "Create"
 	j["actor"] = user.URL
@@ -1414,9 +1414,9 @@ func sendchonk(user *WhatAbout, ch *Chonk) {
 	}
 }
 
-func honkworldwide(user *WhatAbout, honk *Honk) {
+func honkworldwide(user *WhatAbout, honk *ActivityPubActivity) {
 	jonk, _ := jonkjonk(user, honk)
-	jonk["@context"] = itiswhatitis
+	jonk["@context"] = atContextString
 	msg := jonk.ToBytes()
 
 	rcpts := boxuprcpts(user, honk.Audience, honk.Public)
@@ -1468,7 +1468,7 @@ func doesitmatter(what string) bool {
 	return true
 }
 
-func collectiveaction(honk *Honk) {
+func collectiveaction(honk *ActivityPubActivity) {
 	user := getserveruser()
 	for _, ont := range honk.Onts {
 		dubs := getnameddubs(serverUID, ont)
@@ -1476,7 +1476,7 @@ func collectiveaction(honk *Honk) {
 			continue
 		}
 		j := junk.New()
-		j["@context"] = itiswhatitis
+		j["@context"] = atContextString
 		j["type"] = "Add"
 		j["id"] = user.URL + "/add/" + shortxid(ont+honk.XID)
 		j["actor"] = user.URL
@@ -1501,7 +1501,7 @@ func collectiveaction(honk *Honk) {
 
 func junkuser(user *WhatAbout) junk.Junk {
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = user.URL
 	j["inbox"] = user.URL + "/inbox"
 	j["outbox"] = user.URL + "/outbox"
@@ -1781,11 +1781,11 @@ func updateMe(username string) {
 	somenamedusers.Get(username, &user)
 	dt := time.Now().UTC().Format(time.RFC3339)
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = atContextString
 	j["id"] = fmt.Sprintf("%s/upme/%s/%d", user.URL, user.Name, time.Now().Unix())
 	j["actor"] = user.URL
 	j["published"] = dt
-	j["to"] = thewholeworld
+	j["to"] = activitystreamsPublicString
 	j["type"] = "Update"
 	j["object"] = junkuser(user)
 
