@@ -13,7 +13,7 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-// basic image manipulation
+// basic image manipulation (resizing)
 package image
 
 import (
@@ -29,6 +29,7 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// A returned image in compressed format
 type Image struct {
 	Data   []byte
 	Format string
@@ -36,10 +37,12 @@ type Image struct {
 	Height int
 }
 
+// Argument for the Vacuum function
 type Params struct {
+	LimitSize int // max input dimension in pixels
 	MaxWidth  int
 	MaxHeight int
-	MaxSize   int
+	MaxSize   int // max output file size in bytes
 }
 
 const dirLeft = 1
@@ -73,9 +76,18 @@ var rotateRightSigs = [][]byte{
 // Read an image and shrink it down to web scale
 func Vacuum(reader io.Reader, params Params) (*Image, error) {
 	var tmpbuf bytes.Buffer
-	io.CopyN(&tmpbuf, reader, 256)
+	tee := io.TeeReader(reader, &tmpbuf)
+	conf, _, err := image.DecodeConfig(tee)
+	if err != nil {
+		return nil, err
+	}
+	limitSize := 16000
+	if conf.Width > limitSize || conf.Height > limitSize ||
+		(params.LimitSize > 0 && conf.Width*conf.Height > params.LimitSize) {
+		return nil, fmt.Errorf("image is too large: x: %d y: %d", conf.Width, conf.Height)
+	}
 	peek := tmpbuf.Bytes()
-	img, format, err := image.Decode(io.MultiReader(&tmpbuf, reader))
+	img, format, err := image.Decode(io.MultiReader(bytes.NewReader(peek), reader))
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +157,15 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 			case image.YCbCrSubsampleRatio444:
 				oldw, oldh = oldw, oldh
 			case image.YCbCrSubsampleRatio422:
-				oldw, oldh = oldw/2, oldh
+				oldw, oldh = (oldw+1)/2, oldh
 			case image.YCbCrSubsampleRatio420:
-				oldw, oldh = oldw/2, oldh/2
+				oldw, oldh = (oldw+1)/2, (oldh+1)/2
 			case image.YCbCrSubsampleRatio440:
-				oldw, oldh = oldw, oldh/2
+				oldw, oldh = oldw, (oldh+1)/2
 			case image.YCbCrSubsampleRatio411:
-				oldw, oldh = oldw/4, oldh
+				oldw, oldh = (oldw+3)/4, oldh
 			case image.YCbCrSubsampleRatio410:
-				oldw, oldh = oldw/4, oldh/2
+				oldw, oldh = (oldw+3)/4, (oldh+1)/2
 			}
 			w, h = oldw/2, oldh/2
 

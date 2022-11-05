@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2019 Ted Unangst
+  
+   Permission to use, copy, modify, and distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+  
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+   -->
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
+  <title>HFCS(1)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">HFCS(1)</td>
+    <td class="head-vol">General Commands Manual</td>
+    <td class="head-rtitle">HFCS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">hfcs</code> &#x2014; <span class="Nd">honk
+    filtering and censorship system</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">The honk filtering and censorship system,
+    <code class="Nm">hfcs</code>, controls what messages are seen and how they
+    are presented to the user. Filter rules are based on a series of matches and
+    actions. It is accessed via the <span class="Pa">filters</span> menu
+  item.</p>
+<p class="Pp">The following match types are possible. All nonempty criteria must
+    match.</p>
+<dl class="Bl-tag">
+  <dt><var class="Ar">who</var></dt>
+  <dd>Match an actor or domain name. Matches against <var class="Ar">actor</var>
+      property.</dd>
+  <dt><var class="Ar">include audience</var></dt>
+  <dd>Previous match is applied against <var class="Fa">to</var> and
+      <var class="Fa">cc</var> fields as well.</dd>
+  <dt><var class="Ar">text</var></dt>
+  <dd>Regular expression match against the post
+    <var class="Fa">content</var>.</dd>
+  <dt><var class="Ar">is announce</var></dt>
+  <dd>Is announced (shared).</dd>
+  <dt><var class="Ar">announce of</var></dt>
+  <dd>Limit prevous match to only specified actor or domain name.</dd>
+</dl>
+<p class="Pp">The following actions may be applied. Multiple actions may be
+    applied, but some are subsumed by others.</p>
+<dl class="Bl-tag">
+  <dt><var class="Ar">reject</var></dt>
+  <dd>Reject this message entirely.</dd>
+  <dt><var class="Ar">skip media</var></dt>
+  <dd>Don't include images or attachments.</dd>
+  <dt><var class="Ar">hide</var></dt>
+  <dd>Remove this message from most feeds.</dd>
+  <dt><var class="Ar">collapse</var></dt>
+  <dd>Show only a short summary with click to view content.</dd>
+  <dt><var class="Ar">rewrite</var></dt>
+  <dd>Rewrite message content, using <var class="Ar">replace</var> replacement
+      text.</dd>
+</dl>
+<p class="Pp">The <var class="Ar">text</var> and <var class="Ar">rewrite</var>
+    fields are case insensitive word anchored regular expressions. Specifically,
+    an argument &#x2018;<code class="Li">re</code>&#x2019; will be automatically
+    rewritten as &#x2018;<code class="Li">\b(?i:re)\b</code>&#x2019;. The
+    <var class="Ar">replace</var> text may refer to submatches using $1,
+  etc.</p>
+<p class="Pp">An optional expiration may be specified as a duration. XdYhZm for
+    X days, Y hours, and Z minutes.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="honk.1.html">honk(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEATS"><a class="permalink" href="#CAVEATS">CAVEATS</a></h1>
+<p class="Pp">Not seeing is not erasing.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 1, 2019</td>
+    <td class="foot-os">OpenBSD 6.6</td>
+  </tr>
+</table>
+</body>
+</html>

@@ -1,11 +1,11 @@
 {{ template "header.html" . }}
 <main>
 <div class="info">
+{{ .LoginMsg }}
 <form action="/dologin" method="POST">
-	<p><span class="title">login</span>
 	<p><input tabindex=1 type="text" name="username" autocomplete=off> - username
 	<p><input tabindex=1 type="password" name="password"> - password
-	<p><input tabindex=1 type="submit" name="login" value="login">
+	<p><button tabindex=1 name="login" value="login">login</button>
 </form>
 </div>
 </main>

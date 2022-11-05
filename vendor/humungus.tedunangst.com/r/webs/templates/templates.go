@@ -13,6 +13,7 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+// Utilities to make html/templates a little easier to work with
 package templates
 
 import (
@@ -22,7 +23,8 @@ import (
 	"log"
 )
 
-// Wrapper around html/template supporting hot reloads
+// Wrapper around html/template supporting hot reloads.
+// Includes a map function passing multiple arguments to nested templates.
 type Template struct {
 	names     []string
 	templates *template.Template
@@ -68,7 +70,8 @@ func (t *Template) Execute(w io.Writer, name string, data interface{}) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
-// Load templates
+// Load templates.
+// If reload is true, they are reloaded every execution.
 func Load(reload bool, filenames ...string) *Template {
 	t := new(Template)
 	t.names = filenames

@@ -2,14 +2,18 @@
 <main>
 <div class="info">
 <p>
-<form action="/savehonker" method="POST">
-<span class="title">add new honker</span>
+<form action="/submithonker" method="POST">
+<h3>add new honker</h3>
 <input type="hidden" name="CSRF" value="{{ .HonkerCSRF }}">
-<p><input tabindex=1 type="text" name="name" value="" autocomplete=off> - name
-<p><input tabindex=1 type="text" name="url" value="" autocomplete=off> - url
-<p><span><label for="peep">just peeping:</label>
-<input tabindex=1 type="checkbox" id="peep" name="peep" value="peep"><span></span></span>
-<p><input tabindex=1 type="submit" name="add honker" value="add honker">
+<p><label for=url>url:</label><br>
+<input tabindex=1 type="text" name="url" value="" autocomplete=off>
+<p><label for=name>name:</label><br>
+<input tabindex=1 type="text" name="name" value="" placeholder="optional" autocomplete=off>
+<p><label for=combos>combos:</label><br>
+<input tabindex=1 type="text" name="combos" value="" placeholder="optional">
+<p><span><label class=button for="peep">skip subscribe:
+<input tabindex=1 type="checkbox" id="peep" name="peep" value="peep"><span></span></label></span>
+<p><button tabindex=1 name="add honker" value="add honker">add honker</button>
 </form>
 </div>
 {{ $honkercsrf := .HonkerCSRF }}
@@ -34,12 +38,17 @@ function expandstuff() {
 <details>
 <p>url: <a href="{{ .XID }}" rel=noreferrer>{{ .XID }}</a>
 <p>flavor: {{ .Flavor }}
-<form action="/savehonker" method="POST">
+<form action="/submithonker" method="POST">
 <input type="hidden" name="CSRF" value="{{ $honkercsrf }}">
 <input type="hidden" name="honkerid" value="{{ .ID }}">
+<p>name: <input type="text" name="name" value="{{ .Name }}">
 <p>combos: <input type="text" name="combos" value="{{ range .Combos }}{{ . }} {{end}}">
-<p>depart: <input type="text" name="goodbye" placeholder="press F" value="" autocomplete=off>
-<p><input type="submit" name="save" value="save">
+{{ if eq .Flavor "sub" }}
+<p>unsub: <input type="text" name="goodbye" placeholder="press F" value="" autocomplete=off>
+{{ else }}
+<p>(re)sub: <input type="text" name="goodbye" placeholder="press X" value="" autocomplete=off>
+{{ end }}
+<p><button name="save" value="save">save</button>
 </form>
 </details>
 <p>

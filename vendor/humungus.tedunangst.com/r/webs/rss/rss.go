@@ -63,6 +63,7 @@ type CData struct {
 	Data string `xml:",cdata"`
 }
 
+// Write the Feed as XML.
 func (fd *Feed) Write(w io.Writer) error {
 	r := header{Version: "2.0", Feed: fd}
 	io.WriteString(w, xml.Header)

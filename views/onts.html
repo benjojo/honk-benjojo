@@ -1,0 +1,16 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>ontologies of interest
+{{ $letter := 0 }}
+<ul>
+{{ range .Onts }}
+{{ if not (eq $letter (index .Name 0)) }}
+{{ $letter = (index .Name 0) }}
+<li><p>
+{{ end }}
+<span style="white-space: nowrap;"><a href="/o/{{ .Name }}">#{{ .Name }}</a> ({{ .Count }})</span>
+{{ end }}
+</ul>
+</div>
+</main>

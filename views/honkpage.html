@@ -5,60 +5,36 @@
 <p>{{ .Name }} <span style="margin-left:1em;"><a href="/u/{{ .Name }}/rss">rss</a></span>
 <p>{{ .WhatAbout }}
 {{ end }}
-<p>{{ .ServerMessage }}
+<div id="srvmsg"><p>{{ .ServerMessage }}</div>
 {{ if .HonkCSRF }}
 {{ template "honkform.html" . }}
 {{ end }}
 </div>
-{{ $BonkCSRF := .HonkCSRF }}
-{{ range .Honks }}
-{{ template "honk.html" map "Honk" . "BonkCSRF" $BonkCSRF }}
+{{ if and .HonkCSRF (not .IsPreview) }}
+<div class="info" id="refreshbox">
+<p><button onclick="refreshhonks(this)">refresh</button><span></span>
+</div>
 {{ end }}
+<div id="honksonpage">
+<div>
+{{ $BonkCSRF := .HonkCSRF }}
+{{ $IsPreview := .IsPreview }}
+{{ range .Honks }}
+{{ template "honk.html" map "Honk" . "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview }}
+{{ end }}
+</div>
+</div>
 </main>
-{{ if $BonkCSRF }}
+{{ if .HonkCSRF }}
 <script>
-function encode(hash) {
-        var s = []
-        for (var key in hash) {
-                var val = hash[key]
-                s.push(escape(key) + "=" + escape(val))
-        }
-        return s.join("&")
-}
-function post(url, data) {
-	var x = new XMLHttpRequest()
-	x.open("POST", url)
-	x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded")
-	x.send(data)
-}
-function bonk(el, xid) {
-	el.innerHTML = "bonked"
-	el.disabled = true
-	post("/bonk", "CSRF={{ $BonkCSRF }}&xid=" + escape(xid))
-}
-function muteit(el, convoy) {
-	el.innerHTML = "muted"
-	el.disabled = true
-	post("/zonkit", "CSRF={{ $BonkCSRF }}&wherefore=zonvoy&what=" + escape(convoy))
-	var els = document.querySelectorAll('article.honk')
-	for (var i = 0; i < els.length; i++) {
-		var e = els[i]
-		if (e.getAttribute("data-convoy") == convoy) {
-			e.remove()
-		}
-	}
-}
-function zonkit(el, xid) {
-	el.innerHTML = "zonked"
-	el.disabled = true
-	post("/zonkit", "CSRF={{ $BonkCSRF }}&wherefore=zonk&what=" + escape(xid))
-	var p = el
-	while (p && p.tagName != "ARTICLE") {
-		p = p.parentElement
-	}
-	if (p) {
-		p.remove()
-	}
-}
+var csrftoken = {{ .HonkCSRF }}
+var honksforpage = { }
+var curpagestate = { name: "{{ .PageName }}", arg : "{{ .PageArg }}" }
+var tophid = { }
+tophid[curpagestate.name + ":" + curpagestate.arg] = "{{ .TopHID }}"
+var servermsgs = { }
+servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
+
 </script>
+<script src="/honkpage.js{{ .JSParam }}"></script>
 {{ end }}

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2019 Ted Unangst
+  
+   Permission to use, copy, modify, and distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+  
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+   -->
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
+  <title>HONK(5)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">HONK(5)</td>
+    <td class="head-vol">File Formats Manual</td>
+    <td class="head-rtitle">HONK(5)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">honk</code> &#x2014; <span class="Nd">status
+    composition</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">Status updates composed in <code class="Nm">honk</code> have many
+    features beyond just plain text.</p>
+<p class="Pp">The process begins by pressing the button marked &#x201C;it's
+    honking time&#x201D; to activate the honk form.</p>
+<p class="Pp">Honks are posted publicly.</p>
+<p class="Pp">A subset of markdown is supported.</p>
+<dl class="Bl-tag">
+  <dt>bold</dt>
+  <dd>**bold text**</dd>
+  <dt>italics</dt>
+  <dd>*italicized text*</dd>
+  <dt>quotes</dt>
+  <dd>&gt; This text is quoted.</dd>
+  <dt>code</dt>
+  <dd>Inline `code fragments` with single ticks.
+    <div class="Bd Pp">
+    <pre>
+```c
+/* triple tick code blocks support syntax highlighting */
+int main() { return 0; }
+```
+    </pre>
+    </div>
+  </dd>
+  <dt>images</dt>
+  <dd>Inline images with img tags.
+    <div class="Bd Pp">
+    <pre>
+&lt;img alt=&quot;Lifecycle of a honk&quot; src=&quot;https://example.com/diagram.png&quot;&gt;
+    </pre>
+    </div>
+  </dd>
+  <dt>links</dt>
+  <dd>URLs beginning with &#x201C;http&#x201D; or &#x201C;https&#x201D; will be
+      autolinked.</dd>
+</dl>
+<p class="Pp">Mentioning a specfic user such as (@user@example.social) will send
+    a copy of the message to them. Several forms are supported.
+    &#x2018;<code class="Li">@name</code>&#x2019; will work using the short name
+    from the <span class="Pa">honkers</span> table and be expanded
+    automatically. &#x2018;<code class="Li">@handle@domain</code>&#x2019; will
+    work for anyone.
+    &#x2018;<code class="Li">@https://example.com</code>&#x2019; works as well.
+    When honking back, the author of the parent post is automatically
+  mentioned.</p>
+<p class="Pp">Threads from the tiny bird site may be included as quotes in a
+    post via the <var class="Ar">hoot</var> operator followed by the URL.</p>
+<div class="Bd Bd-indent"><code class="Li">hoot:
+  https://twitter.com/tedunangst/status/850379741492367360</code></div>
+<p class="Pp">Custom emoji may be included by colon wrapping the image name.
+    (:hellsyeah:) A meme (sticker, reaction gif) may be included with the
+    <var class="Ar">meme</var> operator followed by the file name.</p>
+<div class="Bd Bd-indent"><code class="Li">meme: honk.mp4</code></div>
+A full list of emoji and memes may be found in the
+  <span class="Pa">funzone</span>.
+<p class="Pp">There are no length restrictions, but remember, somebody is going
+    to have to read this noise.</p>
+<p class="Pp">One may attach a file to a post. Images are automatically rescaled
+    and reduced in size for federation. A description, or caption, is
+    encouraged. Text files and PDFs are also supported as attachments. Other
+    formats are not supported.</p>
+<p class="Pp">One may also check in to a location. The available fields, all
+    optional, are <var class="Ar">name</var>, <var class="Ar">url</var>,
+    <var class="Ar">latitude</var>, and <var class="Ar">longitude</var>. By
+    default, location data is rounded to approximately 1/100 decimal degree
+    accuracy. Pressing the check in button a second time will refine this to
+    more a precise location.</p>
+<p class="Pp">Adding a time to a post turns it into an event. Supported formats
+    for start time are HH:MM or YYYY-MM-DD HH:MM. A 24 hour clock is assumed,
+    unless am or pm are specified. The duration is optional and may be specified
+    as XdYhZm for X days, Y hours, and Z minutes (1d12h would be a 36 hour
+    event).</p>
+<p class="Pp">When everything is at last ready to go, press the &#x201C;it's
+    gonna be honked&#x201D; button.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="honk.1.html">honk(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEATS"><a class="permalink" href="#CAVEATS">CAVEATS</a></h1>
+<p class="Pp">Markdown support is implemented with regexes. Preview is
+    recommended.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 1, 2019</td>
+    <td class="foot-os">OpenBSD 6.6</td>
+  </tr>
+</table>
+</body>
+</html>

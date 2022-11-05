@@ -49,12 +49,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	_ "humungus.tedunangst.com/r/go-sqlite3"
 	"humungus.tedunangst.com/r/webs/httpsig"
+	"humungus.tedunangst.com/r/webs/login"
 )
 
-var savedstyleparams = make(map[string]string)
+var savedassetparams = make(map[string]string)
 
-func getstyleparam(file string) string {
-	if p, ok := savedstyleparams[file]; ok {
+func getassetparam(file string) string {
+	if p, ok := savedassetparams[file]; ok {
 		return p
 	}
 	data, err := ioutil.ReadFile(file)
@@ -71,8 +72,8 @@ var dbtimeformat = "2006-01-02 15:04:05"
 
 var alreadyopendb *sql.DB
 var dbname = "honk.db"
+var blobdbname = "blob.db"
 var stmtConfig *sql.Stmt
-var myVersion = 13
 
 func initdb() {
 	schema, err := ioutil.ReadFile("schema.sql")
@@ -87,6 +88,7 @@ func initdb() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	alreadyopendb = db
 	defer func() {
 		os.Remove(dbname)
 		os.Exit(1)
@@ -116,6 +118,11 @@ func initdb() {
 		log.Print(err)
 		return
 	}
+	err = createserveruser(db)
+	if err != nil {
+		log.Print(err)
+		return
+	}
 
 	fmt.Printf("listen address: ")
 	addr, err := r.ReadString('\n')
@@ -128,11 +135,7 @@ func initdb() {
 		log.Print("that's way too short")
 		return
 	}
-	_, err = db.Exec("insert into config (key, value) values (?, ?)", "listenaddr", addr)
-	if err != nil {
-		log.Print(err)
-		return
-	}
+	setconfig("listenaddr", addr)
 	fmt.Printf("server name: ")
 	addr, err = r.ReadString('\n')
 	if err != nil {
@@ -144,28 +147,47 @@ func initdb() {
 		log.Print("that's way too short")
 		return
 	}
-	_, err = db.Exec("insert into config (key, value) values (?, ?)", "servername", addr)
-	if err != nil {
-		log.Print(err)
-		return
-	}
+	setconfig("servername", addr)
 	var randbytes [16]byte
 	rand.Read(randbytes[:])
 	key := fmt.Sprintf("%x", randbytes)
-	_, err = db.Exec("insert into config (key, value) values (?, ?)", "csrfkey", key)
-	if err != nil {
-		log.Print(err)
-		return
-	}
-	_, err = db.Exec("insert into config (key, value) values (?, ?)", "dbversion", myVersion)
-	if err != nil {
-		log.Print(err)
-		return
-	}
+	setconfig("csrfkey", key)
+	setconfig("dbversion", myVersion)
+
+	setconfig("servermsg", "<h2>Things happen.</h2>")
+	setconfig("aboutmsg", "<h3>What is honk?</h3>\n<p>Honk is amazing!")
+	setconfig("loginmsg", "<h2>login</h2>")
+	setconfig("debug", 0)
+
+	initblobdb()
+
 	prepareStatements(db)
 	db.Close()
 	fmt.Printf("done.\n")
 	os.Exit(0)
+}
+
+func initblobdb() {
+	_, err := os.Stat(blobdbname)
+	if err == nil {
+		log.Fatalf("%s already exists", blobdbname)
+	}
+	blobdb, err := sql.Open("sqlite3", blobdbname)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	_, err = blobdb.Exec("create table filedata (xid text, media text, content blob)")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	_, err = blobdb.Exec("create index idx_filexid on filedata(xid)")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	blobdb.Close()
 }
 
 func adduser() {
@@ -194,6 +216,62 @@ func adduser() {
 	os.Exit(0)
 }
 
+func chpass() {
+	if len(os.Args) < 3 {
+		fmt.Printf("need a username\n")
+		os.Exit(1)
+	}
+	user, err := butwhatabout(os.Args[2])
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		os.Exit(1)
+	}()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		C.termecho(1)
+		fmt.Printf("\n")
+		os.Exit(1)
+	}()
+
+	db := opendatabase()
+	login.Init(db)
+
+	r := bufio.NewReader(os.Stdin)
+
+	pass, err := askpassword(r)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	err = login.SetPassword(user.ID, pass)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	fmt.Printf("done\n")
+	os.Exit(0)
+}
+
+func askpassword(r *bufio.Reader) (string, error) {
+	C.termecho(0)
+	fmt.Printf("password: ")
+	pass, err := r.ReadString('\n')
+	C.termecho(1)
+	fmt.Printf("\n")
+	if err != nil {
+		return "", err
+	}
+	pass = pass[:len(pass)-1]
+	if len(pass) < 6 {
+		return "", fmt.Errorf("that's way too short")
+	}
+	return pass, nil
+}
+
 func createuser(db *sql.DB, r *bufio.Reader) error {
 	fmt.Printf("username: ")
 	name, err := r.ReadString('\n')
@@ -204,17 +282,9 @@ func createuser(db *sql.DB, r *bufio.Reader) error {
 	if len(name) < 1 {
 		return fmt.Errorf("that's way too short")
 	}
-	C.termecho(0)
-	fmt.Printf("password: ")
-	pass, err := r.ReadString('\n')
-	C.termecho(1)
-	fmt.Printf("\n")
+	pass, err := askpassword(r)
 	if err != nil {
 		return err
-	}
-	pass = pass[:len(pass)-1]
-	if len(pass) < 6 {
-		return fmt.Errorf("that's way too short")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(pass), 12)
 	if err != nil {
@@ -232,7 +302,31 @@ func createuser(db *sql.DB, r *bufio.Reader) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec("insert into users (username, displayname, about, hash, pubkey, seckey, options) values (?, ?, ?, ?, ?, ?, ?)", name, name, "what about me?", hash, pubkey, seckey, "")
+	about := "what about me?"
+	_, err = db.Exec("insert into users (username, displayname, about, hash, pubkey, seckey, options) values (?, ?, ?, ?, ?, ?, ?)", name, name, about, hash, pubkey, seckey, "{}")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createserveruser(db *sql.DB) error {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	pubkey, err := httpsig.EncodeKey(&k.PublicKey)
+	if err != nil {
+		return err
+	}
+	seckey, err := httpsig.EncodeKey(k)
+	if err != nil {
+		return err
+	}
+	name := "server"
+	about := "server"
+	hash := "*"
+	_, err = db.Exec("insert into users (userid, username, displayname, about, hash, pubkey, seckey, options) values (?, ?, ?, ?, ?, ?, ?, ?)", serverUID, name, name, about, hash, pubkey, seckey, "")
 	if err != nil {
 		return err
 	}
@@ -260,6 +354,19 @@ func opendatabase() *sql.DB {
 	return db
 }
 
+func openblobdb() *sql.DB {
+	var err error
+	_, err = os.Stat(blobdbname)
+	if err != nil {
+		log.Fatalf("unable to open database: %s", err)
+	}
+	db, err := sql.Open("sqlite3", blobdbname)
+	if err != nil {
+		log.Fatalf("unable to open database: %s", err)
+	}
+	return db
+}
+
 func getconfig(key string, value interface{}) error {
 	m, ok := value.(*map[string]bool)
 	if ok {
@@ -283,6 +390,18 @@ func getconfig(key string, value interface{}) error {
 	if err == sql.ErrNoRows {
 		err = nil
 	}
+	return err
+}
+
+func setconfig(key string, val interface{}) error {
+	db := opendatabase()
+	_, err := db.Exec("insert into config (key, value) values (?, ?)", key, val)
+	return err
+}
+
+func updateconfig(key string, val interface{}) error {
+	db := opendatabase()
+	_, err := db.Exec("update config set value = ? where key = ?", val, key)
 	return err
 }
 

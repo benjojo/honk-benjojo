@@ -1,0 +1,67 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>
+Honk Filtering and Censorship System
+<form action="/savehfcs" method="POST">
+<input type="hidden" name="CSRF" value="{{ .FilterCSRF }}">
+<hr>
+<h3>new filter</h3>
+<p><label for="name">filter name:</label><br>
+<input tabindex=1 type="text" name="name" value="" autocomplete=off>
+<hr>
+<h3>match</h3>
+<p><label for="actor">who or where:</label><br>
+<input tabindex=1 type="text" name="actor" value="" autocomplete=off>
+<p><span><label class=button for="incaud">include audience:
+<input tabindex=1 type="checkbox" id="incaud" name="incaud" value="yes"><span></span></label></span>
+<p><label for="filttext">text matches:</label><br>
+<input tabindex=1 type="text" name="filttext" value="" autocomplete=off>
+<p><span><label class=button for="isannounce">is announce:
+<input tabindex=1 type="checkbox" id="isannounce" name="isannounce" value="yes"><span></span></label></span>
+<p><label for="announceof">announce of:</label><br>
+<input tabindex=1 type="text" name="announceof" value="" autocomplete=off>
+<hr>
+<h3>action</h3>
+<p class="buttonarray">
+<span><label class=button for="doreject">reject:
+<input tabindex=1 type="checkbox" id="doreject" name="doreject" value="yes"><span></span></label></span>
+<span><label class=button for="doskipmedia">skip media:
+<input tabindex=1 type="checkbox" id="doskipmedia" name="doskipmedia" value="yes"><span></span></label></span>
+<span><label class=button for="dohide">hide:
+<input tabindex=1 type="checkbox" id="dohide" name="dohide" value="yes"><span></span></label></span>
+<span><label class=button for="docollapse">collapse:
+<input tabindex=1 type="checkbox" id="docollapse" name="docollapse" value="yes"><span></span></label></span>
+<p><label for="rewrite">rewrite:</label><br>
+<input tabindex=1 type="text" name="filtrewrite" value="" autocomplete=off>
+<p><label for="replace">replace:</label><br>
+<input tabindex=1 type="text" name="filtreplace" value="" autocomplete=off>
+<hr>
+<h3>expiration</h3>
+<p><label for="filtduration">duration:</label><br>
+<input tabindex=1 type="text" name="filtduration" value="" autocomplete=off>
+<hr>
+<p><button>impose your will</button>
+</form>
+</div>
+{{ $csrf := .FilterCSRF }}
+{{ range .Filters }}
+<section class="honk">
+<p>Name: {{ .Name }}
+<p>Date: {{ .Date.Format "2006-01-02" }}
+{{ with .Actor }}<p>Who: {{ . }}{{ end }} {{ with .IncludeAudience }} (inclusive) {{ end }}
+{{ with .Text }}<p>Text: {{ . }}{{ end }}
+<p>Actions: {{ range .Actions }} {{ . }} {{ end }}
+{{ with .Rewrite }}<p>Rewrite: {{ . }}{{ end }}
+{{ with .Replace }}<p>Replace: {{ . }}{{ end }}
+{{ if not .Expiration.IsZero }}<p>Expiration: {{ .Expiration.Format "2006-01-02 03:04" }}{{ end }}
+<form action="/savehfcs" method="POST">
+<input type="hidden" name="CSRF" value="{{ $csrf }}">
+<input type="hidden" name="hfcsid" value="{{ .ID }}">
+<input type="hidden" name="itsok" value="iforgiveyou">
+<button name="pardon" value="pardon">pardon</button>
+</form>
+<p>
+</section>
+{{ end }}
+</main>

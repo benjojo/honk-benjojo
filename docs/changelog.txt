@@ -1,5 +1,56 @@
 changelog
 
+-- 0.8.0
+
++++ Add Honk Filtering and Censorship System (HFCS).
+
++++ Editing honks (Update activity).
+
+++ Subscribe to hashtags.
+
+++ Search. I hate it already.
+
+++ Hashtags that work?
+
+++ Dynamic refresh and page switching without reloads.
+
+++ Reply control. Ack replies to show them on the site.
+
++ Allow PDF attachments. For serious business only.
+
++ "untag me" button to mute part of a thread.
+
++ Inline images in posts. Send and receive.
+
++ Somewhat functional admin console (TTY).
+
++ More JS free fallbacks for some basic functions.
+
++ Add chpass command.
+
++ Improved honker management.
+
++ Better markdown output.
+
++ Times for events.
+
++ Split media database into separate blob.db.
+
++ Location checkin. Welcome to the... danger zone!
+
++ Quick mention @alias.
+
++ Image descriptions.
+
++ Unbonking.
+
++ More robust retries for fetching objects.
+
++ Don't decode excessively large images and run out of memory.
+
+- Sometimes the cached state of the @me feed becomes unsynced.
+	Acked status may display incorrectly.
+
 -- 0.7.7
 
 + Add another retry to workaround pixelfed's general unreliability.

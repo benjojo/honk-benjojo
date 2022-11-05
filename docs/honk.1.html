@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2019 Ted Unangst
+  
+   Permission to use, copy, modify, and distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+  
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+   -->
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
+  <title>HONK(1)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">HONK(1)</td>
+    <td class="head-vol">General Commands Manual</td>
+    <td class="head-rtitle">HONK(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">honk</code> &#x2014; <span class="Nd">federated
+    status conveyance</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">The <code class="Nm">honk</code> utility processes federated
+    status updates and other microblog activities. This is the user manual. For
+    administration, see <a class="Xr" href="honk.8.html">honk(8)</a>. For other
+    documentation, refer to the
+  <a class="Xr" href="intro.1.html">intro(1)</a>.</p>
+<p class="Pp">This manual is still incomplete. It'll get there eventually.</p>
+<section class="Ss">
+<h2 class="Ss" id="Honkers"><a class="permalink" href="#Honkers">Honkers</a></h2>
+<p class="Pp">Initially, there won't be much to see after logging in. In order
+    to receive regular updates from other users, they must first be added to
+    one's honker collection. Begin at the <span class="Pa">honkers</span> tab.
+    The <var class="Ar">url</var> field is required. Either of two forms are
+    accepted, the user's handle (or webfinger) or their ActivityPub actor URL.
+    The <var class="Ar">name</var> field is optional and will be automatically
+    inferred. Examples:</p>
+<div class="Bd Bd-indent"><code class="Li">@user@example.social</code></div>
+<div class="Bd
+  Bd-indent"><code class="Li">https://example.social/users/user</code></div>
+<p class="Pp">Fellow honkers may be added to one or more
+    <code class="Ic">combos</code> to suit one's organizational preferences.
+    These are accessed via the <span class="Pa">combos</span> tab and allow easy
+    access to particular groupings. The special combo name of one hyphen
+    &#x2018;-&#x2019; will exclude a honker's posts from the primary feed.</p>
+<p class="Pp">It is also possible to skip subscribing. In this case, regular
+    posts are not received, but replies and posts fetched via other means will
+    appear in the relevant combos.</p>
+<p class="Pp">In addition to honkers, it is possible to subscribe to a hashtag
+    collection. (Where supported.) Enter the collection URL for
+    <var class="Ar">url</var>.</p>
+<p class="Pp">Separately, hashtags may be added to a combo by creating a honker
+    with a <var class="Ar">url</var> of the desired hashtag (including #).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Viewing"><a class="permalink" href="#Viewing">Viewing</a></h2>
+<p class="Pp">The primary feed is accessed via the <span class="Pa">home</span>
+    tab. It will contain posts from all honkers except those specifically
+    excluded. Posts mentioning the user, both followed and not, are collected
+    under the <span class="Pa">@me</span> tab. Other feeds include
+    <span class="Pa">first</span> which excludes replies, the user defined
+    options under the <span class="Pa">combos</span> subheading, and the
+    <span class="Pa">events</span> page which lists only events.</p>
+<p class="Pp">Individual honks contain a visual representation of the honker's
+    ID, their name, the activity (with a link back to origin), a link to the
+    parent post if applicable, and the convoy (thread) identifier. A red border
+    indicates the honk is not public. Screenshot below.</p>
+<p class="Pp"><img src="screenshot-honk.png"><br>screenshot of one
+    honk</a></p>
+<p class="Pp">Available actions are:</p>
+<dl class="Bl-tag">
+  <dt><a class="permalink" href="#bonk"><code class="Ic" id="bonk">bonk</code></a></dt>
+  <dd>Share with followers. Not available for nonpublic honks.</dd>
+  <dt><a class="permalink" href="#honk_back"><code class="Ic" id="honk_back">honk
+    back</code></a></dt>
+  <dd>Reply.</dd>
+  <dt><a class="permalink" href="#mute"><code class="Ic" id="mute">mute</code></a></dt>
+  <dd>Mute this entire thread. Existing posts are hidden, and future posts will
+      not appear in any feed.</dd>
+  <dt><a class="permalink" href="#zonk"><code class="Ic" id="zonk">zonk</code></a></dt>
+  <dd>Delete this post. When deleting one's own post, other servers will be
+      requested to remove it, but this is unreliable.</dd>
+  <dt><a class="permalink" href="#ack"><code class="Ic" id="ack">ack</code></a></dt>
+  <dd>Acknowledge reading this post. Typically if it's a reply to one's own
+      post.</dd>
+  <dt><a class="permalink" href="#save"><code class="Ic" id="save">save</code></a></dt>
+  <dd>Save this honk to the <span class="Pa">saved</span> tab to find
+    later.</dd>
+  <dt><a class="permalink" href="#untag_me"><code class="Ic" id="untag_me">untag
+    me</code></a></dt>
+  <dd>Sometimes a thread goes on entirely too long. Untag will hide further
+      replies to the selected post, but without muting the entire thread.
+      Replies higher in the tree are still received.</dd>
+  <dt><a class="permalink" href="#edit"><code class="Ic" id="edit">edit</code></a></dt>
+  <dd>Change it up. Alas, Update activities do not federate reliably.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Refresh"><a class="permalink" href="#Refresh">Refresh</a></h2>
+<p class="Pp">Clicking the refresh button will load new honks, if any. New honks
+    will be subtly highlighted.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Honking"><a class="permalink" href="#Honking">Honking</a></h2>
+<p class="Pp">Refer to the <a class="Xr" href="honk.5.html">honk(5)</a> section
+    of the manual for details of honk composition.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Search"><a class="permalink" href="#Search">Search</a></h2>
+<p class="Pp">Find old honks. It's basic substring match with a few extensions.
+    The following keywords are supported:</p>
+<dl class="Bl-tag">
+  <dt>site</dt>
+  <dd>Substring match on the post domain name.</dd>
+  <dt>honker</dt>
+  <dd>Exact match, either AP actor or honker nickname.</dd>
+</dl>
+<p class="Pp">Example:</p>
+<div class="Bd Bd-indent"><code class="Li">honker:goose big moose</code></div>
+This query will find honks by the goose about the big moose.
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Filtering"><a class="permalink" href="#Filtering">Filtering</a></h2>
+<p class="Pp">Sometimes other users of the federation can get unruly. The honk
+    filtering and censorship system,
+    <a class="Xr" href="hfcs.1.html">hfcs(1)</a>, can be of great use to restore
+    order to one's timeline. Accessed via the <span class="Pa">filters</span>
+    menu item.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Xzone"><a class="permalink" href="#Xzone">Xzone</a></h2>
+<p class="Pp">The <span class="Pa">xzone</span> page lists recently seen honkers
+    that are not otherwise tracked. It also allows the import of external
+    objects via URL, either individual posts or actor URLs, in which case their
+    recent outbox is imported.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Account"><a class="permalink" href="#Account">Account</a></h2>
+<p class="Pp">It's all about you.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<p class="Pp"><code class="Nm">honk</code> is designed to work with most
+    browsers, but for optimal results it is recommended to use a 2015 or later
+    Thinkpad X1 Carbon with 2560x1440 screen running
+    <span class="Ux">OpenBSD</span> and chromium at 150% scaling with the dwm
+    window manager. This will enable the main menu to line up just right.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="intro.1.html">intro(1)</a>,
+    <a class="Xr" href="honk.8.html">honk(8)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STANDARDS"><a class="permalink" href="#STANDARDS">STANDARDS</a></h1>
+<p class="Pp"><a class="Lk" href="https://www.w3.org/TR/activitypub/">ActivityPub</a></p>
+<p class="Pp"><a class="Lk" href="https://www.w3.org/TR/activitystreams-vocabulary/">Activity
+    Vocabulary</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="HISTORY"><a class="permalink" href="#HISTORY">HISTORY</a></h1>
+<p class="Pp">Started March 2019.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">AUTHORS</a></h1>
+<p class="Pp"><span class="An">Ted Unangst</span>
+    <a class="Lk" href="https://honk.tedunangst.com/u/tedu">@tedu@honk.tedunangst.com</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEATS"><a class="permalink" href="#CAVEATS">CAVEATS</a></h1>
+<p class="Pp">Completing some operations, such as subscribing to new honkers,
+    requires an aptitude for clipboard use and tab switching along with a steady
+    hand. For the most part, these are infrequent operations, but they are also
+    the first operations new users encounter. This is not ideal.</p>
+<p class="Pp">The ActivityPub standard is subject to interpretation, and not all
+    implementations are as enlightened as <code class="Nm">honk</code>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">It's a feature.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 1, 2019</td>
+    <td class="foot-os">OpenBSD 6.6</td>
+  </tr>
+</table>
+</body>
+</html>

@@ -13,7 +13,8 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-// simple password based logins
+// Simple cookie and password based logins.
+// See Init for required schema.
 package login
 
 import (
@@ -32,6 +33,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"humungus.tedunangst.com/r/webs/cache"
 )
 
 // represents a logged in user
@@ -43,6 +45,8 @@ type UserInfo struct {
 type keytype struct{}
 
 var thekey keytype
+
+var dbtimeformat = "2006-01-02 15:04:05"
 
 // Check for auth cookie. Allows failure.
 func Checker(handler http.Handler) http.Handler {
@@ -96,6 +100,10 @@ func calculateCSRF(salt, action, auth string) string {
 
 // Get a CSRF token for given action.
 func GetCSRF(action string, r *http.Request) string {
+	_, ok := checkauthcookie(r)
+	if !ok {
+		return ""
+	}
 	auth := getauthcookie(r)
 	if auth == "" {
 		return ""
@@ -163,27 +171,30 @@ func getconfig(db *sql.DB, key string, value interface{}) error {
 }
 
 // Init. Must be called with the database.
+// Requires a users table with (userid, username, hash) columns and a
+// auth table with (userid, hash, expiry) columns.
+// Requires a config table with (key, value) ('csrfkey', some secret).
 func Init(db *sql.DB) {
 	var err error
-	stmtUserName, err = db.Prepare("select userid, hash from users where username = ?")
+	stmtUserName, err = db.Prepare("select userid, hash from users where username = ? and userid > 0")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
-	stmtUserAuth, err = db.Prepare("select userid, username from users where userid = (select userid from auth where hash = ?)")
+	stmtUserAuth, err = db.Prepare("select userid, username from users where userid = (select userid from auth where hash = ? and expiry > ?)")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	stmtUpdateUser, err = db.Prepare("update users set hash = ? where userid = ?")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
-	stmtSaveAuth, err = db.Prepare("insert into auth (userid, hash) values (?, ?)")
+	stmtSaveAuth, err = db.Prepare("insert into auth (userid, hash, expiry) values (?, ?, ?)")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	stmtDeleteAuth, err = db.Prepare("delete from auth where userid = ?")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	debug := false
 	getconfig(db, "debug", &debug)
@@ -223,15 +234,12 @@ func getauthcookie(r *http.Request) string {
 	return auth
 }
 
-func checkauthcookie(r *http.Request) (*UserInfo, bool) {
-	auth := getauthcookie(r)
-	if auth == "" {
-		return nil, false
-	}
+var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInfo, bool) {
 	hasher := sha512.New512_256()
-	hasher.Write([]byte(auth))
+	hasher.Write([]byte(cookie))
 	authhash := hexsum(hasher)
-	row := stmtUserAuth.QueryRow(authhash)
+	now := time.Now().UTC().Format(dbtimeformat)
+	row := stmtUserAuth.QueryRow(authhash, now)
 	var userinfo UserInfo
 	err := row.Scan(&userinfo.UserID, &userinfo.Username)
 	if err != nil {
@@ -243,6 +251,16 @@ func checkauthcookie(r *http.Request) (*UserInfo, bool) {
 		return nil, false
 	}
 	return &userinfo, true
+}, Duration: 5 * time.Minute})
+
+func checkauthcookie(r *http.Request) (*UserInfo, bool) {
+	cookie := getauthcookie(r)
+	if cookie == "" {
+		return nil, false
+	}
+	var userinfo *UserInfo
+	ok := validcookies.Get(cookie, &userinfo)
+	return userinfo, ok
 }
 
 func loaduser(username string) (int64, []byte, bool) {
@@ -270,6 +288,8 @@ func hexsum(h hash.Hash) string {
 }
 
 // Default handler for /dologin
+// Requires username and password form values.
+// Redirects to / on success and /login on failure.
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
@@ -302,10 +322,13 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	io.CopyN(hasher, rand.Reader, 32)
 	auth := hexsum(hasher)
 
+	maxage := 3600 * 24 * 30
+
+	// but when do we expire out of the database?
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth",
 		Value:    auth,
-		MaxAge:   3600 * 24 * 30,
+		MaxAge:   maxage,
 		Secure:   securecookies,
 		HttpOnly: true,
 	})
@@ -314,7 +337,8 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	hasher.Write([]byte(auth))
 	authhash := hexsum(hasher)
 
-	_, err = stmtSaveAuth.Exec(userid, authhash)
+	expiry := time.Now().UTC().Add(time.Duration(maxage) * time.Second).Format(dbtimeformat)
+	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
 		log.Printf("error saving auth: %s", err)
 	}
@@ -323,11 +347,17 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// Handler for /dologout
+func deleteauth(userid int64) error {
+	defer validcookies.Flush()
+	_, err := stmtDeleteAuth.Exec(userid)
+	return err
+}
+
+// Handler for /dologout route.
 func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 	userinfo, ok := checkauthcookie(r)
 	if ok && CheckCSRF("logout", r) {
-		_, err := stmtDeleteAuth.Exec(userinfo.UserID)
+		err := deleteauth(userinfo.UserID)
 		if err != nil {
 			log.Printf("login: error deleting old auth: %s", err)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -344,7 +374,9 @@ func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// Change password.
+// Change password helper.
+// Requires oldpass and newpass form values.
+// Requires logout csrf token.
 func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	userinfo, ok := checkauthcookie(r)
 	if !ok || !CheckCSRF("logout", r) {
@@ -380,7 +412,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("error")
 	}
 
-	_, err = stmtDeleteAuth.Exec(userinfo.UserID)
+	err = deleteauth(userid)
 	if err != nil {
 		log.Printf("login: error deleting old auth: %s", err)
 		return fmt.Errorf("error")
@@ -390,10 +422,12 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	io.CopyN(hasher, rand.Reader, 32)
 	auth := hexsum(hasher)
 
+	maxage := 3600 * 24 * 30
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth",
 		Value:    auth,
-		MaxAge:   3600 * 24 * 30,
+		MaxAge:   maxage,
 		Secure:   securecookies,
 		HttpOnly: true,
 	})
@@ -402,10 +436,32 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	hasher.Write([]byte(auth))
 	authhash := hexsum(hasher)
 
-	_, err = stmtSaveAuth.Exec(userid, authhash)
+	expiry := time.Now().UTC().Add(time.Duration(maxage) * time.Second).Format(dbtimeformat)
+	_, err = stmtSaveAuth.Exec(userid, authhash, expiry)
 	if err != nil {
 		log.Printf("error saving auth: %s", err)
 	}
 
+	return nil
+}
+
+// Set password for a user.
+func SetPassword(userid int64, newpass string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newpass), 12)
+	if err != nil {
+		log.Printf("error generating hash: %s", err)
+		return fmt.Errorf("error")
+	}
+	_, err = stmtUpdateUser.Exec(hash, userid)
+	if err != nil {
+		log.Printf("login: error updating user: %s", err)
+		return fmt.Errorf("error")
+	}
+
+	err = deleteauth(userid)
+	if err != nil {
+		log.Printf("login: error deleting old auth: %s", err)
+		return fmt.Errorf("error")
+	}
 	return nil
 }

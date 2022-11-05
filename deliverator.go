@@ -18,20 +18,17 @@ package main
 import (
 	"log"
 	notrand "math/rand"
-	"sync"
 	"time"
-)
 
-func init() {
-	notrand.Seed(time.Now().Unix())
-}
+	"humungus.tedunangst.com/r/webs/gate"
+)
 
 type Doover struct {
 	ID   int64
 	When time.Time
 }
 
-func sayitagain(goarounds int, username string, rcpt string, msg []byte) {
+func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 	var drift time.Duration
 	switch goarounds {
 	case 1:
@@ -39,8 +36,10 @@ func sayitagain(goarounds int, username string, rcpt string, msg []byte) {
 	case 2:
 		drift = 1 * time.Hour
 	case 3:
-		drift = 12 * time.Hour
+		drift = 4 * time.Hour
 	case 4:
+		drift = 12 * time.Hour
+	case 5:
 		drift = 24 * time.Hour
 	default:
 		log.Printf("he's dead jim: %s", rcpt)
@@ -48,61 +47,74 @@ func sayitagain(goarounds int, username string, rcpt string, msg []byte) {
 	}
 	drift += time.Duration(notrand.Int63n(int64(drift / 10)))
 	when := time.Now().UTC().Add(drift)
-	stmtAddDoover.Exec(when.Format(dbtimeformat), goarounds, username, rcpt, msg)
+	_, err := stmtAddDoover.Exec(when.Format(dbtimeformat), goarounds, userid, rcpt, msg)
+	if err != nil {
+		log.Printf("error saving doover: %s", err)
+	}
 	select {
 	case pokechan <- 0:
 	default:
 	}
 }
 
-var trucksout = 0
-var maxtrucksout = 10
-var garagelock sync.Mutex
-var garagebell = sync.NewCond(&garagelock)
+var garage = gate.NewLimiter(20)
 
-func truckgoesout() {
-	garagelock.Lock()
-	for trucksout >= maxtrucksout {
-		garagebell.Wait()
+func deliverate(goarounds int64, userid int64, rcpt string, msg []byte) {
+	garage.Start()
+	defer garage.Finish()
+
+	var ki *KeyInfo
+	ok := ziggies.Get(userid, &ki)
+	if !ok {
+		log.Printf("lost key for delivery")
+		return
 	}
-	trucksout++
-	garagelock.Unlock()
-}
-
-func truckcomesin() {
-	garagelock.Lock()
-	trucksout--
-	garagebell.Broadcast()
-	garagelock.Unlock()
-}
-
-func deliverate(goarounds int, username string, rcpt string, msg []byte) {
-	truckgoesout()
-	defer truckcomesin()
-
-	keyname, key := ziggy(username)
 	var inbox string
 	// already did the box indirection
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]
 	} else {
-		box, err := getboxes(rcpt)
-		if err != nil {
-			log.Printf("error getting inbox %s: %s", rcpt, err)
-			sayitagain(goarounds+1, username, rcpt, msg)
+		var box *Box
+		ok := boxofboxes.Get(rcpt, &box)
+		if !ok {
+			log.Printf("failed getting inbox for %s", rcpt)
+			sayitagain(goarounds+1, userid, rcpt, msg)
 			return
 		}
 		inbox = box.In
 	}
-	err := PostMsg(keyname, key, inbox, msg)
+	err := PostMsg(ki.keyname, ki.seckey, inbox, msg)
 	if err != nil {
 		log.Printf("failed to post json to %s: %s", inbox, err)
-		sayitagain(goarounds+1, username, rcpt, msg)
+		sayitagain(goarounds+1, userid, rcpt, msg)
 		return
 	}
 }
 
-var pokechan = make(chan int)
+var pokechan = make(chan int, 1)
+
+func getdoovers() []Doover {
+	rows, err := stmtGetDoovers.Query()
+	if err != nil {
+		log.Printf("wat?")
+		time.Sleep(1 * time.Minute)
+		return nil
+	}
+	defer rows.Close()
+	var doovers []Doover
+	for rows.Next() {
+		var d Doover
+		var dt string
+		err := rows.Scan(&d.ID, &dt)
+		if err != nil {
+			log.Printf("error scanning dooverid: %s", err)
+			continue
+		}
+		d.When, _ = time.Parse(dbtimeformat, dt)
+		doovers = append(doovers, d)
+	}
+	return doovers
+}
 
 func redeliverator() {
 	sleeper := time.NewTimer(0)
@@ -116,33 +128,28 @@ func redeliverator() {
 		case <-sleeper.C:
 		}
 
-		rows, err := stmtGetDoovers.Query()
-		if err != nil {
-			log.Printf("wat?")
-			time.Sleep(1 * time.Minute)
-			continue
-		}
-		var doovers []Doover
-		for rows.Next() {
-			var d Doover
-			var dt string
-			rows.Scan(&d.ID, &dt)
-			d.When, _ = time.Parse(dbtimeformat, dt)
-			doovers = append(doovers, d)
-		}
-		rows.Close()
+		doovers := getdoovers()
+
 		now := time.Now().UTC()
 		nexttime := now.Add(24 * time.Hour)
 		for _, d := range doovers {
 			if d.When.Before(now) {
-				var goarounds int
-				var username, rcpt string
+				var goarounds, userid int64
+				var rcpt string
 				var msg []byte
 				row := stmtLoadDoover.QueryRow(d.ID)
-				row.Scan(&goarounds, &username, &rcpt, &msg)
-				stmtZapDoover.Exec(d.ID)
+				err := row.Scan(&goarounds, &userid, &rcpt, &msg)
+				if err != nil {
+					log.Printf("error scanning doover: %s", err)
+					continue
+				}
+				_, err = stmtZapDoover.Exec(d.ID)
+				if err != nil {
+					log.Printf("error deleting doover: %s", err)
+					continue
+				}
 				log.Printf("redeliverating %s try %d", rcpt, goarounds)
-				deliverate(goarounds, username, rcpt, msg)
+				deliverate(goarounds, userid, rcpt, msg)
 			} else if d.When.Before(nexttime) {
 				nexttime = d.When
 			}

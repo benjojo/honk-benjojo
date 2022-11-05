@@ -10,26 +10,56 @@
 {{ .UserStyle }}
 </style>
 <link href="/icon.png" rel="icon">
+<meta name="theme-color" content="#305">
 <meta name="viewport" content="width=device-width">
 </head>
 <body>
 <header>
-<span><a href="/">honk</a></span>
 {{ if .UserInfo }}
-<span><a href="/atme">@me</a></span>
-<span><a href="/{{ .UserSep }}/{{ .UserInfo.Username }}">{{ .UserInfo.Username }}</a></span>
-<span><a href="/honkers">honkers</a></span>
-<span><a href="/c">combos</a></span>
+<details id="topmenu">
+<summary>menu</summary>
+<ul>
+<li><a id="homelink" href="/">home</a>
+<li><a id="atmelink" href="/atme">@me</a>
+<li><a id="firstlink" href="/first">first</a>
+<li style="list-style-type:none; margin-left:-1em">
 <details>
-<summary>more</summary>
-<span><a href="/about">about</a></span>
-<span><a href="/front">front</a></span>
-<span><a href="/xzone">xzone</a></span>
-<span><a href="/zonkzone">zonkzone</a></span>
-<span><a href="/funzone">funzone</a></span>
-<span><a href="/account">account</a></span>
+<summary>combos</summary>
+<ul>
+{{ range .Combos }}
+<li><a class="combolink" href="/c/{{ . }}">{{ . }}</a>
+{{ end }}
+</ul>
 </details>
+<li><a href="/o">tags</a>
+<li><a href="/events">events</a>
+<li><a id="savedlink" href="/saved">saved</a>
+<li><a href="/honkers">honkers</a>
+<li><a href="/hfcs">filters</a>
+<li><a href="/{{ .UserSep }}/{{ .UserInfo.Username }}">my honks</a>
+<li><a href="/xzone">xzone</a>
+<li><a href="/account">account</a>
+<li style="list-style-type:none; margin-left:-1em">
+<details>
+<summary>more stuff</summary>
+<ul>
+<li><a href="/about">about</a>
+<li><a href="/front">front</a>
+<li><a href="/funzone">funzone</a>
+</ul>
+</details>
+<li><a href="/help/honk.1.html">help</a>
+<li>
+<form action="/q" method="GET">
+<input type="text" name="q" autocomplete=off size=10 placeholder="search">
+</form>
+</ul>
+</details>
+<p></p>
 {{ else }}
+<span><a id="homelink" href="/">home</a></span>
+<span><a href="/o">tags</a></span>
+<span><a href="/events">events</a></span>
 <span><a href="/about">about</a></span>
 {{ if .ShowRSS }}
 <span><a href="/rss">rss</a></span>

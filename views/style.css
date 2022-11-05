@@ -1,9 +1,18 @@
+html {
+	--bg-page: #305;
+	--bg-dark: #002;
+	--fg: #dde;
+	--fg-subtle: #aab;
+	--fg-limited: #a79;
+}
+
 body {
-	background: #305;
-	color: #dde;
+	background: var(--bg-page);
+	color: var(--fg);
 	font-size: 1em;
 	word-wrap: break-word;
 	font-family: sans-serif, "Noto Color Emoji";
+	line-height: 1.2;
 }
 pre, code {
 	white-space: pre-wrap;
@@ -11,7 +20,7 @@ pre, code {
 blockquote {
 	margin-left: 0em;
 	padding-left: 0.5em;
-	border-left: 1px solid #aab;
+	border-left: 1px solid var(--fg-subtle);
 }
 table {
 	display: block;
@@ -19,36 +28,63 @@ table {
 	overflow-x: auto;
 }
 a {
-	color: #dde;
+	color: var(--fg);
 }
 form, input, textarea {
 	font-family: monospace, "Noto Color Emoji";
 }
 p {
-	margin-top 1em;
+	margin-top: 1em;
 	margin-bottom: 1em;
 }
 input {
-	background: #305;
-	color: #dde;
+	background: var(--bg-page);
+	color: var(--fg);
 	font-size: 1.0em;
 	line-height: 1.2em;
-	padding: 0.5em;
+	padding: 0.4em;
+}
+#honkform input {
+	font-size: 0.8em;
 }
 body > header {
-	max-width: 1200px;
 	margin: 1em auto;
 	font-size: 1.5em;
-	text-align: right;
 }
 body > header span {
-	margin-right: 2em;
+	margin-left: 2em;
 }
-header details {
+body > header p {
+	padding: 1em;
+}
+header > details {
+	background: var(--bg-page);
+	padding: 1em 1em 1em 1em;
+	position: fixed;
+	top: 0;
+	left: 0;
+	display: inline;
+	max-height: calc(100% - 1em);
+	overflow: auto;
+	opacity: 0.7;
+}
+header > details[open] {
+	padding: 1em 1em 0em 1em;
+	background: var(--bg-dark);
+	border: 1px solid var(--fg);
+	margin-bottom: 1em;
+	opacity: 1.0;
+}
+header > details li {
+	margin: 1em 0em 1em 0em;
+}
+details summary {
 	display: inline;
 }
-header details[open] summary {
-	display: none;
+@supports (-moz-appearance:none) {
+	details summary {
+		display: list-item;
+	}
 }
 main {
 	max-width: 1200px;
@@ -56,22 +92,33 @@ main {
 	font-size: 1.5em;
 }
 .info {
-	background: #002;
-	border: 1px solid #dde;
+	background: var(--bg-dark);
+	border: 1px solid var(--fg);
 	margin-bottom: 1em;
 	padding: 0em 1em 0em 1em;
 }
 .info div {
-	margin-top 1em;
+	margin-top: 1em;
 	margin-bottom: 1em;
 }
-label, button, form input[type=submit], select {
+label {
+	font-size: 0.8em;
+}
+label.button, button, select {
 	font-size: 16px;
 	font-family: monospace;
-	color: #dde;
-	background: #305;
-	border: 1px solid #dde;
+	color: var(--fg);
+	background: var(--bg-page);
+	border: 1px solid var(--fg);
 	padding: 0.5em;
+	white-space: nowrap;
+}
+.buttonarray {
+	margin-top: -2.0em;
+}
+.buttonarray button, .buttonarray > span {
+	margin-top: 2.0em;
+	display: inline-block;
 }
 button a {
 	text-decoration: none;
@@ -82,8 +129,8 @@ form {
 textarea {
 	padding: 0.5em;
 	font-size: 1em;
-	background: #305;
-	color: #dde;
+	background: var(--bg-page);
+	color: var(--fg);
 	width: 600px;
 	height: 8em;
 	margin-bottom: 0.5em;
@@ -101,17 +148,20 @@ input[type="checkbox"]:checked + span:after {
 	content: "yes";
 }
 input[type="checkbox"]:focus + span:after {
-	outline: 1px solid #dde;
+	outline: 1px solid var(--fg);
 }
 input[type=file] {
 	display: none;
 }
 
+.glow {
+	box-shadow: 0px 0px 16px var(--fg);
+}
+
 .honk {
-	width: 90%;
 	margin: auto;
-	background: #002;
-	border: 1px solid #dde;
+	background: var(--bg-dark);
+	border: 1px solid var(--fg);
 	border-radius: 1em;
 	margin-bottom: 1em;
 	padding-left: 1em;
@@ -119,69 +169,79 @@ input[type=file] {
 	padding-top: 0;
 	overflow: hidden;
 }
-.honk #honkform {
-	padding: 1em;
-	border: 1px solid #dde;
-}
 
-.honk a {
-	color: #dde;
-}
-.honk header .clip a {
-	color: #88a;
-}
-.honk header {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	font-size: 0.8em;
-	margin-top: 1em;
-	height: 64px;
-}
-.honk header img {
-	float: left;
-	margin-right: 1em;
-	width: 64px;
-	height: 64px;
-}
-.honk header p {
-	margin-top: 0px;
-}
-.honk button {
-	margin-left: 4em;
-}
-.subtle {
+.honk	#honkform {
+		padding: 1em;
+		border: 1px solid var(--fg);
+	}
+.honk	a {
+		color: var(--fg);
+	}
+.honk	header {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: 0.8em;
+		line-height: 1.1;
+		margin-top: 1em;
+		height: 64px;
+	}
+
+.honk	header	.clip a {
+			color: var(--fg-subtle);
+		}
+.honk	header	img {
+			float: left;
+			margin-right: 1em;
+			width: 64px;
+			height: 64px;
+		}
+.honk	header	p {
+			margin-top: 0px;
+		}
+.honk	.actions button {
+		margin-left: 4em;
+		margin-top: 2em;
+	}
+.honk	.noise {
+		line-height: 1.4;
+	}
+
+.honk	.noise	code .kw { font-weight: bold; }
+.honk	.noise	code .bi { font-weight: bold; }
+.honk	.noise	code .st { color: var(--fg-subtle); }
+.honk	.noise	code .nm { color: #ba88ff; }
+.honk	.noise	code .op { color: #ba88ff; }
+.honk	.noise	code .tp { font-weight: bold; }
+.honk	.noise	code .cm { color: var(--fg-subtle); font-style: italic; }
+.honk	.noise	code .al { color: #aaffbb; }
+.honk	.noise	code .dl { color: #ffaabb; }
+
+.honk	details.actions summary {
+		color: var(--fg-subtle);
 }
 .subtle .noise {
-	color: #aab;
-	font-size: 0.8em;
+		color: var(--fg-subtle);
+		font-size: 0.8em;
 }
 .subtle .noise a {
-	color: #aab;
+		color: var(--fg-subtle);
 }
 .limited {
-	border: 1px solid #a79;
-	color: #a79;
+	border: 1px solid var(--fg-limited);
+	color: var(--fg-limited);
 }
-.limited .noise {
-	color: #a79;
-}
-.limited .noise a {
-	color: #a79;
-}
+.limited	.noise {
+		color: var(--fg-limited);
+	}
+.limited	.noise a {
+		color: var(--fg-limited);
+	}
+.limited	details.actions summary {
+		color: var(--fg-limited);
+	}
 details.noise[open] summary {
 	display: none;
-}
-.inlineform {
-	display: inline;
-}
-.inlineform select {
-}
-.honk details.actions summary {
-	color: #aab;
-}
-.limited details.actions summary {
-	color: #a79;
 }
 h1, h2 {
 	font-size: 1.2em;
@@ -191,10 +251,14 @@ h3, h4 {
 }
 
 img:not(.emu) {
-	background: #305;
+	background: var(--bg-page);
 }
 img, video {
-	max-width: 100%
+	max-width: 100%;
+	max-height: 600px;
+}
+.noise img:not(.emu) {
+	display: block;
 }
 img.emu {
 	width: 2em;

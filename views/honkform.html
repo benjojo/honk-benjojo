@@ -1,39 +1,47 @@
 <p id="honkformhost">
-<button onclick="showhonkform(); return false"><a href="/newhonk">it's honking time</a></button>
-<form id="honkform" action="/honk" method="POST" enctype="multipart/form-data" style="display: none">
-<p>
-in reply to: <input type="text" name="rid" id="ridinput" value="{{ .InReplyTo }}" autocomplete=off>
+<button id="honkingtime" onclick="return showhonkform();" {{ if .IsPreview }}style="display:none"{{ end }}><a href="/newhonk">it's honking time</a></button>
+<form id="honkform" action="/honk" method="POST" enctype="multipart/form-data" {{ if not .IsPreview }}style="display: none"{{ end }}>
 <input type="hidden" name="CSRF" value="{{ .HonkCSRF }}">
+<input type="hidden" name="updatexid" id="updatexidinput" value = "{{ .UpdateXID }}">
+<input type="hidden" name="rid" id="ridinput" value="{{ .InReplyTo }}">
+<h3>let's make some noise</h3>
 <p>
-<label id="donker">attach: {{ if .SavedFile }} {{ .SavedFile }} {{ else }} <input onchange="updatedonker();" type="file" name="donk"><span></span> {{ end }}</label>
-<input type="hidden" name="donkxid" value="{{ .SavedFile }}">
+<details>
+<summary>more options</summary>
+<p>
+<label class=button id="donker">attach: <input onchange="updatedonker();" type="file" name="donk"><span>{{ .SavedFile }}</span></label>
+<input type="hidden" id="saveddonkxid" name="donkxid" value="{{ .SavedFile }}">
+<p id="donkdescriptor"><label for=donkdesc>description:</label><br>
+<input type="text" name="donkdesc" value="{{ .DonkDesc }}" autocomplete=off>
+{{ with .SavedPlace }}
+<p><button id=checkinbutton type=button onclick="fillcheckin()">checkin</button>
+<div id=placedescriptor>
+	<p><label>name:</label><br><input type="text" name="placename" id=placenameinput value="{{ .Name }}">
+	<p><label>url:</label><br><input type="text" name="placeurl" id=placeurlinput value="{{ .Url }}">
+	<p><label>lat: </label><input type="text" size=9 name="placelat" id=placelatinput value="{{ .Latitude}}">
+	<label>lon: </label><input type="text" size=9 name="placelong" id=placelonginput value="{{ .Longitude }}">
+</div>
+{{ else }}
+<p><button id=checkinbutton type=button onclick="fillcheckin()">checkin</button>
+<div id=placedescriptor style="display: none">
+<p><label>name:</label><br><input type="text" name="placename" id=placenameinput value="">
+<p><label>url:</label><br><input type="text" name="placeurl" id=placeurlinput value="">
+<p><label>lat: </label><input type="text" size=9 name="placelat" id=placelatinput value="">
+<label>lon: </label><input type="text" size=9 name="placelong" id=placelonginput value="">
+</div>
+{{ end }}
+<p><button id=addtimebutton type=button onclick="showelement('timedescriptor')">add time</button>
+<div id=timedescriptor style="display: none">
+<p><label for=timestart>start:</label><br>
+<input type="text" name="timestart" value="">
+<p><label for=timeend>duration:</label><br>
+<input type="text" name="timeend" value="">
+</div>
+</details>
 <p>
 <textarea name="noise" id="honknoise">{{ .Noise }}</textarea>
-<p>
-<input type="submit" value="it's gonna be honked">
-<input type="submit" name="preview" value="preview">
+<p class="buttonarray">
+<button>it's gonna be honked</button>
+<button name="preview" value="preview">preview</button>
+<button type=button name="cancel" value="cancel" onclick="cancelhonking()">cancel</button>
 </form>
-<script>
-function showhonkform(elem, rid, hname) {
-	var form = document.getElementById("honkform")
-	form.style = "display: block"
-	if (elem) {
-		form.remove()
-		elem.parentElement.insertAdjacentElement('beforebegin', form)
-	} else {
-		elem = document.getElementById("honkformhost")
-		elem.insertAdjacentElement('afterend', form)
-	}
-	var ridinput = document.getElementById("ridinput")
-	var honknoise = document.getElementById("honknoise")
-	if (rid) {
-		ridinput.value = rid
-		honknoise.value = "@" + hname + " "
-	}
-	document.getElementById("honknoise").focus()
-}
-function updatedonker() {
-	var el = document.getElementById("donker")
-	el.children[1].textContent = el.children[0].value.slice(-20)
-}
-</script>

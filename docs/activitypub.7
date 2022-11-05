@@ -1,0 +1,174 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt ACTIVITYPUB 7
+.Os
+.Sh NAME
+.Nm activitypub
+.Nd notes about the honk implementation
+.Sh DESCRIPTION
+The
+.Xr honk 1
+utility processes status updates and other microblog activities using the
+.Nm ActivityPub
+protocol to exchange messages with other servers.
+The specification is subject to interpretation, and not all implementations
+behave in the same way.
+This document attempts to clarify honk's behavior.
+It is not intended to be a complete description of
+.Nm ActivityPub ,
+but may be useful as a guide to other implementors looking to interoperate.
+.Ss OBJECTS
+The following object or document types are supported.
+.Bl -tag -width tenletters
+.It Vt Note
+Fully supported.
+The default object type for honk.
+.It Vt Article
+Fully supported.
+.It Vt Page
+Supported.
+.It Vt Question
+Read only support.
+Appears similar to a Note.
+.It Vt Event
+Supported.
+Appears similar to a Note.
+Can be both created and received, but
+.Vt Invite
+activities are ignored.
+.It Vt Video
+Limited support.
+.It Vt Audio
+Limited Support.
+.El
+.Pp
+Honk primarily supports HTML content, not markdown or other formats,
+with a wide range of permitted HTML tags in object
+.Fa content
+fields.
+The following tags are supported.
+.Bd -literal -offset indent
+a, img, span,
+div, h1, h2, h3, h4, h5, h6, hr,
+table, thead, tbody, th, tr, td, colgroup, col,
+p, br, pre, code, blockquote, q,
+samp, mark, ins, dfn, cite, abbr, address,
+strong, em, b, i, s, u, sub, sup, del, tt, small,
+ol, ul, li, dl, dt, dd
+.Ed
+.Pp
+The following tag attributes are permitted.
+.Bd -literal -offset indent
+href, src, alt, colspan, rowspan
+.Ed
+.Pp
+The following class names are used for syntax highlighting code blocks.
+.Bd -literal -offset indent
+kw, bi, st, nm, tp, op, cm, al, dl
+.Ed
+.Ss ACTIVITIES
+The following activities are supported.
+.Bl -tag -width tenletters
+.It Vt Create
+Fully supported.
+.It Vt Announce
+Supported with share semantics.
+.It Vt Read
+Supported.
+Primarily used to acknowledge replies and complete threads.
+Can be interpreted to mean reply is approved, if not endorsed.
+.It Vt Add
+Works with collections.
+.It Vt Follow
+Supported.
+Can follow both actors and collections.
+.Vt Accept
+and
+.Vt Undo
+require that the original request be quoted, not referred to by URI.
+.It Vt Update
+Supported.
+Honk sends and receives
+.Vt Update
+activities.
+.It Vt Delete
+Does what it can.
+.It Vt Like
+Don't be ridiculous.
+.El
+.Ss METADATA
+The following additional object types are supported as
+.Fa tag
+or
+.Fa attachment .
+.Bl -tag -width tenletters
+.It Mention
+Pretty @ machine.
+.It Emoji
+Inline text :emoji: with image replacement.
+.It Place
+Attached as a
+.Fa tag
+to
+.Vt Note
+and
+.Fa location
+to
+.Vt Event .
+Supports
+.Fa name ,
+.Fa url ,
+.Fa latitude ,
+and
+.Fa longitude .
+.It Document
+Plain text and images in jpeg, gif, png, and webp formats are supported.
+Other formats are linked to origin.
+.El
+.Pp
+The
+.Fa replies
+array will be populated with a list of acknowledged replies.
+.Ss EXTENSIONS
+Honk also supports a
+.Vt Ping
+activity and will respond with a
+.Vt Pong
+activity.
+This is useful for debugging networking connectivity issues without
+visible side effects.
+See ping.txt for details.
+.Ss SECURITY
+Honk uses http signatures.
+.Ss WEBFINGER
+Honk implements the
+.Vt webfinger
+end point and will use it for @mention resolution.
+It is not required for federation.
+.Ss LD-JSON
+Not really.
+.Sh SEE ALSO
+.Xr intro 1 ,
+.Xr honk 1
+.Sh STANDARDS
+.Pp
+.Lk https://www.w3.org/TR/activitypub/ "ActivityPub"
+.Pp
+.Lk https://www.w3.org/TR/activitystreams-vocabulary/ "Activity Vocabulary"
+.Sh CAVEATS
+The ActivityPub standard is subject to interpretation, and not all
+implementations are as enlightened as honk.

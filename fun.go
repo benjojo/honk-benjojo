@@ -18,67 +18,110 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha512"
 	"fmt"
-	"html"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 
+	"golang.org/x/net/html"
+	"humungus.tedunangst.com/r/webs/cache"
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
+	"humungus.tedunangst.com/r/webs/templates"
 )
 
+var allowedclasses = make(map[string]bool)
+
+func init() {
+	allowedclasses["kw"] = true
+	allowedclasses["bi"] = true
+	allowedclasses["st"] = true
+	allowedclasses["nm"] = true
+	allowedclasses["tp"] = true
+	allowedclasses["op"] = true
+	allowedclasses["cm"] = true
+	allowedclasses["al"] = true
+	allowedclasses["dl"] = true
+}
+
 func reverbolate(userid int64, honks []*Honk) {
-	filt := htfilter.New()
-	zilences := getzilences(userid)
 	for _, h := range honks {
 		h.What += "ed"
 		if h.What == "tonked" {
 			h.What = "honked back"
-			h.Style = "subtle"
+			h.Style += " subtle"
 		}
 		if !h.Public {
 			h.Style += " limited"
 		}
+		translate(h, false)
 		if h.Whofore == 2 || h.Whofore == 3 {
 			h.URL = h.XID
 			if h.What != "bonked" {
+				h.Noise = re_memes.ReplaceAllString(h.Noise, "")
 				h.Noise = mentionize(h.Noise)
+				h.Noise = ontologize(h.Noise)
 			}
-			h.Username, h.Handle = honkerhandle(h.Honker)
+			h.Username, h.Handle = handles(h.Honker)
 		} else {
-			_, h.Handle = honkerhandle(h.Honker)
-			h.Username = h.Handle
-			if len(h.Username) > 20 {
-				h.Username = h.Username[:20] + ".."
+			_, h.Handle = handles(h.Honker)
+			short := shortname(userid, h.Honker)
+			if short != "" {
+				h.Username = short
+			} else {
+				h.Username = h.Handle
+				if len(h.Username) > 20 {
+					h.Username = h.Username[:20] + ".."
+				}
 			}
 			if h.URL == "" {
 				h.URL = h.XID
 			}
 		}
 		if h.Oonker != "" {
-			_, h.Oondle = honkerhandle(h.Oonker)
+			_, h.Oondle = handles(h.Oonker)
 		}
-		zap := make(map[*Donk]bool)
-		h.Noise = unpucker(h.Noise)
+		h.Precis = demoji(h.Precis)
+		h.Noise = demoji(h.Noise)
 		h.Open = "open"
-		if badword := unsee(zilences, h.Precis, h.Noise); badword != "" {
+
+		zap := make(map[string]bool)
+		{
+			var htf htfilter.Filter
+			htf.Imager = replaceimgsand(zap, false)
+			htf.SpanClasses = allowedclasses
+			p, _ := htf.String(h.Precis)
+			n, _ := htf.String(h.Noise)
+			h.Precis = string(p)
+			h.Noise = string(n)
+		}
+
+		if userid == -1 {
+			if h.Precis != "" {
+				h.Open = ""
+			}
+		} else {
+			unsee(userid, h)
+			if h.Open == "open" && h.Precis == "unspecified horror" {
+				h.Precis = ""
+			}
+		}
+		if len(h.Noise) > 6000 && h.Open == "open" {
 			if h.Precis == "" {
-				h.Precis = badword
+				h.Precis = "really freaking long"
 			}
 			h.Open = ""
-		} else if h.Precis == "unspecified horror" {
-			h.Precis = ""
 		}
-		h.HTML, _ = filt.String(h.Noise)
+
 		emuxifier := func(e string) string {
 			for _, d := range h.Donks {
 				if d.Name == e {
-					zap[d] = true
+					zap[d.XID] = true
 					if d.Local {
 						return fmt.Sprintf(`<img class="emu" title="%s" src="/d/%s">`, d.Name, d.XID)
 					}
@@ -86,68 +129,134 @@ func reverbolate(userid int64, honks []*Honk) {
 			}
 			return e
 		}
-		h.HTML = template.HTML(re_emus.ReplaceAllStringFunc(string(h.HTML), emuxifier))
+		h.Precis = re_emus.ReplaceAllStringFunc(h.Precis, emuxifier)
+		h.Noise = re_emus.ReplaceAllStringFunc(h.Noise, emuxifier)
+
 		j := 0
 		for i := 0; i < len(h.Donks); i++ {
-			if !zap[h.Donks[i]] {
+			if !zap[h.Donks[i].XID] {
 				h.Donks[j] = h.Donks[i]
 				j++
 			}
 		}
 		h.Donks = h.Donks[:j]
+
+		h.HTPrecis = template.HTML(h.Precis)
+		h.HTML = template.HTML(h.Noise)
 	}
 }
 
-func unsee(zilences []*regexp.Regexp, precis string, noise string) string {
-	for _, z := range zilences {
-		if z.MatchString(precis) || z.MatchString(noise) {
-			if precis == "" {
-				w := z.String()
-				return w[6 : len(w)-3]
+func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) string {
+	return func(node *html.Node) string {
+		src := htfilter.GetAttr(node, "src")
+		alt := htfilter.GetAttr(node, "alt")
+		//title := GetAttr(node, "title")
+		if htfilter.HasClass(node, "Emoji") && alt != "" {
+			return alt
+		}
+		d := finddonk(src)
+		if d != nil {
+			zap[d.XID] = true
+			base := ""
+			if absolute {
+				base = "https://" + serverName
 			}
-			return precis
+			return string(templates.Sprintf(`<img alt="%s" title="%s" src="%s/d/%s">`, alt, alt, base, d.XID))
+		}
+		return string(templates.Sprintf(`&lt;img alt="%s" src="<a href="%s">%s<a>"&gt;`, alt, src, src))
+	}
+}
+
+func inlineimgsfor(honk *Honk) func(node *html.Node) string {
+	return func(node *html.Node) string {
+		src := htfilter.GetAttr(node, "src")
+		alt := htfilter.GetAttr(node, "alt")
+		d := savedonk(src, "image", alt, "image", true)
+		if d != nil {
+			honk.Donks = append(honk.Donks, d)
+		}
+		log.Printf("inline img with src: %s", src)
+		return ""
+	}
+}
+
+func imaginate(honk *Honk) {
+	var htf htfilter.Filter
+	htf.Imager = inlineimgsfor(honk)
+	htf.String(honk.Noise)
+}
+
+func translate(honk *Honk, redoimages bool) {
+	if honk.Format == "html" {
+		return
+	}
+	noise := honk.Noise
+	if strings.HasPrefix(noise, "DZ:") {
+		idx := strings.Index(noise, "\n")
+		if idx == -1 {
+			honk.Precis = noise
+			noise = ""
+		} else {
+			honk.Precis = noise[:idx]
+			noise = noise[idx+1:]
 		}
 	}
-	return ""
-}
+	honk.Precis = markitzero(strings.TrimSpace(honk.Precis))
 
-func osmosis(honks []*Honk, userid int64) []*Honk {
-	zords := getzords(userid)
-	j := 0
-outer:
-	for _, h := range honks {
-		for _, z := range zords {
-			if z.MatchString(h.Precis) || z.MatchString(h.Noise) {
-				continue outer
+	noise = strings.TrimSpace(noise)
+	noise = quickrename(noise, honk.UserID)
+	noise = markitzero(noise)
+	honk.Noise = noise
+	honk.Onts = oneofakind(ontologies(honk.Noise))
+
+	if redoimages {
+		zap := make(map[string]bool)
+		{
+			var htf htfilter.Filter
+			htf.Imager = replaceimgsand(zap, true)
+			htf.SpanClasses = allowedclasses
+			p, _ := htf.String(honk.Precis)
+			n, _ := htf.String(honk.Noise)
+			honk.Precis = string(p)
+			honk.Noise = string(n)
+		}
+		j := 0
+		for i := 0; i < len(honk.Donks); i++ {
+			if !zap[honk.Donks[i].XID] {
+				honk.Donks[j] = honk.Donks[i]
+				j++
 			}
 		}
-		honks[j] = h
-		j++
+		honk.Donks = honk.Donks[:j]
+
+		honk.Noise = re_memes.ReplaceAllString(honk.Noise, "")
+		honk.Noise = ontologize(mentionize(honk.Noise))
+		honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
 	}
-	honks = honks[0:j]
-	return honks
 }
 
-func shortxid(xid string) string {
-	idx := strings.LastIndexByte(xid, '/')
-	if idx == -1 {
-		return xid
-	}
-	return xid[idx+1:]
-}
-
-func xfiltrate() string {
+func xcelerate(b []byte) string {
 	letters := "BCDFGHJKLMNPQRSTVWXYZbcdfghjklmnpqrstvwxyz1234567891234567891234"
-	var b [18]byte
-	rand.Read(b[:])
 	for i, c := range b {
 		b[i] = letters[c&63]
 	}
-	s := string(b[:])
+	s := string(b)
 	return s
 }
 
-var re_hashes = regexp.MustCompile(`(?:^|\W)#[[:alnum:]]+`)
+func shortxid(xid string) string {
+	h := sha512.New512_256()
+	io.WriteString(h, xid)
+	return xcelerate(h.Sum(nil)[:20])
+}
+
+func xfiltrate() string {
+	var b [18]byte
+	rand.Read(b[:])
+	return xcelerate(b[:])
+}
+
+var re_hashes = regexp.MustCompile(`(?:^| )#[[:alnum:]][[:alnum:]_-]*`)
 
 func ontologies(s string) []string {
 	m := re_hashes.FindAllString(s, -1)
@@ -210,7 +319,6 @@ type Emu struct {
 	Name string
 }
 
-var re_link = regexp.MustCompile(`@?https?://[^\s"]+[\w/)]`)
 var re_emus = regexp.MustCompile(`:[[:alnum:]_-]+:`)
 
 func herdofemus(noise string) []Emu {
@@ -248,99 +356,92 @@ func memetize(honk *Honk) {
 		fd.Close()
 
 		url := fmt.Sprintf("https://%s/meme/%s", serverName, name)
-		res, err := stmtSaveFile.Exec("", name, url, ct, 0, "")
+		fileid, err := savefile("", name, name, url, ct, false, nil)
 		if err != nil {
 			log.Printf("error saving meme: %s", err)
 			return x
 		}
-		var d Donk
-		d.FileID, _ = res.LastInsertId()
-		d.XID = ""
-		d.Name = name
-		d.Media = ct
-		d.URL = url
-		d.Local = false
-		honk.Donks = append(honk.Donks, &d)
-		log.Printf("replace with -")
+		d := &Donk{
+			FileID: fileid,
+			XID:    "",
+			Name:   name,
+			Media:  ct,
+			URL:    url,
+			Local:  false,
+		}
+		honk.Donks = append(honk.Donks, d)
 		return ""
 	}
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-var re_bolder = regexp.MustCompile(`(^|\W)\*\*([\w\s,.!?'-]+)\*\*($|\W)`)
-var re_italicer = regexp.MustCompile(`(^|\W)\*([\w\s,.!?'-]+)\*($|\W)`)
-var re_bigcoder = regexp.MustCompile("```\n?((?s:.*?))\n?```\n?")
-var re_coder = regexp.MustCompile("`([^`]*)`")
-var re_quoter = regexp.MustCompile(`(?m:^&gt; (.*)\n?)`)
+var re_quickmention = regexp.MustCompile("(^| )@[[:alnum:]]+( |$)")
 
-func markitzero(s string) string {
-	var bigcodes []string
-	bigsaver := func(code string) string {
-		bigcodes = append(bigcodes, code)
-		return "``````"
+func quickrename(s string, userid int64) string {
+	nonstop := true
+	for nonstop {
+		nonstop = false
+		s = re_quickmention.ReplaceAllStringFunc(s, func(m string) string {
+			prefix := ""
+			if m[0] == ' ' {
+				prefix = " "
+				m = m[1:]
+			}
+			prefix += "@"
+			m = m[1:]
+			if m[len(m)-1] == ' ' {
+				m = m[:len(m)-1]
+			}
+
+			xid := fullname(m, userid)
+
+			if xid != "" {
+				_, name := handles(xid)
+				if name != "" {
+					nonstop = true
+					m = name
+				}
+			}
+			return prefix + m + " "
+		})
 	}
-	s = re_bigcoder.ReplaceAllStringFunc(s, bigsaver)
-	var lilcodes []string
-	lilsaver := func(code string) string {
-		lilcodes = append(lilcodes, code)
-		return "`x`"
-	}
-	s = re_coder.ReplaceAllStringFunc(s, lilsaver)
-	s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
-	s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
-	s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><p>")
-	lilun := func(s string) string {
-		code := lilcodes[0]
-		lilcodes = lilcodes[1:]
-		return code
-	}
-	s = re_coder.ReplaceAllStringFunc(s, lilun)
-	bigun := func(s string) string {
-		code := bigcodes[0]
-		bigcodes = bigcodes[1:]
-		return code
-	}
-	s = re_bigcoder.ReplaceAllStringFunc(s, bigun)
-	s = re_bigcoder.ReplaceAllString(s, "<pre><code>$1</code></pre><p>")
-	s = re_coder.ReplaceAllString(s, "<code>$1</code>")
 	return s
 }
 
-func obfusbreak(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.Replace(s, "\r", "", -1)
-	s = html.EscapeString(s)
-	// dammit go
-	s = strings.Replace(s, "&#39;", "'", -1)
-	linkfn := func(url string) string {
-		if url[0] == '@' {
-			return url
-		}
-		addparen := false
-		adddot := false
-		if strings.HasSuffix(url, ")") && strings.IndexByte(url, '(') == -1 {
-			url = url[:len(url)-1]
-			addparen = true
-		}
-		if strings.HasSuffix(url, ".") {
-			url = url[:len(url)-1]
-			adddot = true
-		}
-		url = fmt.Sprintf(`<a class="mention u-url" href="%s">%s</a>`, url, url)
-		if adddot {
-			url += "."
-		}
-		if addparen {
-			url += ")"
-		}
-		return url
+var shortnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+	honkers := gethonkers(userid)
+	m := make(map[string]string)
+	for _, h := range honkers {
+		m[h.XID] = h.Name
 	}
-	s = re_link.ReplaceAllStringFunc(s, linkfn)
+	return m, true
+}, Invalidator: &honkerinvalidator})
 
-	s = markitzero(s)
+func shortname(userid int64, xid string) string {
+	var m map[string]string
+	ok := shortnames.Get(userid, &m)
+	if ok {
+		return m[xid]
+	}
+	return ""
+}
 
-	s = strings.Replace(s, "\n", "<br>", -1)
-	return s
+var fullnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+	honkers := gethonkers(userid)
+	m := make(map[string]string)
+	for _, h := range honkers {
+		m[h.Name] = h.XID
+	}
+	return m, true
+}, Invalidator: &honkerinvalidator})
+
+func fullname(name string, userid int64) string {
+	var m map[string]string
+	ok := fullnames.Get(userid, &m)
+	if ok {
+		return m[name]
+	}
+	return ""
 }
 
 func mentionize(s string) string {
@@ -360,8 +461,25 @@ func mentionize(s string) string {
 	return s
 }
 
+func ontologize(s string) string {
+	s = re_hashes.ReplaceAllStringFunc(s, func(o string) string {
+		if o[0] == '&' {
+			return o
+		}
+		p := ""
+		h := o
+		if h[0] != '#' {
+			p = h[:1]
+			h = h[1:]
+		}
+		return fmt.Sprintf(`%s<a href="https://%s/o/%s">%s</a>`, p, serverName,
+			strings.ToLower(h[1:]), h)
+	})
+	return s
+}
+
 var re_unurl = regexp.MustCompile("https://([^/]+).*/([^/]+)")
-var re_urlhost = regexp.MustCompile("https://([^/]+)")
+var re_urlhost = regexp.MustCompile("https://([^/ ]+)")
 
 func originate(u string) string {
 	m := re_urlhost.FindStringSubmatch(u)
@@ -371,19 +489,47 @@ func originate(u string) string {
 	return ""
 }
 
-func honkerhandle(h string) (string, string) {
-	m := re_unurl.FindStringSubmatch(h)
-	if len(m) > 2 {
-		return m[2], fmt.Sprintf("%s@%s", m[2], m[1])
+var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool) {
+	row := stmtGetXonker.QueryRow(xid, "handle")
+	var handle string
+	err := row.Scan(&handle)
+	if err != nil {
+		info, err := investigate(xid)
+		if err != nil {
+			m := re_unurl.FindStringSubmatch(xid)
+			if len(m) > 2 {
+				handle = m[2]
+			} else {
+				handle = xid
+			}
+		} else {
+			handle = info.Name
+			_, err = stmtSaveXonker.Exec(xid, handle, "handle")
+			if err != nil {
+				log.Printf("error saving handle: %s", err)
+			}
+		}
 	}
-	return h, h
+	return handle, true
+}})
+
+// handle, handle@host
+func handles(xid string) (string, string) {
+	if xid == "" {
+		return "", ""
+	}
+	var handle string
+	allhandles.Get(xid, &handle)
+	if handle == xid {
+		return xid, xid
+	}
+	return handle, handle + "@" + originate(xid)
 }
 
 func prepend(s string, x []string) []string {
 	return append([]string{s}, x...)
 }
 
-// pleroma leaks followers addressed posts to followers
 func butnottooloud(aud []string) {
 	for i, a := range aud {
 		if strings.HasSuffix(a, "/followers") {
@@ -392,198 +538,98 @@ func butnottooloud(aud []string) {
 	}
 }
 
-func keepitquiet(aud []string) bool {
+func loudandproud(aud []string) bool {
 	for _, a := range aud {
 		if a == thewholeworld {
-			return false
-		}
-	}
-	return true
-}
-
-func oneofakind(a []string) []string {
-	var x []string
-	for n, s := range a {
-		if s != "" {
-			x = append(x, s)
-			for i := n + 1; i < len(a); i++ {
-				if a[i] == s {
-					a[i] = ""
-				}
-			}
-		}
-	}
-	return x
-}
-
-var ziggies = make(map[string]*rsa.PrivateKey)
-var zaggies = make(map[string]*rsa.PublicKey)
-var ziggylock sync.Mutex
-
-func ziggy(username string) (keyname string, key *rsa.PrivateKey) {
-	ziggylock.Lock()
-	key = ziggies[username]
-	ziggylock.Unlock()
-	if key == nil {
-		db := opendatabase()
-		row := db.QueryRow("select seckey from users where username = ?", username)
-		var data string
-		row.Scan(&data)
-		var err error
-		key, _, err = httpsig.DecodeKey(data)
-		if err != nil {
-			log.Printf("error decoding %s seckey: %s", username, err)
-			return
-		}
-		ziggylock.Lock()
-		ziggies[username] = key
-		ziggylock.Unlock()
-	}
-	keyname = fmt.Sprintf("https://%s/%s/%s#key", serverName, userSep, username)
-	return
-}
-
-func zaggy(keyname string) (key *rsa.PublicKey) {
-	ziggylock.Lock()
-	key = zaggies[keyname]
-	ziggylock.Unlock()
-	if key != nil {
-		return
-	}
-	row := stmtGetXonker.QueryRow(keyname, "pubkey")
-	var data string
-	err := row.Scan(&data)
-	if err != nil {
-		log.Printf("hitting the webs for missing pubkey: %s", keyname)
-		j, err := GetJunk(keyname)
-		if err != nil {
-			log.Printf("error getting %s pubkey: %s", keyname, err)
-			return
-		}
-		keyobj, ok := j.GetMap("publicKey")
-		if ok {
-			j = keyobj
-		}
-		data, ok = j.GetString("publicKeyPem")
-		if !ok {
-			log.Printf("error finding %s pubkey", keyname)
-			return
-		}
-		_, ok = j.GetString("owner")
-		if !ok {
-			log.Printf("error finding %s pubkey owner", keyname)
-			return
-		}
-		_, key, err = httpsig.DecodeKey(data)
-		if err != nil {
-			log.Printf("error decoding %s pubkey: %s", keyname, err)
-			return
-		}
-		_, err = stmtSaveXonker.Exec(keyname, data, "pubkey")
-		if err != nil {
-			log.Printf("error saving key: %s", err)
-		}
-	} else {
-		_, key, err = httpsig.DecodeKey(data)
-		if err != nil {
-			log.Printf("error decoding %s pubkey: %s", keyname, err)
-			return
-		}
-	}
-	ziggylock.Lock()
-	zaggies[keyname] = key
-	ziggylock.Unlock()
-	return
-}
-
-func makeitworksomehowwithoutregardforkeycontinuity(keyname string, r *http.Request, payload []byte) (string, error) {
-	_, err := stmtDeleteXonker.Exec(keyname, "pubkey")
-	if err != nil {
-		log.Printf("error deleting key: %s", err)
-	}
-	ziggylock.Lock()
-	delete(zaggies, keyname)
-	ziggylock.Unlock()
-	return httpsig.VerifyRequest(r, payload, zaggy)
-}
-
-var thumbbiters map[int64]map[string]bool
-var zordses map[int64][]*regexp.Regexp
-var zilences map[int64][]*regexp.Regexp
-var thumblock sync.Mutex
-
-func bitethethumbs() {
-	rows, err := stmtThumbBiters.Query()
-	if err != nil {
-		log.Printf("error getting thumbbiters: %s", err)
-		return
-	}
-	defer rows.Close()
-
-	thumblock.Lock()
-	defer thumblock.Unlock()
-	thumbbiters = make(map[int64]map[string]bool)
-	zordses = make(map[int64][]*regexp.Regexp)
-	zilences = make(map[int64][]*regexp.Regexp)
-	for rows.Next() {
-		var userid int64
-		var name, wherefore string
-		err = rows.Scan(&userid, &name, &wherefore)
-		if err != nil {
-			log.Printf("error scanning zonker: %s", err)
-			continue
-		}
-		if wherefore == "zord" || wherefore == "zilence" {
-			zord := "\\b(?i:" + name + ")\\b"
-			re, err := regexp.Compile(zord)
-			if err != nil {
-				log.Printf("error compiling zord: %s", err)
-			} else {
-				if wherefore == "zord" {
-					zordses[userid] = append(zordses[userid], re)
-				} else {
-					zilences[userid] = append(zilences[userid], re)
-				}
-			}
-			continue
-		}
-		m := thumbbiters[userid]
-		if m == nil {
-			m = make(map[string]bool)
-			thumbbiters[userid] = m
-		}
-		m[name] = true
-	}
-}
-
-func getzords(userid int64) []*regexp.Regexp {
-	thumblock.Lock()
-	defer thumblock.Unlock()
-	return zordses[userid]
-}
-
-func getzilences(userid int64) []*regexp.Regexp {
-	thumblock.Lock()
-	defer thumblock.Unlock()
-	return zilences[userid]
-}
-
-func thoudostbitethythumb(userid int64, who []string, objid string) bool {
-	thumblock.Lock()
-	biters := thumbbiters[userid]
-	thumblock.Unlock()
-	for _, w := range who {
-		if biters[w] {
 			return true
-		}
-		where := originate(w)
-		if where != "" {
-			if biters[where] {
-				return true
-			}
 		}
 	}
 	return false
+}
+
+func firstclass(honk *Honk) bool {
+	return honk.Audience[0] == thewholeworld
+}
+
+func oneofakind(a []string) []string {
+	seen := make(map[string]bool)
+	seen[""] = true
+	j := 0
+	for _, s := range a {
+		if !seen[s] {
+			seen[s] = true
+			a[j] = s
+			j++
+		}
+	}
+	return a[:j]
+}
+
+var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool) {
+	var user *WhatAbout
+	ok := somenumberedusers.Get(userid, &user)
+	if !ok {
+		return nil, false
+	}
+	ki := new(KeyInfo)
+	ki.keyname = user.URL + "#key"
+	ki.seckey = user.SecKey
+	return ki, true
+}})
+
+func ziggy(userid int64) *KeyInfo {
+	var ki *KeyInfo
+	ziggies.Get(userid, &ki)
+	return ki
+}
+
+var zaggies = cache.New(cache.Options{Filler: func(keyname string) (*rsa.PublicKey, bool) {
+	row := stmtGetXonker.QueryRow(keyname, "pubkey")
+	var data string
+	err := row.Scan(&data)
+	if err == nil {
+		_, key, err := httpsig.DecodeKey(data)
+		if err != nil {
+			log.Printf("error decoding %s pubkey: %s", keyname, err)
+		}
+		return key, true
+	}
+	log.Printf("hitting the webs for missing pubkey: %s", keyname)
+	j, err := GetJunk(keyname)
+	if err != nil {
+		log.Printf("error getting %s pubkey: %s", keyname, err)
+		return nil, true
+	}
+	keyobj, ok := j.GetMap("publicKey")
+	if ok {
+		j = keyobj
+	}
+	data, ok = j.GetString("publicKeyPem")
+	if !ok {
+		log.Printf("error finding %s pubkey", keyname)
+		return nil, true
+	}
+	_, ok = j.GetString("owner")
+	if !ok {
+		log.Printf("error finding %s pubkey owner", keyname)
+		return nil, true
+	}
+	_, key, err := httpsig.DecodeKey(data)
+	if err != nil {
+		log.Printf("error decoding %s pubkey: %s", keyname, err)
+		return nil, true
+	}
+	_, err = stmtSaveXonker.Exec(keyname, data, "pubkey")
+	if err != nil {
+		log.Printf("error saving key: %s", err)
+	}
+	return key, true
+}})
+
+func zaggy(keyname string) *rsa.PublicKey {
+	var key *rsa.PublicKey
+	zaggies.Get(keyname, &key)
+	return key
 }
 
 func keymatch(keyname string, actor string) string {

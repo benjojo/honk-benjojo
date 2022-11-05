@@ -1,14 +1,27 @@
 <article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}">
 {{ $bonkcsrf := .BonkCSRF }}
+{{ $IsPreview := .IsPreview }}
 {{ with .Honk }}
 <header>
-<img alt="avatar" src="/a?a={{ .Honker}}">
+{{ if $bonkcsrf }}
+<a class="honkerlink" href="/h?xid={{ .Honker }}" data-xid="{{ .Honker }}">
+{{ else }}
+<a href="{{ .Honker }}" rel=noreferrer>
+{{ end }}
+<img alt="" src="/a?a={{ .Honker}}">
+{{ if $bonkcsrf }} </a> {{ end }}
 {{ if .Oonker }}
-<img alt="avatar" src="/a?a={{ .Oonker}}">
+{{ if $bonkcsrf }}
+<a class="honkerlink" href="/h?xid={{ .Oonker }}" data-xid="{{ .Oonker }}">
+{{ else }}
+<a href="{{ .Oonker }}" rel=noreferrer>
+{{ end }}
+<img alt="" src="/a?a={{ .Oonker}}">
+{{ if $bonkcsrf }} </a> {{ end }}
 {{ end }}
 <p>
 {{ if $bonkcsrf }}
-<a href="/h?xid={{ .Honker }}" rel=noreferrer>{{ .Username }}</a>
+<a class="honkerlink" href="/h?xid={{ .Honker }}" data-xid="{{ .Honker }}">{{ .Username }}</a>
 {{ else }}
 <a href="{{ .Honker }}" rel=noreferrer>{{ .Username }}</a>
 {{ end }}
@@ -17,7 +30,7 @@
 <br>
 <span style="margin-left: 1em;" class="clip">
 {{ if $bonkcsrf }}
-original: <a href="/h?xid={{ .Oonker }}" rel=noreferrer>{{ .Oondle }}</a>
+original: <a class="honkerlink" href="/h?xid={{ .Oonker }}" data-xid="{{ .Oonker }}">{{ .Oondle }}</a>
 {{ else }}
 original: <a href="{{ .Oonker }}" rel=noreferrer>{{ .Oondle }}</a>
 {{ end }}
@@ -32,38 +45,47 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 <br>
 {{ if $bonkcsrf }}
-<span style="margin-left: 1em;" class="clip">convoy: <a href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
+<span style="margin-left: 1em;" class="clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
 {{ else }}
 <span style="margin-left: 1em;" class="clip">convoy: {{ .Convoy }}</span>
 {{ end }}
 </header>
 <p>
 <details class="noise" {{ .Open }} >
-<summary>{{ .Precis }}</summary>
-<p>{{ .Precis }}
+<summary>{{ .HTPrecis }}<p></summary>
+<p>{{ .HTPrecis }}
 <p>{{ .HTML }}
+{{ with .Time }}
+<p>Time: {{ .StartTime.Local.Format "03:04PM EDT Mon Jan 02"}}
+{{ if .Duration }}<br>Duration: {{ .Duration }}{{ end }}
+{{ end }}
+{{ with .Place }}
+<p>Location: {{ with .Url }}<a href="{{ . }}" rel=noreferrer>{{ end }}{{ .Name }}{{ if .Url }}</a>{{ end }}{{ if or .Latitude .Longitude }} <a href="https://www.openstreetmap.org/?mlat={{ .Latitude }}&mlon={{ .Longitude}}#map=16/{{ .Latitude }}/{{ .Longitude }}" rel=noreferrer>{{ .Latitude }} {{ .Longitude }}</a>{{ end }}
+{{ end }}
 {{ range .Donks }}
 {{ if .Local }}
 {{ if eq .Media "text/plain" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a> {{ .Desc }}
+{{ else if eq .Media "application/pdf" }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a> {{ .Desc }}
 {{ else }}
-<p><a href="/d/{{ .XID }}"><img src="/d/{{ .XID }}" title="{{ .URL }}"></a>
+<p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
 {{ end }}
 {{ else }}
 {{ if .XID }}
-<p><a href="{{ .URL }}">External Attachment: {{ .Name }}</a>
+<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>
 {{ else }}
 {{ if eq .Media "video/mp4" }}
-<p><a href="{{ .URL }}"><video controls src="{{ .URL }}">{{ .Name }}</video></a>
+<p><video controls src="{{ .URL }}">{{ .Name }}</video>
 {{ else }}
-<p><a href="{{ .URL }}"><img src="{{ .URL }}" title="{{ .Name }}"></a>
+<p><img src="{{ .URL }}" title="{{ .Desc }}" alt="{{ .Desc }}">
 {{ end }}
 {{ end }}
 {{ end }}
 {{ end }}
 </details>
 {{ end }}
-{{ if $bonkcsrf }}
+{{ if and $bonkcsrf (not $IsPreview) }}
 <p>
 <details class="actions">
 <summary>Actions
@@ -71,13 +93,29 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <div>
 <p>
 {{ if .Honk.Public }}
-<button onclick="bonk(this, '{{ .Honk.XID }}');">bonk</button>
+{{ if .Honk.IsBonked }}
+<button onclick="return unbonk(this, '{{ .Honk.XID }}');">unbonk</button>
+{{ else }}
+<button onclick="return bonk(this, '{{ .Honk.XID }}');">bonk</button>
+{{ end }}
 {{ else }}
 <button disabled>nope</button>
 {{ end }}
-<button onclick="showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handle }}');">honk back</button>
-<button onclick="muteit(this, '{{ .Honk.Convoy }}');">mute</button>
-<button onclick="zonkit(this, '{{ .Honk.XID }}');">zonk</button>
+<button onclick="return showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handle }}');"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
+<button onclick="return muteit(this, '{{ .Honk.Convoy }}');">mute</button>
+<button onclick="return zonkit(this, '{{ .Honk.XID }}');">zonk</button>
+{{ if .Honk.IsAcked }}
+<button onclick="return flogit(this, 'deack', '{{ .Honk.XID }}');">deack</button>
+{{ else }}
+<button onclick="return flogit(this, 'ack', '{{ .Honk.XID }}');">ack</button>
+{{ end }}
+{{ if .Honk.IsSaved }}
+<button onclick="return flogit(this, 'unsave', '{{ .Honk.XID }}');">unsave</button>
+{{ else }}
+<button onclick="return flogit(this, 'save', '{{ .Honk.XID }}');">save</button>
+{{ end }}
+<button onclick="return flogit(this, 'untag', '{{ .Honk.XID }}');">untag me</button>
+<button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
 </div>
 </details>
 <p>

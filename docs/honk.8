@@ -1,0 +1,150 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt HONK 8
+.Os
+.Sh NAME
+.Nm honk
+.Nd honk administration
+.Sh DESCRIPTION
+The
+.Nm
+daemon processes messages from other federated servers.
+This is the admin manual.
+For user operation, see
+.Xr honk 1 .
+.Ss SETUP
+.Pp
+Set up a TLS reverse proxy.
+.Nm
+can listen on TCP or unix sockets, but will not terminate TLS.
+https is a required component for federation.
+.Pp
+Make sure to pass the Host header, if necessary (as for nginx).
+.Bd -literal -offset indent
+proxy_set_header Host $http_host;
+.Ed
+.Ss BUILD
+Building
+.Nm
+requires a go compiler and libsqlite.
+On
+.Ox
+this is the go and sqlite3 packages.
+Other platforms may require additional development libraries or headers
+to be installed.
+Run make.
+Please be patient.
+Even on fast machines, building from source can take several seconds.
+.Ss INIT
+Run the
+.Ic init
+command.
+.Dl ./honk init
+This will create the database and ask four questions, as well as creating
+the initial user.
+.Bd -literal -offset indent
+username: (desired username)
+password: (desired password)
+listenaddr: (tcp or unix: localhost:31337, /var/www/honk.sock, etc.)
+servername: (public DNS name: honk.example.com)
+.Ed
+.Ss OPERATION
+Run honk.
+.Dl date; ./honk >> log 2>&1
+Log messages are sent to stderr and should probably be redirected to a file.
+.Ss CUSTOMIZATION
+Add custom memes (stickers) to the
+.Pa memes
+directory.
+Image and video files are supported.
+.Pp
+Add custom emus (emoji) to the
+.Pa emus
+directory.
+Image files are supported.
+.Pp
+Site CSS may be overridden by creating a
+.Pa views/local.css
+file.
+A restart is required after changes.
+.Pp
+Custom HTML messages may be added to select pages by using the
+.Ic admin
+command.
+A restart is required after changes.
+.Dl ./honk admin
+.Bl -tag -width tenletters
+.It server
+Displayed on the home page.
+.It about
+Displayed on the about page.
+.It login
+Displayed about the login form.
+.El
+.Pp
+.Ss USER ADMIN
+New users can be added with the
+.Ic adduser
+command.
+This is discouraged.
+.Dl ./honk adduser
+.Pp
+Passwords may be reset with the
+.Ic chpass
+command.
+.Dl ./honk chpass username
+.Ss MAINTENANCE
+The database may grow large over time.
+The
+.Ic cleanup
+command exists to purge old data, by default 30 days.
+This removes unreferenced, unsaved posts and attachments.
+It does not remove any original content.
+.Ss UPGRADE
+Stop the old honk process.
+.Dl pkill honk
+Backup the database.
+.Dl cp honk.db backup.db
+Perform the upgrade with the
+.Ic upgrade
+command.
+.Dl ./honk upgrade
+Restart.
+.Dl ./honk
+.Pp
+There's also a
+.Pa blob.db
+file which is important to backup and restore.
+.Sh SECURITY
+.Nm
+is not currently hardened against SSRF, server side request forgery.
+Be mindful of what other services may be exposed via localhost or the
+local network.
+.Sh DEBUG
+Debug mode may be enabled or disabled by running
+.Ic debug Ar on|off .
+In debug mode, secure cookies are disabled and templates are reloaded
+every request.
+.Sh ENVIRONMENT
+Image processing and scaling requires considerable memory.
+It is recommended to adjust the datasize ulimit to at least 1GB.
+.Sh SEE ALSO
+.Xr intro 1 ,
+.Xr honk 1
+.Sh CAVEATS
+There's no online upgrade capability.
+Upgrades may result in minutes of downtime.

@@ -21,6 +21,7 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
+// these lists are mostly (?) accurate
 var bigboldshitz = "𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙"
 var lilboldshitz = "𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳"
 var moeboldshitz = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭"
@@ -38,6 +39,8 @@ var lilbangshitz = "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠
 var bigwideshitz = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
 var lilwideshitz = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ"
 var bigblokshitz = "🅰🅱🅲🅳🅴🅵🅶🅷🅸🅹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉"
+var evenmoeshitz = "𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍"
+var evenmorshitz = "𝒶𝒷𝒸𝒹𝑒𝒻𝓰𝒽𝒾𝒿𝓀𝓁𝓂𝓃𝓸𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏"
 
 var re_alltheshitz = regexp.MustCompile(`([` +
 	bigboldshitz + lilboldshitz +
@@ -48,13 +51,15 @@ var re_alltheshitz = regexp.MustCompile(`([` +
 	moeitalshitz + moritalshitz +
 	bigbangshitz + lilbangshitz +
 	bigwideshitz + lilwideshitz +
+	evenmoeshitz + evenmorshitz +
 	bigblokshitz +
 	"][ '\ufe0f]?){3,}")
 
-var allUppers = []string{bigboldshitz, moeboldshitz, biggothshitz, bigwideshitz, moegothshitz, bigitalshitz, moeitalshitz, bigbangshitz, bigblokshitz}
-var allLowers = []string{lilboldshitz, morboldshitz, lilgothshitz, lilwideshitz, morgothshitz, lilitalshitz, moritalshitz, lilbangshitz}
+var allUppers = []string{bigboldshitz, moeboldshitz, biggothshitz, bigwideshitz, moegothshitz, bigitalshitz, moeitalshitz, bigbangshitz, bigblokshitz, evenmoeshitz}
+var allLowers = []string{lilboldshitz, morboldshitz, lilgothshitz, lilwideshitz, morgothshitz, lilitalshitz, moritalshitz, lilbangshitz, evenmorshitz}
 
-var re_moredumb = regexp.MustCompile(`[👏]`)
+var skinTones = "\U0001F3FB\U0001F3FC\U0001F3FD\U0001F3FE\U0001F3FF"
+var re_moredumb = regexp.MustCompile("[\U0001f44f\U0001f6a8\U000026a0][" + skinTones + "\ufe0f]*")
 
 // this may not be especially fast
 func unpucker(s string) string {
@@ -94,6 +99,10 @@ func unpucker(s string) string {
 	}
 	s = re_alltheshitz.ReplaceAllStringFunc(s, fixer)
 
+	return demoji(s)
+}
+
+func demoji(s string) string {
 	s = re_moredumb.ReplaceAllString(s, ".")
 
 	zw := false

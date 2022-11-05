@@ -1,0 +1,89 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt HFCS 1
+.Os
+.Sh NAME
+.Nm hfcs
+.Nd honk filtering and censorship system
+.Sh DESCRIPTION
+The honk filtering and censorship system,
+.Nm hfcs ,
+controls what messages are seen and how they are presented to the user.
+Filter rules are based on a series of matches and actions.
+It is accessed via the
+.Pa filters
+menu item.
+.Pp
+The following match types are possible.
+All nonempty criteria must match.
+.Bl -tag -width include-audience
+.It Ar who
+Match an actor or domain name.
+Matches against
+.Fa Ar actor
+property.
+.It Ar include audience
+Previous match is applied against
+.Fa to
+and
+.Fa cc
+fields as well.
+.It Ar text
+Regular expression match against the post
+.Fa content .
+.It Ar is announce
+Is announced (shared).
+.It Ar announce of
+Limit prevous match to only specified actor or domain name.
+.El
+.Pp
+The following actions may be applied.
+Multiple actions may be applied, but some are subsumed by others.
+.Bl -tag -width tenletters
+.It Ar reject
+Reject this message entirely.
+.It Ar skip media
+Don't include images or attachments.
+.It Ar hide
+Remove this message from most feeds.
+.It Ar collapse
+Show only a short summary with click to view content.
+.It Ar rewrite
+Rewrite message content, using
+.Ar replace
+replacement text.
+.El
+.Pp
+The
+.Ar text
+and
+.Ar rewrite
+fields are case insensitive word anchored regular expressions.
+Specifically, an argument
+.Ql re
+will be automatically rewritten as
+.Ql \\\b(?i:re)\\\b .
+The
+.Ar replace
+text may refer to submatches using $1, etc.
+.Pp
+An optional expiration may be specified as a duration.
+XdYhZm for X days, Y hours, and Z minutes.
+.Sh SEE ALSO
+.Xr honk 1
+.Sh CAVEATS
+Not seeing is not erasing.

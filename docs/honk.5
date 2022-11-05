@@ -1,0 +1,124 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt HONK 5
+.Os
+.Sh NAME
+.Nm honk
+.Nd status composition
+.Sh DESCRIPTION
+Status updates composed in
+.Nm
+have many features beyond just plain text.
+.Pp
+The process begins by pressing the button marked
+.Dq it's honking time
+to activate the honk form.
+.Pp
+Honks are posted publicly.
+.Pp
+A subset of markdown is supported.
+.Bl -tag -width tenletters
+.It bold
+**bold text**
+.It italics
+*italicized text*
+.It quotes
+> This text is quoted.
+.It code
+Inline `code fragments` with single ticks.
+.Bd -literal
+```c
+/* triple tick code blocks support syntax highlighting */
+int main() { return 0; }
+```
+.Ed
+.It images
+Inline images with img tags.
+.Bd -literal
+<img alt="Lifecycle of a honk" src="https://example.com/diagram.png">
+.Ed
+.It links
+URLs beginning with
+.Dq http
+or
+.Dq https
+will be autolinked.
+.El
+.Pp
+Mentioning a specfic user such as
+.Pq @user@example.social
+will send a copy of the message to them.
+Several forms are supported.
+.Ql @name
+will work using the short name from the
+.Pa honkers
+table and be expanded automatically.
+.Ql @handle@domain
+will work for anyone.
+.Ql @https://example.com
+works as well.
+When honking back, the author of the parent post is automatically mentioned.
+.Pp
+Threads from the tiny bird site may be included as quotes in a post via the
+.Ar hoot
+operator followed by the URL.
+.Dl hoot: https://twitter.com/tedunangst/status/850379741492367360
+.Pp
+Custom emoji may be included by colon wrapping the image name.
+.Pq :hellsyeah:
+A meme (sticker, reaction gif) may be included with the
+.Ar meme
+operator followed by the file name.
+.Dl meme: honk.mp4
+A full list of emoji and memes may be found in the
+.Pa funzone .
+.Pp
+There are no length restrictions, but remember, somebody is going to have
+to read this noise.
+.Pp
+One may attach a file to a post.
+Images are automatically rescaled and reduced in size for federation.
+A description, or caption, is encouraged.
+Text files and PDFs are also supported as attachments.
+Other formats are not supported.
+.Pp
+One may also check in to a location.
+The available fields, all optional, are
+.Ar name ,
+.Ar url ,
+.Ar latitude ,
+and
+.Ar longitude .
+By default, location data is rounded to approximately 1/100 decimal degree
+accuracy.
+Pressing the check in button a second time will refine this to more a
+precise location.
+.Pp
+Adding a time to a post turns it into an event.
+Supported formats for start time are HH:MM or YYYY-MM-DD HH:MM.
+A 24 hour clock is assumed, unless am or pm are specified.
+The duration is optional and may be specified as XdYhZm for X days, Y hours,
+and Z minutes (1d12h would be a 36 hour event).
+.Pp
+When everything is at last ready to go, press the
+.Dq it's gonna be honked
+button.
+.Sh SEE ALSO
+.Xr honk 1
+.Sh CAVEATS
+Markdown support is implemented with regexes.
+Preview is recommended.

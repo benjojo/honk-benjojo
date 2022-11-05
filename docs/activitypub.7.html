@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2019 Ted Unangst
+  
+   Permission to use, copy, modify, and distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+  
+   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+   -->
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="mandoc.css" type="text/css" media="all"/>
+  <title>ACTIVITYPUB(7)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">ACTIVITYPUB(7)</td>
+    <td class="head-vol">Miscellaneous Information Manual</td>
+    <td class="head-rtitle">ACTIVITYPUB(7)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">activitypub</code> &#x2014;
+    <span class="Nd">notes about the honk implementation</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">The <a class="Xr" href="honk.1.html">honk(1)</a> utility processes
+    status updates and other microblog activities using the
+    <code class="Nm">ActivityPub</code> protocol to exchange messages with other
+    servers. The specification is subject to interpretation, and not all
+    implementations behave in the same way. This document attempts to clarify
+    honk's behavior. It is not intended to be a complete description of
+    <code class="Nm">ActivityPub</code>, but may be useful as a guide to other
+    implementors looking to interoperate.</p>
+<section class="Ss">
+<h2 class="Ss" id="OBJECTS"><a class="permalink" href="#OBJECTS">OBJECTS</a></h2>
+<p class="Pp">The following object or document types are supported.</p>
+<dl class="Bl-tag">
+  <dt><var class="Vt">Note</var></dt>
+  <dd>Fully supported. The default object type for honk.</dd>
+  <dt><var class="Vt">Article</var></dt>
+  <dd>Fully supported.</dd>
+  <dt><var class="Vt">Page</var></dt>
+  <dd>Supported.</dd>
+  <dt><var class="Vt">Question</var></dt>
+  <dd>Read only support. Appears similar to a Note.</dd>
+  <dt><var class="Vt">Event</var></dt>
+  <dd>Supported. Appears similar to a Note. Can be both created and received,
+      but <var class="Vt">Invite</var> activities are ignored.</dd>
+  <dt><var class="Vt">Video</var></dt>
+  <dd>Limited support.</dd>
+  <dt><var class="Vt">Audio</var></dt>
+  <dd>Limited Support.</dd>
+</dl>
+<p class="Pp">Honk primarily supports HTML content, not markdown or other
+    formats, with a wide range of permitted HTML tags in object
+    <var class="Fa">content</var> fields. The following tags are supported.</p>
+<div class="Bd Pp Bd-indent">
+<pre>
+a, img, span,
+div, h1, h2, h3, h4, h5, h6, hr,
+table, thead, tbody, th, tr, td, colgroup, col,
+p, br, pre, code, blockquote, q,
+samp, mark, ins, dfn, cite, abbr, address,
+strong, em, b, i, s, u, sub, sup, del, tt, small,
+ol, ul, li, dl, dt, dd
+</pre>
+</div>
+<p class="Pp">The following tag attributes are permitted.</p>
+<div class="Bd Pp Bd-indent">
+<pre>
+href, src, alt, colspan, rowspan
+</pre>
+</div>
+<p class="Pp">The following class names are used for syntax highlighting code
+    blocks.</p>
+<div class="Bd Pp Bd-indent">
+<pre>
+kw, bi, st, nm, tp, op, cm, al, dl
+</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="ACTIVITIES"><a class="permalink" href="#ACTIVITIES">ACTIVITIES</a></h2>
+<p class="Pp">The following activities are supported.</p>
+<dl class="Bl-tag">
+  <dt><var class="Vt">Create</var></dt>
+  <dd>Fully supported.</dd>
+  <dt><var class="Vt">Announce</var></dt>
+  <dd>Supported with share semantics.</dd>
+  <dt><var class="Vt">Read</var></dt>
+  <dd>Supported. Primarily used to acknowledge replies and complete threads. Can
+      be interpreted to mean reply is approved, if not endorsed.</dd>
+  <dt><var class="Vt">Add</var></dt>
+  <dd>Works with collections.</dd>
+  <dt><var class="Vt">Follow</var></dt>
+  <dd>Supported. Can follow both actors and collections.
+      <var class="Vt">Accept</var> and <var class="Vt">Undo</var> require that
+      the original request be quoted, not referred to by URI.</dd>
+  <dt><var class="Vt">Update</var></dt>
+  <dd>Supported. Honk sends and receives <var class="Vt">Update</var>
+      activities.</dd>
+  <dt><var class="Vt">Delete</var></dt>
+  <dd>Does what it can.</dd>
+  <dt><var class="Vt">Like</var></dt>
+  <dd>Don't be ridiculous.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="METADATA"><a class="permalink" href="#METADATA">METADATA</a></h2>
+<p class="Pp">The following additional object types are supported as
+    <var class="Fa">tag</var> or <var class="Fa">attachment</var>.</p>
+<dl class="Bl-tag">
+  <dt>Mention</dt>
+  <dd>Pretty @ machine.</dd>
+  <dt>Emoji</dt>
+  <dd>Inline text :emoji: with image replacement.</dd>
+  <dt>Place</dt>
+  <dd>Attached as a <var class="Fa">tag</var> to <var class="Vt">Note</var> and
+      <var class="Fa">location</var> to <var class="Vt">Event</var>. Supports
+      <var class="Fa">name</var>, <var class="Fa">url</var>,
+      <var class="Fa">latitude</var>, and <var class="Fa">longitude</var>.</dd>
+  <dt>Document</dt>
+  <dd>Plain text and images in jpeg, gif, png, and webp formats are supported.
+      Other formats are linked to origin.</dd>
+</dl>
+<p class="Pp">The <var class="Fa">replies</var> array will be populated with a
+    list of acknowledged replies.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="EXTENSIONS"><a class="permalink" href="#EXTENSIONS">EXTENSIONS</a></h2>
+<p class="Pp">Honk also supports a <var class="Vt">Ping</var> activity and will
+    respond with a <var class="Vt">Pong</var> activity. This is useful for
+    debugging networking connectivity issues without visible side effects. See
+    ping.txt for details.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="SECURITY"><a class="permalink" href="#SECURITY">SECURITY</a></h2>
+<p class="Pp">Honk uses http signatures.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="WEBFINGER"><a class="permalink" href="#WEBFINGER">WEBFINGER</a></h2>
+<p class="Pp">Honk implements the <var class="Vt">webfinger</var> end point and
+    will use it for @mention resolution. It is not required for federation.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="LD_JSON"><a class="permalink" href="#LD_JSON">LD-JSON</a></h2>
+<p class="Pp">Not really.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="intro.1.html">intro(1)</a>,
+    <a class="Xr" href="honk.1.html">honk(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STANDARDS"><a class="permalink" href="#STANDARDS">STANDARDS</a></h1>
+<p class="Pp"><a class="Lk" href="https://www.w3.org/TR/activitypub/">ActivityPub</a></p>
+<p class="Pp"><a class="Lk" href="https://www.w3.org/TR/activitystreams-vocabulary/">Activity
+    Vocabulary</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEATS"><a class="permalink" href="#CAVEATS">CAVEATS</a></h1>
+<p class="Pp">The ActivityPub standard is subject to interpretation, and not all
+    implementations are as enlightened as honk.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 1, 2019</td>
+    <td class="foot-os">OpenBSD 6.6</td>
+  </tr>
+</table>
+</body>
+</html>

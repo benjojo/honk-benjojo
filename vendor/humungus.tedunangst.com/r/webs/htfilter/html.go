@@ -13,49 +13,47 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+// A hypertext filter.
+// Rewrite HTML into a safer whitelisted subset.
 package htfilter
 
 import (
 	"fmt"
 	"html/template"
-	"io"
 	"net/url"
-	"regexp"
-	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
+	"humungus.tedunangst.com/r/webs/templates"
 )
 
+// A filter.
+// Imager is a function that is used to process <img> tags.
+// It should return the HTML replacement.
+// SpanClasses is a map of classes allowed for span tags.
+// The zero filter is useful by itself.
+// By default, images are replaced with text.
 type Filter struct {
+	Imager      func(node *html.Node) string
+	SpanClasses map[string]bool
 }
 
-func New() *Filter {
-	return new(Filter)
+var permittedtags = map[string]bool{
+	"div": true, "hr": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"table": true, "thead": true, "tbody": true, "th": true,
+	"tr": true, "td": true, "colgroup": true, "col": true,
+	"p": true, "br": true, "pre": true, "code": true, "blockquote": true, "q": true,
+	"samp": true, "mark": true, "ins": true, "dfn": true, "cite": true,
+	"abbr": true, "address": true,
+	"strong": true, "em": true, "b": true, "i": true, "s": true, "u": true,
+	"sub": true, "sup": true, "del": true, "tt": true, "small": true,
+	"ol": true, "ul": true, "li": true, "dl": true, "dt": true, "dd": true,
 }
+var permittedattr = map[string]bool{"colspan": true, "rowspan": true}
+var bannedtags = map[string]bool{"script": true, "style": true}
 
-var permittedtags = []string{
-	"div", "h1", "h2", "h3", "h4", "h5", "h6",
-	"table", "thead", "tbody", "th", "tr", "td", "colgroup", "col",
-	"p", "br", "pre", "code", "blockquote", "q",
-	"samp", "mark", "ins", "dfn", "cite", "abbr", "address",
-	"strong", "em", "b", "i", "s", "u", "sub", "sup", "del", "tt", "small",
-	"ol", "ul", "li", "dl", "dt", "dd",
-}
-var permittedattr = []string{"colspan", "rowspan"}
-var bannedtags = []string{"script", "style"}
-
-func init() {
-	sort.Strings(permittedtags)
-	sort.Strings(permittedattr)
-	sort.Strings(bannedtags)
-}
-
-func contains(array []string, tag string) bool {
-	idx := sort.SearchStrings(array, tag)
-	return idx < len(array) && array[idx] == tag
-}
-
+// Returns the value for a node attribute.
 func GetAttr(node *html.Node, attr string) string {
 	for _, a := range node.Attr {
 		if a.Key == attr {
@@ -65,22 +63,74 @@ func GetAttr(node *html.Node, attr string) string {
 	return ""
 }
 
+// Returns true if this node has specified class
 func HasClass(node *html.Node, class string) bool {
 	return strings.Contains(" "+GetAttr(node, "class")+" ", " "+class+" ")
 }
 
-func writetag(w io.Writer, node *html.Node) {
-	io.WriteString(w, "<")
-	io.WriteString(w, node.Data)
-	for _, attr := range node.Attr {
-		if contains(permittedattr, attr.Key) {
-			fmt.Fprintf(w, ` %s="%s"`, attr.Key, html.EscapeString(attr.Val))
-		}
-	}
-	io.WriteString(w, ">")
+type writer interface {
+	Write(p []byte) (n int, err error)
+	WriteString(s string) (n int, err error)
 }
 
-func render(w io.Writer, node *html.Node) {
+func writetag(w writer, node *html.Node) {
+	w.WriteString("<")
+	w.WriteString(node.Data)
+	for _, attr := range node.Attr {
+		if permittedattr[attr.Key] {
+			templates.Fprintf(w, ` %s="%s"`, attr.Key, attr.Val)
+		}
+	}
+	w.WriteString(">")
+}
+
+func getclasses(node *html.Node, allowed map[string]bool) string {
+	if allowed == nil {
+		return ""
+	}
+	nodeclass := GetAttr(node, "class")
+	if len(nodeclass) == 0 {
+		return ""
+	}
+	classes := strings.Split(nodeclass, " ")
+	var toprint []string
+	for _, c := range classes {
+		if allowed[c] {
+			toprint = append(toprint, c)
+		}
+	}
+	if len(toprint) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(` class="%s"`, strings.Join(toprint, " "))
+}
+
+// no need to escape quotes here
+func writeText(w writer, text string) {
+	last := 0
+	for i, c := range text {
+		var html string
+		switch c {
+		case '\000':
+			html = "\ufffd"
+		case '&':
+			html = "&amp;"
+		case '<':
+			html = "&lt;"
+		case '>':
+			html = "&gt;"
+		default:
+			continue
+		}
+		w.WriteString(text[last:i])
+		w.WriteString(html)
+		last = i + 1
+	}
+	w.WriteString(text[last:])
+}
+
+func (filt *Filter) render(w writer, node *html.Node) {
+	closespan := false
 	if node.Type == html.ElementNode {
 		tag := node.Data
 		switch {
@@ -92,53 +142,66 @@ func render(w io.Writer, node *html.Node) {
 			} else {
 				href = hrefurl.String()
 			}
-			fmt.Fprintf(w, `<a href="%s" rel=noreferrer>`, html.EscapeString(href))
+			templates.Fprintf(w, `<a href="%s" rel=noreferrer>`, href)
 		case tag == "img":
-			div := replaceimg(node)
-			if div != "skip" {
-				io.WriteString(w, div)
+			if filt.Imager != nil {
+				div := filt.Imager(node)
+				w.WriteString(div)
+			} else {
+				div := imgtotext(node)
+				w.WriteString(div)
 			}
 		case tag == "span":
+			c := getclasses(node, filt.SpanClasses)
+			if c != "" {
+				w.WriteString("<span")
+				w.WriteString(c)
+				w.WriteString(">")
+				closespan = true
+			}
 		case tag == "iframe":
-			src := html.EscapeString(GetAttr(node, "src"))
-			fmt.Fprintf(w, `&lt;iframe src="<a href="%s">%s</a>"&gt;`, src, src)
-		case contains(permittedtags, tag):
+			src := GetAttr(node, "src")
+			templates.Fprintf(w, `&lt;iframe src="<a href="%s">%s</a>"&gt;`, src, src)
+		case permittedtags[tag]:
 			writetag(w, node)
-		case contains(bannedtags, tag):
+		case bannedtags[tag]:
 			return
 		}
 	} else if node.Type == html.TextNode {
-		io.WriteString(w, html.EscapeString(node.Data))
+		writeText(w, node.Data)
 	}
 
 	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		render(w, c)
+		filt.render(w, c)
 	}
 
 	if node.Type == html.ElementNode {
 		tag := node.Data
-		if tag == "a" || (contains(permittedtags, tag) && tag != "br") {
+		if tag == "a" || (permittedtags[tag] && tag != "br") {
 			fmt.Fprintf(w, "</%s>", tag)
 		}
+		if closespan {
+			w.WriteString("</span>")
+		}
 		if tag == "p" || tag == "div" {
-			io.WriteString(w, "\n")
+			w.WriteString("\n")
 		}
 	}
 }
 
-func replaceimg(node *html.Node) string {
+func imgtotext(node *html.Node) string {
 	src := GetAttr(node, "src")
 	alt := GetAttr(node, "alt")
 	//title := GetAttr(node, "title")
 	if HasClass(node, "Emoji") && alt != "" {
-		return html.EscapeString(alt)
+		return alt
 	}
-	return html.EscapeString(fmt.Sprintf(`<img src="%s">`, src))
+	return html.EscapeString(fmt.Sprintf(`<img alt="%s" src="%s">`, alt, src))
 }
 
-func cleannode(node *html.Node) template.HTML {
+func (filt *Filter) cleannode(node *html.Node) template.HTML {
 	var buf strings.Builder
-	render(&buf, node)
+	filt.render(&buf, node)
 	return template.HTML(buf.String())
 }
 
@@ -148,16 +211,16 @@ func (filt *Filter) String(shtml string) (template.HTML, error) {
 	if err != nil {
 		return "", err
 	}
-	return cleannode(body), nil
+	return filt.cleannode(body), nil
 }
 
-func TextOnly(node *html.Node) string {
+func (filt *Filter) TextOnly(node *html.Node) string {
 	var buf strings.Builder
-	gathertext(&buf, node, false)
+	filt.gathertext(&buf, node, false)
 	return buf.String()
 }
 
-func gathertext(w io.Writer, node *html.Node, withlinks bool) {
+func (filt *Filter) gathertext(w writer, node *html.Node, withlinks bool) {
 	switch node.Type {
 	case html.ElementNode:
 		tag := node.Data
@@ -169,20 +232,20 @@ func gathertext(w io.Writer, node *html.Node, withlinks bool) {
 				fmt.Fprintf(w, `<a href="%s">`, href)
 			}
 		case tag == "img":
-			io.WriteString(w, "<img>")
+			div := filt.Imager(node)
+			w.WriteString(div)
 		case tag == "span":
 			if HasClass(node, "tco-ellipsis") {
 				return
 			}
-
-		case contains(bannedtags, tag):
+		case bannedtags[tag]:
 			return
 		}
 	case html.TextNode:
-		io.WriteString(w, node.Data)
+		w.WriteString(node.Data)
 	}
 	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		gathertext(w, c, withlinks)
+		filt.gathertext(w, c, withlinks)
 	}
 	if node.Type == html.ElementNode {
 		tag := node.Data
@@ -190,26 +253,7 @@ func gathertext(w io.Writer, node *html.Node, withlinks bool) {
 			fmt.Fprintf(w, "</%s>", tag)
 		}
 		if tag == "p" || tag == "div" {
-			io.WriteString(w, "\n")
+			w.WriteString("\n")
 		}
 	}
-}
-
-var re_whitespaceeater = regexp.MustCompile("[ \t\r]*\n[ \t\r]*")
-var re_blanklineeater = regexp.MustCompile("\n\n+")
-var re_tabeater = regexp.MustCompile("[ \t]+")
-
-func htmltotext(shtml template.HTML) string {
-	reader := strings.NewReader(string(shtml))
-	body, _ := html.Parse(reader)
-	var buf strings.Builder
-	gathertext(&buf, body, true)
-	rv := buf.String()
-	rv = re_whitespaceeater.ReplaceAllLiteralString(rv, "\n")
-	rv = re_blanklineeater.ReplaceAllLiteralString(rv, "\n\n")
-	rv = re_tabeater.ReplaceAllLiteralString(rv, " ")
-	for len(rv) > 0 && rv[0] == '\n' {
-		rv = rv[1:]
-	}
-	return rv
 }
