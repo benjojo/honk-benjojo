@@ -1,6 +1,6 @@
 html {
-	--bg-page: #306;
-	--bg-dark: #002;
+	--bg-page: #15202b;
+	--bg-dark: #15202b;
 	--fg: #dcf;
 	--hl: #dcf;
 	--fg-subtle: #a9c;
@@ -119,11 +119,13 @@ label {
 label.button, button, select {
 	font-size: 16px;
 	font-family: monospace;
-	color: var(--fg);
-	background: var(--bg-page);
+	color: #fff;
+	background: rgb(29, 155, 240);
 	border: 1px solid var(--hl);
 	padding: 0.5em;
 	white-space: nowrap;
+    font-weight: bold;
+	border-radius: 1em;
 }
 .buttonarray {
 	margin-top: -2.0em;
@@ -180,7 +182,6 @@ input[type=file] {
 	margin: auto;
 	background: var(--bg-dark);
 	border: 1px solid var(--hl);
-	border-radius: 1em;
 	margin-bottom: 1em;
 	padding-left: 1em;
 	padding-right: 1em;
