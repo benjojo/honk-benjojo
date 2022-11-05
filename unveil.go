@@ -62,4 +62,7 @@ func init() {
 		C.unveil(nil, nil)
 		Pledge("stdio rpath wpath cpath flock dns inet unix")
 	})
+	backendhooks = append(backendhooks, func() {
+		Pledge("stdio unix")
+	})
 }

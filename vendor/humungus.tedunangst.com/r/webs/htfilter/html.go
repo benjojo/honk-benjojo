@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -37,6 +38,7 @@ type Filter struct {
 	Imager      func(node *html.Node) string
 	SpanClasses map[string]bool
 	BaseURL     *url.URL
+	WithLinks   bool
 }
 
 var permittedtags = map[string]bool{
@@ -172,7 +174,7 @@ func (filt *Filter) render(w writer, node *html.Node) {
 				div := filt.Imager(node)
 				w.WriteString(div)
 			} else {
-				div := imgtotext(node)
+				div := html.EscapeString(imgtotext(node))
 				w.WriteString(div)
 			}
 		case tag == "span":
@@ -213,6 +215,48 @@ func (filt *Filter) render(w writer, node *html.Node) {
 	}
 }
 
+func (filt *Filter) rendertext(w writer, node *html.Node) {
+	switch node.Type {
+	case html.ElementNode:
+		tag := node.Data
+		switch {
+		case tag == "a":
+			if filt.WithLinks {
+				fmt.Fprintf(w, " ")
+				href := GetAttr(node, "href")
+				fmt.Fprintf(w, `<a href="%s">`, href)
+			}
+		case tag == "img":
+			if filt.Imager != nil {
+				div := filt.Imager(node)
+				w.WriteString(div)
+			} else {
+				div := imgtotext(node)
+				w.WriteString(div)
+			}
+		case tag == "span":
+			if HasClass(node, "tco-ellipsis") {
+				return
+			}
+		case bannedtags[tag]:
+			return
+		}
+	case html.TextNode:
+		w.WriteString(strings.Replace(node.Data, "\n", " ", -1))
+	}
+	for c := node.FirstChild; c != nil; c = c.NextSibling {
+		filt.rendertext(w, c)
+	}
+	if node.Type == html.ElementNode {
+		tag := node.Data
+		if filt.WithLinks && tag == "a" {
+			fmt.Fprintf(w, "</%s>", tag)
+		}
+		if tag == "p" || tag == "div" || tag == "tr" {
+			w.WriteString("\n")
+		}
+	}
+}
 func imgtotext(node *html.Node) string {
 	src := GetAttr(node, "src")
 	alt := GetAttr(node, "alt")
@@ -220,7 +264,7 @@ func imgtotext(node *html.Node) string {
 	if HasClass(node, "Emoji") && alt != "" {
 		return alt
 	}
-	return html.EscapeString(fmt.Sprintf(`<img alt="%s" src="%s">`, alt, src))
+	return fmt.Sprintf(`<img alt="%s" src="%s">`, alt, src)
 }
 
 func (filt *Filter) cleannode(node *html.Node) template.HTML {
@@ -238,46 +282,28 @@ func (filt *Filter) String(shtml string) (template.HTML, error) {
 	return filt.cleannode(body), nil
 }
 
-func (filt *Filter) TextOnly(node *html.Node) string {
-	var buf strings.Builder
-	filt.gathertext(&buf, node, false)
-	return buf.String()
+var re_whitespaceeater = regexp.MustCompile("[ \t\r]*\n[ \t\r]*")
+var re_blanklineeater = regexp.MustCompile("\n\n+")
+var re_tabeater = regexp.MustCompile("[ \t]+")
+
+func (filt *Filter) TextOnly(shtml string) (string, error) {
+	reader := strings.NewReader(shtml)
+	body, err := html.Parse(reader)
+	if err != nil {
+		return "", err
+	}
+	return filt.NodeText(body), nil
 }
 
-func (filt *Filter) gathertext(w writer, node *html.Node, withlinks bool) {
-	switch node.Type {
-	case html.ElementNode:
-		tag := node.Data
-		switch {
-		case tag == "a":
-			fmt.Fprintf(w, " ")
-			if withlinks {
-				href := GetAttr(node, "href")
-				fmt.Fprintf(w, `<a href="%s">`, href)
-			}
-		case tag == "img":
-			div := filt.Imager(node)
-			w.WriteString(div)
-		case tag == "span":
-			if HasClass(node, "tco-ellipsis") {
-				return
-			}
-		case bannedtags[tag]:
-			return
-		}
-	case html.TextNode:
-		w.WriteString(node.Data)
+func (filt *Filter) NodeText(node *html.Node) string {
+	var buf strings.Builder
+	filt.rendertext(&buf, node)
+	str := buf.String()
+	str = re_whitespaceeater.ReplaceAllLiteralString(str, "\n")
+	str = re_blanklineeater.ReplaceAllLiteralString(str, "\n\n")
+	str = re_tabeater.ReplaceAllLiteralString(str, " ")
+	for len(str) > 0 && str[0] == '\n' {
+		str = str[1:]
 	}
-	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		filt.gathertext(w, c, withlinks)
-	}
-	if node.Type == html.ElementNode {
-		tag := node.Data
-		if withlinks && tag == "a" {
-			fmt.Fprintf(w, "</%s>", tag)
-		}
-		if tag == "p" || tag == "div" {
-			w.WriteString("\n")
-		}
-	}
+	return str
 }

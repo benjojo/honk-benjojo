@@ -36,6 +36,9 @@ func adminscreen() {
 	smcup := esc + "[?1049h"
 	rmcup := esc + "[?1049l"
 
+	var avatarColors string
+	getconfig("avatarcolors", &avatarColors)
+
 	messages := []*struct {
 		name  string
 		label string
@@ -55,6 +58,11 @@ func adminscreen() {
 			name:  "loginmsg",
 			label: "login",
 			text:  string(loginMsg),
+		},
+		{
+			name:  "avatarcolors",
+			label: "avatar colors (4 RGBA hex numbers)",
+			text:  string(avatarColors),
 		},
 	}
 	cursel := 0
@@ -239,7 +247,7 @@ func adminscreen() {
 			stdout.Flush()
 		}
 		editing = false
-		updateconfig(m.name, m.text)
+		setconfig(m.name, m.text)
 		hidecursor()
 		drawscreen()
 	}

@@ -43,15 +43,18 @@ The
 field is required.
 Either of two forms are accepted, the user's handle (or webfinger) or their
 ActivityPub actor URL.
-The
-.Ar name
-field is optional and will be automatically inferred.
-Examples:
+.Pp
 .Dl @user@example.social
 .Dl https://example.social/users/user
 .Pp
+The
+.Ar name
+field is optional and will be automatically inferred.
+The
+.Ar notes
+field is reserved for user remarks.
 Fellow honkers may be added to one or more
-.Ic combos
+.Ar combos
 to suit one's organizational preferences.
 These are accessed via the
 .Pa combos
@@ -143,11 +146,14 @@ The following keywords are supported:
 Substring match on the post domain name.
 .It honker
 Exact match, either AP actor or honker nickname.
+.It -
+Negate term.
 .El
 .Pp
 Example:
-.Dl honker:goose big moose
-This query will find honks by the goose about the big moose.
+.Dl honker:goose big moose -footloose
+This query will find honks by the goose about the big moose, but excluding
+those about footloose.
 .Ss Filtering
 Sometimes other users of the federation can get unruly.
 The honk filtering and censorship system,

@@ -13,6 +13,9 @@
 <input tabindex=1 type="text" name="combos" value="" placeholder="optional">
 <p><span><label class=button for="peep">skip subscribe:
 <input tabindex=1 type="checkbox" id="peep" name="peep" value="peep"><span></span></label></span>
+<p><label for="notes">notes:</label><br>
+<textarea tabindex=1 name="notes">
+</textarea>
 <p><button tabindex=1 name="add honker" value="add honker">add honker</button>
 </form>
 </div>
@@ -42,6 +45,8 @@ function expandstuff() {
 <input type="hidden" name="CSRF" value="{{ $honkercsrf }}">
 <input type="hidden" name="honkerid" value="{{ .ID }}">
 <p>name: <input type="text" name="name" value="{{ .Name }}">
+<p><label for="notes">notes:</label><br>
+<textarea name="notes">{{ .Meta.Notes }}</textarea>
 <p>combos: <input type="text" name="combos" value="{{ range .Combos }}{{ . }} {{end}}">
 {{ if eq .Flavor "sub" }}
 <p>unsub: <input type="text" name="goodbye" placeholder="press F" value="" autocomplete=off>

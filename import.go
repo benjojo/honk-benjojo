@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -29,10 +30,127 @@ import (
 
 func importMain(username, flavor, source string) {
 	switch flavor {
+	case "mastodon":
+		importMastodon(username, source)
 	case "twitter":
 		importTwitter(username, source)
 	default:
 		log.Fatal("unknown source flavor")
+	}
+}
+
+func importMastodon(username, source string) {
+	user, err := butwhatabout(username)
+	if err != nil {
+		log.Fatal(err)
+	}
+	type Toot struct {
+		Id           string
+		Type         string
+		To           []string
+		Cc           []string
+		Summary      string
+		Content      string
+		InReplyTo    string
+		Conversation string
+		Published    time.Time
+		Tag          []struct {
+			Type string
+			Name string
+		}
+		Attachment []struct {
+			Type      string
+			MediaType string
+			Url       string
+			Name      string
+		}
+	}
+	var outbox struct {
+		OrderedItems []struct {
+			Object Toot
+		}
+	}
+	fd, err := os.Open(source + "/outbox.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	dec := json.NewDecoder(fd)
+	err = dec.Decode(&outbox)
+	if err != nil {
+		log.Fatalf("error parsing json: %s", err)
+	}
+	fd.Close()
+
+	havetoot := func(xid string) bool {
+		var id int64
+		row := stmtFindXonk.QueryRow(user.ID, xid)
+		err := row.Scan(&id)
+		if err == nil {
+			return true
+		}
+		return false
+	}
+
+	re_tootid := regexp.MustCompile("[^/]+$")
+	for _, item := range outbox.OrderedItems {
+		toot := item.Object
+		tootid := re_tootid.FindString(toot.Id)
+		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, tootid)
+		if havetoot(xid) {
+			continue
+		}
+		honk := Honk{
+			UserID:   user.ID,
+			What:     "honk",
+			Honker:   user.URL,
+			XID:      xid,
+			RID:      toot.InReplyTo,
+			Date:     toot.Published,
+			URL:      xid,
+			Audience: append(toot.To, toot.Cc...),
+			Noise:    toot.Content,
+			Convoy:   toot.Conversation,
+			Whofore:  2,
+			Format:   "html",
+			Precis:   toot.Summary,
+		}
+		if honk.RID != "" {
+			honk.What = "tonk"
+		}
+		if !loudandproud(honk.Audience) {
+			honk.Whofore = 3
+		}
+		for _, att := range toot.Attachment {
+			switch att.Type {
+			case "Document":
+				fname := fmt.Sprintf("%s/%s", source, att.Url)
+				data, err := ioutil.ReadFile(fname)
+				if err != nil {
+					log.Printf("error reading media: %s", fname)
+					continue
+				}
+				u := xfiltrate()
+				name := att.Name
+				desc := name
+				newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
+				fileid, err := savefile(u, name, desc, newurl, att.MediaType, true, data)
+				if err != nil {
+					log.Printf("error saving media: %s", fname)
+					continue
+				}
+				donk := &Donk{
+					FileID: fileid,
+				}
+				honk.Donks = append(honk.Donks, donk)
+			}
+		}
+		for _, t := range toot.Tag {
+			switch t.Type {
+			case "Hashtag":
+				honk.Onts = append(honk.Onts, t.Name)
+			}
+		}
+		savehonk(&honk)
 	}
 }
 

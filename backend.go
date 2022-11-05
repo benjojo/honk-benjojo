@@ -73,6 +73,8 @@ func shrinkit(data []byte) (*image.Image, error) {
 	return res.Image, nil
 }
 
+var backendhooks []func()
+
 func backendServer() {
 	log.Printf("backend server running")
 	shrinker := new(Shrinker)
@@ -92,7 +94,7 @@ func backendServer() {
 	if err != nil {
 		log.Panicf("unable to register shrinker: %s", err)
 	}
-	for _, h := range preservehooks {
+	for _, h := range backendhooks {
 		h()
 	}
 	srv.Accept(lis)

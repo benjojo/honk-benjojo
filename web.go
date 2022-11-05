@@ -48,6 +48,8 @@ var readviews *templates.Template
 var userSep = "u"
 var honkSep = "h"
 
+var debugMode = false
+
 func getuserstyle(u *login.UserInfo) template.CSS {
 	if u == nil {
 		return ""
@@ -223,8 +225,10 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 			modtime = honk.Date
 		}
 	}
-	w.Header().Set("Cache-Control", "max-age=300")
-	w.Header().Set("Last-Modified", modtime.Format(http.TimeFormat))
+	if !debugMode {
+		w.Header().Set("Cache-Control", "max-age=300")
+		w.Header().Set("Last-Modified", modtime.Format(http.TimeFormat))
+	}
 
 	err := feed.Write(w)
 	if err != nil {
@@ -874,7 +878,7 @@ func thelistingoftheontologies(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(onts, func(i, j int) bool {
 		return onts[i].Name < onts[j].Name
 	})
-	if u == nil {
+	if u == nil && !debugMode {
 		w.Header().Set("Cache-Control", "max-age=300")
 	}
 	templinfo := getInfo(r)
@@ -1093,7 +1097,7 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 			templinfo["TopHID"] = 0
 		}
 	}
-	if u == nil {
+	if u == nil && !debugMode {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
 	err := readviews.Execute(w, "honkpage.html", templinfo)
@@ -1101,8 +1105,6 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*Honk, templinfo
 		log.Print(err)
 	}
 }
-
-var re_avatar = regexp.MustCompile("avatar: ?([[:alnum:]_.-]+)")
 
 func saveuser(w http.ResponseWriter, r *http.Request) {
 	whatabout := r.FormValue("whatabout")
@@ -1349,7 +1351,12 @@ func edithonkpage(w http.ResponseWriter, r *http.Request) {
 	templinfo["MapLink"] = getmaplink(u)
 	templinfo["Noise"] = noise
 	templinfo["SavedPlace"] = honk.Place
-	templinfo["ServerMessage"] = "honk edit"
+	if tm := honk.Time; tm != nil {
+		templinfo["ShowTime"] = ";"
+		templinfo["StartTime"] = tm.StartTime.Format("2006-01-02 03:04")
+		templinfo["Duration"] = tm.Duration
+	}
+	templinfo["ServerMessage"] = "honk edit 2"
 	templinfo["IsPreview"] = true
 	templinfo["UpdateXID"] = honk.XID
 	if len(honk.Donks) > 0 {
@@ -1437,8 +1444,9 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 	noise = strings.Replace(noise, "\r", "", -1)
 	noise = quickrename(noise, userinfo.UserID)
 	noise = hooterize(noise)
+	honk.Mentions = bunchofgrapes(noise)
 	honk.Noise = noise
-	translate(honk, false)
+	translate(honk)
 
 	var convoy string
 	if rid != "" {
@@ -1576,14 +1584,6 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 			log.Printf("can't find file: %s", xid)
 		}
 	}
-	herd := herdofemus(noise)
-	for _, e := range herd {
-		donk := savedonk(e.ID, e.Name, e.Name, "image/png", true)
-		if donk != nil {
-			donk.Name = e.Name
-			honk.Donks = append(honk.Donks, donk)
-		}
-	}
 	memetize(honk)
 	imaginate(honk)
 
@@ -1643,6 +1643,11 @@ func submithonk(w http.ResponseWriter, r *http.Request, isAPI bool) {
 		templinfo["InReplyTo"] = r.FormValue("rid")
 		templinfo["Noise"] = r.FormValue("noise")
 		templinfo["SavedFile"] = donkxid
+		if tm := honk.Time; tm != nil {
+			templinfo["ShowTime"] = ";"
+			templinfo["StartTime"] = tm.StartTime.Format("2006-01-02 03:04")
+			templinfo["Duration"] = tm.Duration
+		}
 		templinfo["IsPreview"] = true
 		templinfo["UpdateXID"] = updatexid
 		templinfo["ServerMessage"] = "honk preview"
@@ -1724,6 +1729,10 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	combos = " " + combos + " "
 	honkerid, _ := strconv.ParseInt(r.FormValue("honkerid"), 10, 0)
 
+	var meta HonkerMeta
+	meta.Notes = strings.TrimSpace(r.FormValue("notes"))
+	mj, _ := jsonify(&meta)
+
 	defer honkerinvalidator.Clear(u.UserID)
 
 	if honkerid > 0 {
@@ -1774,7 +1783,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/honkers", http.StatusSeeOther)
 			return
 		}
-		_, err := stmtUpdateHonker.Exec(name, combos, honkerid, u.UserID)
+		_, err := stmtUpdateHonker.Exec(name, combos, mj, honkerid, u.UserID)
 		if err != nil {
 			log.Printf("update honker err: %s", err)
 			return
@@ -1798,7 +1807,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = url
 		}
-		_, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, url)
+		_, err := stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, url, mj)
 		if err != nil {
 			log.Print(err)
 			return
@@ -1830,7 +1839,7 @@ func submithonker(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = info.Name
 	}
-	_, err = stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, info.Owner)
+	_, err = stmtSaveHonker.Exec(u.UserID, name, url, flavor, combos, info.Owner, mj)
 	if err != nil {
 		log.Print(err)
 		return
@@ -1865,7 +1874,7 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error deleting filter: %s", err)
 		}
-		filtcache.Clear(userinfo.UserID)
+		filtInvalidator.Clear(userinfo.UserID)
 		http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
 		return
 	}
@@ -1887,6 +1896,7 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 	if dur := parseDuration(r.FormValue("filtduration")); dur > 0 {
 		filt.Expiration = time.Now().UTC().Add(dur)
 	}
+	filt.Notes = strings.TrimSpace(r.FormValue("filtnotes"))
 
 	if filt.Actor == "" && filt.Text == "" && !filt.IsAnnounce {
 		log.Printf("blank filter")
@@ -1902,7 +1912,7 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error saving filter: %s", err)
 	}
 
-	filtcache.Clear(userinfo.UserID)
+	filtInvalidator.Clear(userinfo.UserID)
 	http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
 }
 
@@ -1988,14 +1998,19 @@ func somedays() string {
 }
 
 func avatate(w http.ResponseWriter, r *http.Request) {
+	if debugMode {
+		loadAvatarColors()
+	}
 	n := r.FormValue("a")
-	a := avatar(n)
+	a := genAvatar(n)
 	w.Header().Set("Cache-Control", "max-age="+somedays())
 	w.Write(a)
 }
 
 func serveasset(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "max-age=7776000")
+	if !debugMode {
+		w.Header().Set("Cache-Control", "max-age=7776000")
+	}
 	dir := viewDir
 	if r.URL.Path == "/local.css" {
 		dir = dataDir
@@ -2004,7 +2019,9 @@ func serveasset(w http.ResponseWriter, r *http.Request) {
 }
 func servehelp(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	w.Header().Set("Cache-Control", "max-age=3600")
+	if !debugMode {
+		w.Header().Set("Cache-Control", "max-age=3600")
+	}
 	http.ServeFile(w, r, viewDir+"/docs/"+name)
 }
 func servehtml(w http.ResponseWriter, r *http.Request) {
@@ -2016,7 +2033,7 @@ func servehtml(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/about" {
 		templinfo["Sensors"] = getSensors()
 	}
-	if u == nil {
+	if u == nil && !debugMode {
 		w.Header().Set("Cache-Control", "max-age=60")
 	}
 	err := readviews.Execute(w, r.URL.Path[1:]+".html", templinfo)
@@ -2025,14 +2042,16 @@ func servehtml(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func serveemu(w http.ResponseWriter, r *http.Request) {
-	xid := mux.Vars(r)["xid"]
+	emu := mux.Vars(r)["emu"]
+
 	w.Header().Set("Cache-Control", "max-age="+somedays())
-	http.ServeFile(w, r, dataDir+"/emus/"+xid)
+	http.ServeFile(w, r, dataDir+"/emus/"+emu)
 }
 func servememe(w http.ResponseWriter, r *http.Request) {
-	xid := mux.Vars(r)["xid"]
+	meme := mux.Vars(r)["meme"]
+
 	w.Header().Set("Cache-Control", "max-age="+somedays())
-	http.ServeFile(w, r, dataDir+"/memes/"+xid)
+	http.ServeFile(w, r, dataDir+"/memes/"+meme)
 }
 
 func servefile(w http.ResponseWriter, r *http.Request) {
@@ -2138,6 +2157,7 @@ func honkhonkline() {
 func apihandler(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	userid := u.UserID
+	user, _ := butwhatabout(u.Username)
 	action := r.FormValue("action")
 	wait, _ := strconv.ParseInt(r.FormValue("wait"), 10, 0)
 	log.Printf("api request '%s' on behalf of %s", action, u.Username)
@@ -2175,6 +2195,13 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 		j := junk.New()
 		j["honks"] = honks
 		j.Write(w)
+	case "sendactivity":
+		public := r.FormValue("public") == "1"
+		rcpts := boxuprcpts(user, r.Form["rcpt"], public)
+		msg := []byte(r.FormValue("msg"))
+		for rcpt := range rcpts {
+			go deliverate(0, userid, rcpt, msg)
+		}
 	default:
 		http.Error(w, "unknown action", http.StatusNotFound)
 		return
@@ -2223,9 +2250,8 @@ func serve() {
 	go redeliverator()
 	go tracker()
 
-	debug := false
-	getconfig("debug", &debug)
-	readviews = templates.Load(debug,
+	getconfig("debug", &debugMode)
+	readviews = templates.Load(debugMode,
 		viewDir+"/views/honkpage.html",
 		viewDir+"/views/honkfrags.html",
 		viewDir+"/views/honkers.html",
@@ -2243,11 +2269,12 @@ func serve() {
 		viewDir+"/views/onts.html",
 		viewDir+"/views/honkpage.js",
 	)
-	if !debug {
+	if !debugMode {
 		assets := []string{viewDir + "/views/style.css", dataDir + "/views/local.css", viewDir + "/views/honkpage.js"}
 		for _, s := range assets {
 			savedassetparams[s] = getassetparam(s)
 		}
+		loadAvatarColors()
 	}
 
 	for _, h := range preservehooks {
@@ -2279,8 +2306,8 @@ func serve() {
 	getters.HandleFunc("/o", thelistingoftheontologies)
 	getters.HandleFunc("/o/{name:.+}", showontology)
 	getters.HandleFunc("/d/{xid:[[:alnum:].]+}", servefile)
-	getters.HandleFunc("/emu/{xid:[[:alnum:]_.-]+}", serveemu)
-	getters.HandleFunc("/meme/{xid:[[:alnum:]_.-]+}", servememe)
+	getters.HandleFunc("/emu/{emu:[^.]*[^/]+}", serveemu)
+	getters.HandleFunc("/meme/{meme:[^.]*[^/]+}", servememe)
 	getters.HandleFunc("/.well-known/webfinger", fingerlicker)
 
 	getters.HandleFunc("/server", serveractor)

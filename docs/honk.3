@@ -109,6 +109,20 @@ If there are no results, wait this many seconds for something to appear.
 .El
 .Pp
 The result will be returned as json.
+.Ss sendactivity
+Send anything.
+No limits, no error checking.
+.Bl -tag -width public
+.It Fa rcpt
+An actor to deliver the message to to.
+May be specified more than once.
+An inbox may be specified directly by prefixing with %.
+.It Fa msg
+The message.
+It should be a valid json activity, but yolo.
+.It Fa public
+Set to 1 to use shared inboxes for delivery.
+.El
 .Sh EXAMPLES
 Refer to the sample code in the
 .Pa toys

@@ -36,6 +36,7 @@ import (
 	"humungus.tedunangst.com/r/webs/gate"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/junk"
+	"humungus.tedunangst.com/r/webs/templates"
 )
 
 var theonetruename = `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`
@@ -241,11 +242,20 @@ func needxonk(user *WhatAbout, x *Honk) bool {
 	}
 	return needxonkid(user, x.XID)
 }
+func needbonkid(user *WhatAbout, xid string) bool {
+	return needxonkidX(user, xid, true)
+}
 func needxonkid(user *WhatAbout, xid string) bool {
+	return needxonkidX(user, xid, false)
+}
+func needxonkidX(user *WhatAbout, xid string, isannounce bool) bool {
+	if !strings.HasPrefix(xid, "https://") {
+		return false
+	}
 	if strings.HasPrefix(xid, user.URL+"/") {
 		return false
 	}
-	if rejectorigin(user.ID, xid) {
+	if rejectorigin(user.ID, xid, isannounce) {
 		return false
 	}
 	if iszonked(user.ID, xid) {
@@ -456,13 +466,15 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	xonkxonkfn = func(item junk.Junk, origin string) *Honk {
 		// id, _ := item.GetString( "id")
 		what, _ := item.GetString("type")
-		dt, _ := item.GetString("published")
+		dt, ok := item.GetString("published")
+		if !ok {
+			dt = time.Now().Format(time.RFC3339)
+		}
 
 		var err error
 		var xid, rid, url, content, precis, convoy string
 		var replies []string
 		var obj junk.Junk
-		var ok bool
 		isUpdate := false
 		switch what {
 		case "Delete":
@@ -501,7 +513,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			} else {
 				xid, _ = item.GetString("object")
 			}
-			if !needxonkid(user, xid) {
+			if !needbonkid(user, xid) {
 				return nil
 			}
 			log.Printf("getting bonk: %s", xid)
@@ -563,6 +575,9 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				return xonkxonkfn(obj, originate(xid))
 			}
 			return nil
+		case "Move":
+			obj = item
+			what = "move"
 		case "Audio":
 			fallthrough
 		case "Video":
@@ -589,26 +604,22 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		}
 
 		if obj != nil {
-			_, ok := obj.GetString("diaspora:guid")
-			if ok {
+			if _, ok := obj.GetString("diaspora:guid"); ok {
 				// friendica does the silliest bonks
-				c, ok := obj.GetString("source", "content")
-				if ok {
+				if c, ok := obj.GetString("source", "content"); ok {
 					re_link := regexp.MustCompile(`link='([^']*)'`)
-					m := re_link.FindStringSubmatch(c)
-					if len(m) > 1 {
+					if m := re_link.FindStringSubmatch(c); len(m) > 1 {
 						xid := m[1]
 						log.Printf("getting friendica flavored bonk: %s", xid)
 						if !needxonkid(user, xid) {
 							return nil
 						}
-						newobj, err := GetJunkHardMode(xid)
-						if err != nil {
-							log.Printf("error getting bonk: %s: %s", xid, err)
-						} else {
+						if newobj, err := GetJunkHardMode(xid); err == nil {
 							obj = newobj
 							origin = originate(xid)
 							what = "bonk"
+						} else {
+							log.Printf("error getting bonk: %s: %s", xid, err)
 						}
 					}
 				}
@@ -635,31 +646,31 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		xonk.Audience = append(xonk.Audience, xonk.Honker)
 		xonk.Audience = oneofakind(xonk.Audience)
 
-		var mentions []string
+		var mentions []Mention
 		if obj != nil {
 			ot, _ := obj.GetString("type")
 			url, _ = obj.GetString("url")
-			dt2, ok := obj.GetString("published")
-			if ok {
+			if dt2, ok := obj.GetString("published"); ok {
 				dt = dt2
 			}
 			xid, _ = obj.GetString("id")
 			precis, _ = obj.GetString("summary")
-			if precis == "" {
-				precis, _ = obj.GetString("name")
+			if name, ok := obj.GetString("name"); ok {
+				if precis != "" {
+					precis = "\n" + precis
+				}
+				precis = name + precis
 			}
 			content, _ = obj.GetString("content")
 			if !strings.HasPrefix(content, "<p>") {
 				content = "<p>" + content
 			}
-			sens, _ := obj["sensitive"].(bool)
-			if sens && precis == "" {
+			if sens, _ := obj["sensitive"].(bool); sens && precis == "" {
 				precis = "unspecified horror"
 			}
 			rid, ok = obj.GetString("inReplyTo")
 			if !ok {
-				robj, ok := obj.GetMap("inReplyTo")
-				if ok {
+				if robj, ok := obj.GetMap("inReplyTo"); ok {
 					rid, _ = robj.GetString("id")
 				}
 			}
@@ -691,6 +702,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					content += "<li>" + as
 				}
 				content += "</ul>"
+			}
+			if ot == "Move" {
+				targ, _ := obj.GetString("target")
+				content += string(templates.Sprintf(`<p>Moved to <a href="%s">%s</a>`, targ, targ))
 			}
 			if what == "honk" && rid != "" {
 				what = "tonk"
@@ -773,14 +788,14 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					xonk.Place = p
 				}
 				if tt == "Mention" {
-					m, _ := tag.GetString("href")
+					var m Mention
+					m.Who, _ = tag.GetString("name")
+					m.Where, _ = tag.GetString("href")
 					mentions = append(mentions, m)
 				}
 			}
-			starttime, ok := obj.GetString("startTime")
-			if ok {
-				start, err := time.Parse(time.RFC3339, starttime)
-				if err == nil {
+			if starttime, ok := obj.GetString("startTime"); ok {
+				if start, err := time.Parse(time.RFC3339, starttime); err == nil {
 					t := new(Time)
 					t.StartTime = start
 					endtime, _ := obj.GetString("endTime")
@@ -794,13 +809,10 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					xonk.Time = t
 				}
 			}
-			loca, ok := obj.GetMap("location")
-			if ok {
-				tt, _ := loca.GetString("type")
-				name, _ := loca.GetString("name")
-				if tt == "Place" {
+			if loca, ok := obj.GetMap("location"); ok {
+				if tt, _ := loca.GetString("type"); tt == "Place" {
 					p := new(Place)
-					p.Name = name
+					p.Name, _ = loca.GetString("name")
 					p.Latitude, _ = loca["latitude"].(float64)
 					p.Longitude, _ = loca["longitude"].(float64)
 					p.Url, _ = loca.GetString("url")
@@ -852,8 +864,9 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		xonk.Precis = precis
 		xonk.Format = "html"
 		xonk.Convoy = convoy
+		xonk.Mentions = mentions
 		for _, m := range mentions {
-			if m == user.URL {
+			if m.Where == user.URL {
 				xonk.Whofore = 1
 			}
 		}
@@ -866,14 +879,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				log.Printf("didn't find old version for update: %s", xonk.XID)
 				isUpdate = false
 			} else {
-				prev.Noise = xonk.Noise
-				prev.Precis = xonk.Precis
-				prev.Date = xonk.Date
-				prev.Donks = xonk.Donks
-				prev.Onts = xonk.Onts
-				prev.Place = xonk.Place
-				prev.Whofore = xonk.Whofore
-				updatehonk(prev)
+				xonk.ID = prev.ID
+				updatehonk(&xonk)
 			}
 		}
 		if !isUpdate && needxonk(user, &xonk) {
@@ -902,7 +909,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				convoy = currenttid
 			}
 			if convoy == "" {
-				convoy = "missing-" + xfiltrate()
+				convoy = "data:,missing-" + xfiltrate()
 				currenttid = convoy
 			}
 			xonk.Convoy = convoy
@@ -1027,7 +1034,8 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			jo["directMessage"] = true
 		}
 		mentions := bunchofgrapes(h.Noise)
-		translate(h, true)
+		translate(h)
+		redoimages(h)
 		jo["summary"] = html.EscapeString(h.Precis)
 		jo["content"] = h.Noise
 		if h.Precis != "" {
@@ -1050,8 +1058,8 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		for _, m := range mentions {
 			t := junk.New()
 			t["type"] = "Mention"
-			t["name"] = m.who
-			t["href"] = m.where
+			t["name"] = m.Who
+			t["href"] = m.Where
 			tags = append(tags, t)
 		}
 		for _, o := range h.Onts {
@@ -1186,24 +1194,34 @@ func gimmejonk(xid string) ([]byte, bool) {
 	return j, ok
 }
 
-func honkworldwide(user *WhatAbout, honk *Honk) {
-	jonk, _ := jonkjonk(user, honk)
-	jonk["@context"] = itiswhatitis
-	msg := jonk.ToBytes()
-
+func boxuprcpts(user *WhatAbout, addresses []string, useshared bool) map[string]bool {
 	rcpts := make(map[string]bool)
-	for _, a := range honk.Audience {
-		if a == thewholeworld || a == user.URL || strings.HasSuffix(a, "/followers") {
+	for _, a := range addresses {
+		if a == "" || a == thewholeworld || a == user.URL || strings.HasSuffix(a, "/followers") {
+			continue
+		}
+		if a[0] == '%' {
+			rcpts[a] = true
 			continue
 		}
 		var box *Box
 		ok := boxofboxes.Get(a, &box)
-		if ok && honk.Public && box.Shared != "" {
+		if ok && useshared && box.Shared != "" {
 			rcpts["%"+box.Shared] = true
 		} else {
 			rcpts[a] = true
 		}
 	}
+	return rcpts
+}
+
+func honkworldwide(user *WhatAbout, honk *Honk) {
+	jonk, _ := jonkjonk(user, honk)
+	jonk["@context"] = itiswhatitis
+	msg := jonk.ToBytes()
+
+	rcpts := boxuprcpts(user, honk.Audience, honk.Public)
+
 	if honk.Public {
 		for _, h := range getdubs(user.ID) {
 			if h.XID == user.URL {

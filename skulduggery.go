@@ -21,86 +21,8 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
-// these lists are mostly (?) accurate
-var bigboldshitz = "𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙"
-var lilboldshitz = "𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳"
-var moeboldshitz = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭"
-var morboldshitz = "𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇"
-var biggothshitz = "𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅"
-var lilgothshitz = "𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟"
-var moegothshitz = "𝔄𝔅𝕮𝔇𝔈𝔉𝔊𝕳ℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜𝖅"
-var morgothshitz = "𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷"
-var bigitalshitz = "𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁"
-var lilitalshitz = "𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛"
-var moeitalshitz = "𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕"
-var moritalshitz = "𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯"
-var bigbangshitz = "𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ"
-var lilbangshitz = "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫"
-var bigwideshitz = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
-var lilwideshitz = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ"
-var bigblokshitz = "🅰🅱🅲🅳🅴🅵🅶🅷🅸🅹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉"
-var evenmoeshitz = "𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍"
-var evenmorshitz = "𝒶𝒷𝒸𝒹𝑒𝒻𝓰𝒽𝒾𝒿𝓀𝓁𝓂𝓃𝓸𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏"
-
-var re_alltheshitz = regexp.MustCompile(`([` +
-	bigboldshitz + lilboldshitz +
-	moeboldshitz + morboldshitz +
-	biggothshitz + lilgothshitz +
-	moegothshitz + morgothshitz +
-	bigitalshitz + lilitalshitz +
-	moeitalshitz + moritalshitz +
-	bigbangshitz + lilbangshitz +
-	bigwideshitz + lilwideshitz +
-	evenmoeshitz + evenmorshitz +
-	bigblokshitz +
-	"][ '\ufe0f]?){3,}")
-
-var allUppers = []string{bigboldshitz, moeboldshitz, biggothshitz, bigwideshitz, moegothshitz, bigitalshitz, moeitalshitz, bigbangshitz, bigblokshitz, evenmoeshitz}
-var allLowers = []string{lilboldshitz, morboldshitz, lilgothshitz, lilwideshitz, morgothshitz, lilitalshitz, moritalshitz, lilbangshitz, evenmorshitz}
-
 var skinTones = "\U0001F3FB\U0001F3FC\U0001F3FD\U0001F3FE\U0001F3FF"
 var re_moredumb = regexp.MustCompile("[\U0001f44f\U0001f6a8\U000026a0][" + skinTones + "\ufe0f]*")
-
-// this may not be especially fast
-func unpucker(s string) string {
-	fixer := func(r string) string {
-		x := make([]byte, len(r))
-		xi := 0
-	loop1:
-		for _, c := range r {
-			xi++
-			if c == ' ' || c == '\'' {
-				x[xi] = byte(c)
-				continue
-			}
-			for _, set := range allUppers {
-				i := 0
-				for _, rr := range set {
-					if rr == c {
-						x[xi] = byte('A' + i)
-						continue loop1
-					}
-					i++
-				}
-			}
-			for _, set := range allLowers {
-				i := 0
-				for _, rr := range set {
-					if rr == c {
-						x[xi] = byte('a' + i)
-						continue loop1
-					}
-					i++
-				}
-			}
-			x[xi] = '.'
-		}
-		return string(x)
-	}
-	s = re_alltheshitz.ReplaceAllStringFunc(s, fixer)
-
-	return demoji(s)
-}
 
 func demoji(s string) string {
 	s = re_moredumb.ReplaceAllString(s, ".")

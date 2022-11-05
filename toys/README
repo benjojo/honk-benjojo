@@ -4,6 +4,8 @@ A little of this, a little of that.
 
 gettoken.go - obtains an authorization token
 
-saytheday.go - posts a new honk
+saytheday.go - posts a new honk that's a date based look and say sequence
+
+sprayandpray.go - send an activity with no error checking and hope it works
 
 youvegothonks.go - polls for new mesages

@@ -44,6 +44,7 @@ type Filter struct {
 	re_rewrite      *regexp.Regexp
 	Replace         string `json:",omitempty"`
 	Expiration      time.Time
+	Notes           string
 }
 
 type filtType uint
@@ -66,11 +67,12 @@ func (ft filtType) String() string {
 
 type afiltermap map[filtType][]*Filter
 
+var filtInvalidator cache.Invalidator
 var filtcache *cache.Cache
 
 func init() {
 	// resolve init loop
-	filtcache = cache.New(cache.Options{Filler: filtcachefiller})
+	filtcache = cache.New(cache.Options{Filler: filtcachefiller, Invalidator: &filtInvalidator})
 }
 
 func filtcachefiller(userid int64) (afiltermap, bool) {
@@ -156,7 +158,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 
 func filtcacheclear(userid int64, dur time.Duration) {
 	time.Sleep(dur + time.Second)
-	filtcache.Clear(userid)
+	filtInvalidator.Clear(userid)
 }
 
 func getfilters(userid int64, scope filtType) []*Filter {
@@ -168,14 +170,48 @@ func getfilters(userid int64, scope filtType) []*Filter {
 	return nil
 }
 
-func rejectorigin(userid int64, origin string) bool {
+type arejectmap map[string][]*Filter
+
+var rejectAnyKey = "..."
+
+var rejectcache = cache.New(cache.Options{Filler: func(userid int64) (arejectmap, bool) {
+	m := make(arejectmap)
+	filts := getfilters(userid, filtReject)
+	for _, f := range filts {
+		if f.Text != "" {
+			key := rejectAnyKey
+			m[key] = append(m[key], f)
+			continue
+		}
+		if f.IsAnnounce && f.AnnounceOf != "" {
+			key := f.AnnounceOf
+			m[key] = append(m[key], f)
+		}
+		if f.Actor != "" {
+			key := f.Actor
+			m[key] = append(m[key], f)
+		}
+	}
+	return m, true
+}, Invalidator: &filtInvalidator})
+
+func rejectfilters(userid int64, name string) []*Filter {
+	var m arejectmap
+	rejectcache.Get(userid, &m)
+	return m[name]
+}
+
+func rejectorigin(userid int64, origin string, isannounce bool) bool {
 	if o := originate(origin); o != "" {
 		origin = o
 	}
-	filts := getfilters(userid, filtReject)
+	filts := rejectfilters(userid, origin)
 	for _, f := range filts {
-		if f.IsAnnounce || f.Text != "" {
-			continue
+		if isannounce && f.IsAnnounce {
+			if f.AnnounceOf == origin {
+				log.Printf("rejecting announce: %s", origin)
+				return true
+			}
 		}
 		if f.Actor == origin {
 			log.Printf("rejecting origin: %s", origin)
@@ -186,13 +222,26 @@ func rejectorigin(userid int64, origin string) bool {
 }
 
 func rejectactor(userid int64, actor string) bool {
-	origin := originate(actor)
-	filts := getfilters(userid, filtReject)
+	filts := rejectfilters(userid, actor)
 	for _, f := range filts {
-		if f.IsAnnounce || f.Text != "" {
+		if f.IsAnnounce {
 			continue
 		}
-		if f.Actor == actor || (origin != "" && f.Actor == origin) {
+		if f.Actor == actor {
+			log.Printf("rejecting actor: %s", actor)
+			return true
+		}
+	}
+	origin := originate(actor)
+	if origin == "" {
+		return false
+	}
+	filts = rejectfilters(userid, origin)
+	for _, f := range filts {
+		if f.IsAnnounce {
+			continue
+		}
+		if f.Actor == origin {
 			log.Printf("rejecting actor: %s", actor)
 			return true
 		}
@@ -204,7 +253,7 @@ func stealthmode(userid int64, r *http.Request) bool {
 	agent := r.UserAgent()
 	agent = originate(agent)
 	if agent != "" {
-		fake := rejectorigin(userid, agent)
+		fake := rejectorigin(userid, agent, false)
 		if fake {
 			log.Printf("faking 404 for %s", agent)
 			return true
@@ -277,10 +326,17 @@ func matchfilterX(h *Honk, f *Filter) string {
 }
 
 func rejectxonk(xonk *Honk) bool {
-	filts := getfilters(xonk.UserID, filtReject)
+	var m arejectmap
+	rejectcache.Get(xonk.UserID, &m)
+	filts := m[rejectAnyKey]
+	filts = append(filts, m[xonk.Honker]...)
+	filts = append(filts, m[xonk.Oonker]...)
+	for _, a := range xonk.Audience {
+		filts = append(filts, m[a]...)
+	}
 	for _, f := range filts {
-		if matchfilter(xonk, f) {
-			log.Printf("rejecting %s because %s", xonk.XID, f.Actor)
+		if cause := matchfilterX(xonk, f); cause != "" {
+			log.Printf("rejecting %s because %s", xonk.XID, cause)
 			return true
 		}
 	}
@@ -297,21 +353,34 @@ func skipMedia(xonk *Honk) bool {
 	return false
 }
 
-func unsee(userid int64, h *Honk) {
-	filts := getfilters(userid, filtCollapse)
-	for _, f := range filts {
-		if bad := matchfilterX(h, f); bad != "" {
-			if h.Precis == "" {
-				h.Precis = bad
+func unsee(honks []*Honk, userid int64) {
+	if userid != -1 {
+		colfilts := getfilters(userid, filtCollapse)
+		rwfilts := getfilters(userid, filtRewrite)
+		for _, h := range honks {
+			for _, f := range colfilts {
+				if bad := matchfilterX(h, f); bad != "" {
+					if h.Precis == "" {
+						h.Precis = bad
+					}
+					h.Open = ""
+					break
+				}
 			}
-			h.Open = ""
-			break
-		}
-	}
-	filts = getfilters(userid, filtRewrite)
-	for _, f := range filts {
-		if matchfilter(h, f) {
-			h.Noise = f.re_rewrite.ReplaceAllString(h.Noise, f.Replace)
+			if h.Open == "open" && h.Precis == "unspecified horror" {
+				h.Precis = ""
+			}
+			for _, f := range rwfilts {
+				if matchfilter(h, f) {
+					h.Noise = f.re_rewrite.ReplaceAllString(h.Noise, f.Replace)
+				}
+			}
+			if len(h.Noise) > 6000 && h.Open == "open" {
+				if h.Precis == "" {
+					h.Precis = "really freaking long"
+				}
+				h.Open = ""
+			}
 		}
 	}
 }

@@ -48,15 +48,17 @@
     to receive regular updates from other users, they must first be added to
     one's honker collection. Begin at the <span class="Pa">honkers</span> tab.
     The <var class="Ar">url</var> field is required. Either of two forms are
-    accepted, the user's handle (or webfinger) or their ActivityPub actor URL.
-    The <var class="Ar">name</var> field is optional and will be automatically
-    inferred. Examples:</p>
+    accepted, the user's handle (or webfinger) or their ActivityPub actor
+  URL.</p>
+<p class="Pp"></p>
 <div class="Bd Bd-indent"><code class="Li">@user@example.social</code></div>
 <div class="Bd
   Bd-indent"><code class="Li">https://example.social/users/user</code></div>
-<p class="Pp">Fellow honkers may be added to one or more
-    <code class="Ic">combos</code> to suit one's organizational preferences.
-    These are accessed via the <span class="Pa">combos</span> tab and allow easy
+<p class="Pp">The <var class="Ar">name</var> field is optional and will be
+    automatically inferred. The <var class="Ar">notes</var> field is reserved
+    for user remarks. Fellow honkers may be added to one or more
+    <var class="Ar">combos</var> to suit one's organizational preferences. These
+    are accessed via the <span class="Pa">combos</span> tab and allow easy
     access to particular groupings. The special combo name of one hyphen
     &#x2018;-&#x2019; will exclude a honker's posts from the primary feed.</p>
 <p class="Pp">It is also possible to skip subscribing. In this case, regular
@@ -131,10 +133,14 @@
   <dd>Substring match on the post domain name.</dd>
   <dt>honker</dt>
   <dd>Exact match, either AP actor or honker nickname.</dd>
+  <dt>-</dt>
+  <dd>Negate term.</dd>
 </dl>
 <p class="Pp">Example:</p>
-<div class="Bd Bd-indent"><code class="Li">honker:goose big moose</code></div>
-This query will find honks by the goose about the big moose.
+<div class="Bd Bd-indent"><code class="Li">honker:goose big moose
+  -footloose</code></div>
+This query will find honks by the goose about the big moose, but excluding those
+  about footloose.
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Filtering"><a class="permalink" href="#Filtering">Filtering</a></h2>
@@ -210,7 +216,7 @@ This query will find honks by the goose about the big moose.
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">November 26, 2019</td>
+    <td class="foot-date">December 25, 2019</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>

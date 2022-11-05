@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -105,4 +106,23 @@ para
 - singleton`
 	output := `hello<ul><li>a list<li>the list</ul><p>para<ul><li>singleton</ul><p>`
 	doonezerotest(t, input, output)
+}
+
+var benchData, simpleData string
+
+func init() {
+	benchData = strings.Repeat("hello there sir. It is a **fine** day for some testing!\n", 100)
+	simpleData = strings.Repeat("just a few words\n", 100)
+}
+
+func BenchmarkModerateSize(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		markitzero(benchData)
+	}
+}
+
+func BenchmarkSimpleData(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		markitzero(simpleData)
+	}
 }

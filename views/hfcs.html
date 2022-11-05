@@ -9,6 +9,9 @@ Honk Filtering and Censorship System
 <h3>new filter</h3>
 <p><label for="name">filter name:</label><br>
 <input tabindex=1 type="text" name="name" value="" autocomplete=off>
+<p><label for="filtnotes">notes:</label><br>
+<textarea tabindex=1 name="filtnotes" height=4>
+</textarea>
 <hr>
 <h3>match</h3>
 <p><label for="actor">who or where:</label><br>
@@ -48,8 +51,10 @@ Honk Filtering and Censorship System
 {{ range .Filters }}
 <section class="honk">
 <p>Name: {{ .Name }}
+{{ with .Notes }}<p>Notes: {{ . }}{{ end }}
 <p>Date: {{ .Date.Format "2006-01-02" }}
 {{ with .Actor }}<p>Who: {{ . }}{{ end }} {{ with .IncludeAudience }} (inclusive) {{ end }}
+{{ if .IsAnnounce }}<p>Announce: {{ .AnnounceOf }}{{ end }}
 {{ with .Text }}<p>Text: {{ . }}{{ end }}
 <p>Actions: {{ range .Actions }} {{ . }} {{ end }}
 {{ with .Rewrite }}<p>Rewrite: {{ . }}{{ end }}

@@ -31,11 +31,11 @@
 </div>
 {{ end }}
 <p><button id=addtimebutton type=button onclick="showelement('timedescriptor')">add time</button>
-<div id=timedescriptor style="display: none">
+<div id=timedescriptor style="{{ or .ShowTime "display: none" }}">
 <p><label for=timestart>start:</label><br>
-<input type="text" name="timestart" value="">
+<input type="text" name="timestart" value="{{ .StartTime }}">
 <p><label for=timeend>duration:</label><br>
-<input type="text" name="timeend" value="">
+<input type="text" name="timeend" value="{{ .Duration }}">
 </div>
 </details>
 <p>

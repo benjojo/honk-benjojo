@@ -17,7 +17,7 @@ golang.org/x/net/html
 golang.org/x/net/html/atom
 # humungus.tedunangst.com/r/go-sqlite3 v1.1.3
 humungus.tedunangst.com/r/go-sqlite3
-# humungus.tedunangst.com/r/webs v0.6.26
+# humungus.tedunangst.com/r/webs v0.6.31
 humungus.tedunangst.com/r/webs/cache
 humungus.tedunangst.com/r/webs/gate
 humungus.tedunangst.com/r/webs/htfilter

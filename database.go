@@ -101,13 +101,16 @@ func gethonkers(userid int64) []*Honker {
 	var honkers []*Honker
 	for rows.Next() {
 		h := new(Honker)
-		var combos string
-		err = rows.Scan(&h.ID, &h.UserID, &h.Name, &h.XID, &h.Flavor, &combos)
-		h.Combos = strings.Split(strings.TrimSpace(combos), " ")
+		var combos, meta string
+		err = rows.Scan(&h.ID, &h.UserID, &h.Name, &h.XID, &h.Flavor, &combos, &meta)
+		if err == nil {
+			err = unjsonify(meta, &h.Meta)
+		}
 		if err != nil {
 			log.Printf("error scanning honker: %s", err)
-			return nil
+			continue
 		}
+		h.Combos = strings.Split(strings.TrimSpace(combos), " ")
 		honkers = append(honkers, h)
 	}
 	return honkers
@@ -188,7 +191,11 @@ func geteventhonks(userid int64) []*Honk {
 	})
 	now := time.Now().Add(-24 * time.Hour)
 	for i, h := range honks {
-		if h.Time.StartTime.Before(now) {
+		t := h.Date
+		if tm := h.Time; tm != nil {
+			t = tm.StartTime
+		}
+		if t.Before(now) {
 			honks = honks[:i]
 			break
 		}
@@ -249,8 +256,10 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 	withhonker := 0
 	site := ""
 	withsite := 0
+	withnotq := 0
 	terms := strings.Split(q, " ")
 	q = "%"
+	notq := "%"
 	for _, t := range terms {
 		if strings.HasPrefix(t, "site:") {
 			site = t[5:]
@@ -267,13 +276,27 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 			withhonker = 1
 			continue
 		}
+		if t[0] == '-' {
+			if t == "-" {
+				continue
+			}
+			if len(notq) != 1 {
+				notq += " "
+			}
+			notq += t[1:]
+			continue
+		}
 		if len(q) != 1 {
 			q += " "
 		}
 		q += t
 	}
 	q += "%"
-	rows, err := stmtHonksBySearch.Query(wanted, userid, withsite, site, withhonker, honker, honker, q, userid)
+	notq += "%"
+	if notq != "%%" {
+		withnotq = 1
+	}
+	rows, err := stmtHonksBySearch.Query(wanted, userid, withsite, site, withhonker, honker, honker, q, withnotq, notq, userid)
 	honks := getsomehonks(rows, err)
 	return honks
 }
@@ -413,6 +436,12 @@ func donksforhonks(honks []*Honk) {
 				continue
 			}
 			h.Time = t
+		case "mentions":
+			err = unjsonify(j, &h.Mentions)
+			if err != nil {
+				log.Printf("error parsing mentions: %s", err)
+				continue
+			}
 		case "oldrev":
 		default:
 			log.Printf("unknown meta genus: %s", genus)
@@ -491,7 +520,7 @@ func updatehonk(h *Honk) error {
 		return err
 	}
 
-	err = deleteextras(tx, h.ID)
+	err = deleteextras(tx, h.ID, false)
 	if err == nil {
 		_, err = tx.Stmt(stmtUpdateHonk).Exec(h.Precis, h.Noise, h.Format, h.Whofore, dt, h.ID)
 	}
@@ -527,10 +556,7 @@ func deletehonk(honkid int64) error {
 		return err
 	}
 
-	err = deleteextras(tx, honkid)
-	if err == nil {
-		_, err = tx.Stmt(stmtDeleteMeta).Exec(honkid, "nonsense")
-	}
+	err = deleteextras(tx, honkid, true)
 	if err == nil {
 		_, err = tx.Stmt(stmtDeleteHonk).Exec(honkid)
 	}
@@ -580,10 +606,20 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 			return err
 		}
 	}
+	if m := h.Mentions; len(m) > 0 {
+		j, err := jsonify(m)
+		if err == nil {
+			_, err = tx.Stmt(stmtSaveMeta).Exec(h.ID, "mentions", j)
+		}
+		if err != nil {
+			log.Printf("error saving mentions: %s", err)
+			return err
+		}
+	}
 	return nil
 }
 
-func deleteextras(tx *sql.Tx, honkid int64) error {
+func deleteextras(tx *sql.Tx, honkid int64, everything bool) error {
 	_, err := tx.Stmt(stmtDeleteDonks).Exec(honkid)
 	if err != nil {
 		return err
@@ -592,7 +628,11 @@ func deleteextras(tx *sql.Tx, honkid int64) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Stmt(stmtDeleteMeta).Exec(honkid, "oldrev")
+	if everything {
+		_, err = tx.Stmt(stmtDeleteAllMeta).Exec(honkid)
+	} else {
+		_, err = tx.Stmt(stmtDeleteSomeMeta).Exec(honkid)
+	}
 	if err != nil {
 		return err
 	}
@@ -691,7 +731,8 @@ var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker 
 var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonker *sql.Stmt
 var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker *sql.Stmt
 var stmtAllOnts, stmtSaveOnt, stmtUpdateFlags, stmtClearFlags *sql.Stmt
-var stmtHonksForUserFirstClass, stmtSaveMeta, stmtDeleteMeta, stmtUpdateHonk *sql.Stmt
+var stmtHonksForUserFirstClass *sql.Stmt
+var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteSomeMeta, stmtUpdateHonk *sql.Stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
 var stmtGetTracks *sql.Stmt
 
@@ -704,10 +745,10 @@ func preparetodie(db *sql.DB, s string) *sql.Stmt {
 }
 
 func prepareStatements(db *sql.DB) {
-	stmtHonkers = preparetodie(db, "select honkerid, userid, name, xid, flavor, combos from honkers where userid = ? and (flavor = 'presub' or flavor = 'sub' or flavor = 'peep' or flavor = 'unsub') order by name")
-	stmtSaveHonker = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner) values (?, ?, ?, ?, ?, ?)")
+	stmtHonkers = preparetodie(db, "select honkerid, userid, name, xid, flavor, combos, meta from honkers where userid = ? and (flavor = 'presub' or flavor = 'sub' or flavor = 'peep' or flavor = 'unsub') order by name")
+	stmtSaveHonker = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta) values (?, ?, ?, ?, ?, ?, ?)")
 	stmtUpdateFlavor = preparetodie(db, "update honkers set flavor = ? where userid = ? and xid = ? and name = ? and flavor = ?")
-	stmtUpdateHonker = preparetodie(db, "update honkers set name = ?, combos = ? where honkerid = ? and userid = ?")
+	stmtUpdateHonker = preparetodie(db, "update honkers set name = ?, combos = ?, meta = ? where honkerid = ? and userid = ?")
 	stmtOneHonker = preparetodie(db, "select xid from honkers where name = ? and userid = ?")
 	stmtDubbers = preparetodie(db, "select honkerid, userid, name, xid, flavor from honkers where userid = ? and flavor = 'dub'")
 	stmtNamedDubbers = preparetodie(db, "select honkerid, userid, name, xid, flavor from honkers where userid = ? and name = ? and flavor = 'dub'")
@@ -730,12 +771,13 @@ func prepareStatements(db *sql.DB) {
 	stmtHonksByHonker = preparetodie(db, selecthonks+"join honkers on (honkers.xid = honks.honker or honkers.xid = honks.oonker) where honks.honkid > ? and honks.userid = ? and honkers.name = ?"+butnotthose+limit)
 	stmtHonksByXonker = preparetodie(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and (honker = ? or oonker = ?)"+butnotthose+limit)
 	stmtHonksByCombo = preparetodie(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and honks.honker in (select xid from honkers where honkers.userid = ? and honkers.combos like ?) "+butnotthose+" union "+selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and honks.userid = ? and onts.ontology in (select xid from honkers where combos like ?)"+butnotthose+limit)
-	stmtHonksBySearch = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and (? = 0 or xid like ?) and (? = 0 or honks.honker = ? or honks.oonker = ?) and noise like ?"+butnotthose+limit)
+	stmtHonksBySearch = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and (? = 0 or xid like ?) and (? = 0 or honks.honker = ? or honks.oonker = ?) and noise like ? and (? = 0 or noise not like ?)"+butnotthose+limit)
 	stmtHonksByConvoy = preparetodie(db, selecthonks+"where honks.honkid > ? and (honks.userid = ? or (? = -1 and whofore = 2)) and convoy = ?"+limit)
 	stmtHonksByOntology = preparetodie(db, selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and onts.ontology = ? and (honks.userid = ? or (? = -1 and honks.whofore = 2))"+limit)
 
 	stmtSaveMeta = preparetodie(db, "insert into honkmeta (honkid, genus, json) values (?, ?, ?)")
-	stmtDeleteMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus <> ?")
+	stmtDeleteAllMeta = preparetodie(db, "delete from honkmeta where honkid = ?")
+	stmtDeleteSomeMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus not in ('oldrev')")
 	stmtSaveHonk = preparetodie(db, "insert into honks (userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	stmtDeleteHonk = preparetodie(db, "delete from honks where honkid = ?")
 	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ? where honkid = ?")

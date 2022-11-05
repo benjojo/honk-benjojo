@@ -100,6 +100,8 @@ Displayed on the home page.
 Displayed on the about page.
 .It login
 Displayed about the login form.
+.It avatar colors
+Four 32-bit hex colors (RGBA).
 .El
 .Pp
 .Ss User Admin
@@ -110,6 +112,10 @@ This is discouraged.
 .Pp
 Passwords may be reset with the
 .Ic chpass Ar username
+command.
+.Pp
+Users may be deleted with the
+.Ic deluser Ar username
 command.
 .Ss Maintenance
 The database may grow large over time.
@@ -133,6 +139,12 @@ file which is important to backup and restore.
 The current version of the honk binary may be printed with the
 .Ic version
 command.
+.Ss unplug
+Sometimes servers simply disappear, resulting in many errors trying to deliver
+undeliverable messages.
+Running
+.Ic unplug Ar hostname
+will delete all subscriptions and pending deliveries.
 .Ss Security
 .Nm
 is not currently hardened against SSRF, server side request forgery.
@@ -143,15 +155,19 @@ Debug mode may be enabled or disabled by running
 .Ic debug Ar on|off .
 In debug mode, secure cookies are disabled and templates are reloaded
 every request.
+Debug mode is really more useful for development, not debugging production.
 .Ss Import
 Data may be imported and converted from other services using the
 .Ic import
 command.
 Posts are imported and backdated to appear as old honks.
 No other information is imported.
+Currently supports Mastodon and Twitter exported data.
 .Pp
-Currently limited to Twitter import.
-This requires a Twitter data archive.
+To prepare a Mastodon data archive, extract the archive-longhash.tar.gz file.
+.Dl ./honk import username mastodon source-directory
+.Pp
+To prepare a Twitter data archive, extract the twitter-longhash.zip file.
 After unzipping the data archive, navigate to the tweet_media directory
 and unzip any zip files contained within.
 .Dl ./honk import username twitter source-directory
@@ -191,6 +207,12 @@ listen address: /var/www/honk.sock
 server name: honk.example.com
 honk-v98> ./honk -datadir ../honkdata admin
 honk-v98> date; ./honk -datadir ../honkdata >> log 2>&1
+.Ed
+.Pp
+The views directory includes a sample pleroma.css to change color scheme.
+.Bd -literal -offset indent
+honk-v98> mkdir ../honkdata/views
+honk-v98> cp views/pleroma.css ../honkdata/views/local.css
 .Ed
 .Pp
 Upgrade to the next version.

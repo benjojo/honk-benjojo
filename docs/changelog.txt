@@ -1,6 +1,32 @@
 changelog
 
--- 0.8.5 Turnkey Blaster
+=== 0.8.6 Sartorial Headpiece
+
+++ Import command now supports the elephant in the room.
+
++ Minimal support for Move activity.
+
++ deluser command.
+
++ Configurable avatar colors.
+
++ Optional pleroma color scheme for the home sick...
+
++ Rebalance colors slightly. Looks a little fresher now?
+
++ Add unplug command for servers that have dropped off the net.
+
++ Add notes field to honkers to document their downfall.
+
++ Add notes field to filters for record keeping.
+
++ Negated search -terms.
+
++ A raw sendactivity API action for the bold.
+
++ More flexible meme names.
+
+=== 0.8.5 Turnkey Blaster
 
 + Codenames in changelog.
 
@@ -20,17 +46,17 @@ changelog
 
 + Can never seem to version the changelog correctly.
 
--- 0.8.4
+=== 0.8.4
 
 + Fix bug preventing import of keys
 
 + Option to switch map links to Apple.
 
--- 0.8.3
+=== 0.8.3
 
 - mistag.
 
--- 0.8.2 Game Warden
+=== 0.8.2 Game Warden
 
 ++ Import command to preserve those embarssassing old posts from Twitter.
 
@@ -46,7 +72,7 @@ changelog
 
 + "Bug" fixes.
 
--- 0.8.1
+=== 0.8.1
 
 ++ Make it easier to upgrade by decoupling data dir from ".".
 
@@ -58,7 +84,7 @@ changelog
 	Syntax highlighting for code blocks.
 	Something resembling an actual manual.
 
--- 0.8.0 Ordinary Octology
+=== 0.8.0 Ordinary Octology
 
 +++ Add Honk Filtering and Censorship System (HFCS).
 
@@ -113,7 +139,7 @@ changelog
 - Sometimes the cached state of the @me feed becomes unsynced.
 	Acked status may display incorrectly.
 
--- 0.7.7 More 7 Than Ever
+=== 0.7.7 More 7 Than Ever
 
 + Add another retry to workaround pixelfed's general unreliability.
 
@@ -125,11 +151,11 @@ changelog
 
 + Increase max thread retrieval depth to 10.
 
--- 0.7.6
+=== 0.7.6
 
 + Fix a bug where upgrades would not complete in one step.
 
--- 0.7.5
+=== 0.7.5
 
 + Fix a bug (introdcued 0.7.4) preventing new user creation from working.
 
@@ -141,7 +167,7 @@ changelog
 
 + What may be considered UI improvements.
 
--- 0.7.4
+=== 0.7.4
 
 + Ever more bug fixes.
 
@@ -157,19 +183,19 @@ changelog
 
 + webp image transcoding.
 
--- 0.7.3
+=== 0.7.3
 
 + Better fedicompat so bonks are visible to pleroma followers.
 
--- 0.7.2
+=== 0.7.2
 
 + Add the funzone. Minor other UI tweaks.
 
--- 0.7.1
+=== 0.7.1
 
 + Fix bug preventing unfollow from working.
 
--- 0.7.0 Father Mother Maiden Crone Honker Bonker Zonker
+=== 0.7.0 Father Mother Maiden Crone Honker Bonker Zonker
 
 +++ Auto fetching and inlining of hoots.
 
@@ -199,12 +225,12 @@ changelog
 
 + Add max-width for video tag.
 
--- 0.6.0 Sixy Delights
+=== 0.6.0 Sixy Delights
 
 Most records from this time of primitive development have been lost.
 
--- 0.5.0 Halfway to Heaven
+=== 0.5.0 Halfway to Heaven
 
--- 0.4.0 Fore Score
+=== 0.4.0 Fore Score
 
--- 0.3.0 Valorous Varaha
+=== 0.3.0 Valorous Varaha

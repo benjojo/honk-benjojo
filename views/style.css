@@ -1,8 +1,9 @@
 html {
-	--bg-page: #305;
+	--bg-page: #306;
 	--bg-dark: #002;
-	--fg: #dde;
-	--fg-subtle: #aab;
+	--fg: #dcf;
+	--hl: #dcf;
+	--fg-subtle: #a9c;
 	--fg-limited: #a79;
 }
 
@@ -76,7 +77,7 @@ header > details {
 header > details[open] {
 	padding: 1em 1em 0em 1em;
 	background: var(--bg-dark);
-	border: 1px solid var(--fg);
+	border: 1px solid var(--hl);
 	margin-bottom: 1em;
 	opacity: 1.0;
 }
@@ -102,9 +103,12 @@ main {
 	margin: auto;
 	font-size: 1.5em;
 }
+hr {
+	border-color: var(--hl);
+}
 .info {
 	background: var(--bg-dark);
-	border: 1px solid var(--fg);
+	border: 1px solid var(--hl);
 	margin-bottom: 1em;
 	padding: 0em 1em 0em 1em;
 }
@@ -120,7 +124,7 @@ label.button, button, select {
 	font-family: monospace;
 	color: var(--fg);
 	background: var(--bg-page);
-	border: 1px solid var(--fg);
+	border: 1px solid var(--hl);
 	padding: 0.5em;
 	white-space: nowrap;
 }
@@ -143,10 +147,13 @@ textarea {
 	background: var(--bg-page);
 	color: var(--fg);
 	width: 600px;
-	height: 8em;
+	height: 4em;
 	margin-bottom: 0.5em;
 	box-sizing: border-box;
 	max-width: 100%;
+}
+textarea#honknoise {
+	height: 10em;
 }
 input[type="checkbox"] {
 	position: fixed;
@@ -166,13 +173,13 @@ input[type=file] {
 }
 
 .glow {
-	box-shadow: 0px 0px 16px var(--fg);
+	box-shadow: 0px 0px 16px var(--hl);
 }
 
 .honk {
 	margin: auto;
 	background: var(--bg-dark);
-	border: 1px solid var(--fg);
+	border: 1px solid var(--hl);
 	border-radius: 1em;
 	margin-bottom: 1em;
 	padding-left: 1em;
@@ -241,6 +248,9 @@ input[type=file] {
 .limited {
 	border: 1px solid var(--fg-limited);
 	color: var(--fg-limited);
+}
+.limited	.glow {
+		box-shadow: 0px 0px 16px var(--fg-limited);
 }
 .limited	.noise {
 		color: var(--fg-limited);

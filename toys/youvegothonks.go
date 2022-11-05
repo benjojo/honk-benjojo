@@ -33,7 +33,7 @@ func gethonks(server, token string, wanted int) HonkSet {
 	if err != nil {
 		log.Fatal(err)
 	}
-	req.Header.Add("Authorization", token)
+	req.Header.Add("Authorization", "Bearer " + token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Fatal(err)

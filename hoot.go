@@ -53,6 +53,9 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 
 	fmt.Fprintf(&buf, "%s\n", url)
 	var htf htfilter.Filter
+	htf.Imager = func(node *html.Node) string {
+		return ""
+	}
 	for _, div := range divs {
 		twp := div.Parent.Parent.Parent
 		alink := linksel.MatchFirst(twp)
@@ -77,7 +80,7 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 		if author != wanted {
 			continue
 		}
-		text := htf.TextOnly(div)
+		text := htf.NodeText(div)
 		text = strings.Replace(text, "\n", " ", -1)
 		text = strings.Replace(text, "pic.twitter.com", "https://pic.twitter.com", -1)
 

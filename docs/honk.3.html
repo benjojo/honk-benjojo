@@ -111,6 +111,19 @@
 </dl>
 <p class="Pp">The result will be returned as json.</p>
 </section>
+<section class="Ss">
+<h2 class="Ss" id="sendactivity"><a class="permalink" href="#sendactivity">sendactivity</a></h2>
+<p class="Pp">Send anything. No limits, no error checking.</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">rcpt</var></dt>
+  <dd>An actor to deliver the message to to. May be specified more than once. An
+      inbox may be specified directly by prefixing with %.</dd>
+  <dt><var class="Fa">msg</var></dt>
+  <dd>The message. It should be a valid json activity, but yolo.</dd>
+  <dt><var class="Fa">public</var></dt>
+  <dd>Set to 1 to use shared inboxes for delivery.</dd>
+</dl>
+</section>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
@@ -125,7 +138,7 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">November 26, 2019</td>
+    <td class="foot-date">December 25, 2019</td>
     <td class="foot-os">OpenBSD 6.6</td>
   </tr>
 </table>
