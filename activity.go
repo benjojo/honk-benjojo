@@ -188,9 +188,9 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 			Timeout: timeout,
 			Client:  client,
 		})
+		// log.Printf("debug junk %#v", j)
 		return j, err
 	}
-
 	ji, err := flightdeck.Call(url, fn)
 	if err != nil {
 		return nil, err
@@ -1670,6 +1670,18 @@ func somethingabout(obj junk.Junk) (*SomeThing, error) {
 	if info.Owner == "" {
 		info.Owner = info.XID
 	}
+
+	iconInfo, ok := obj.GetMap("icon")
+	if ok {
+		mType, _ := iconInfo.GetString("mediaType")
+		if strings.HasPrefix(mType, "image/") {
+			AvatarUrl, ok := iconInfo.GetString("url")
+			if ok {
+				info.AvatarURL = AvatarUrl
+			}
+		}
+	}
+
 	return info, nil
 }
 

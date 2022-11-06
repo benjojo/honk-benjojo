@@ -248,10 +248,11 @@ type HonkerMeta struct {
 }
 
 type SomeThing struct {
-	What  int
-	XID   string
-	Owner string
-	Name  string
+	What      int
+	XID       string
+	Owner     string
+	Name      string
+	AvatarURL string
 }
 
 const (

@@ -18,8 +18,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io"
@@ -566,6 +568,7 @@ func ximport(w http.ResponseWriter, r *http.Request) {
 		user, _ := getUserBio(u.Username)
 
 		info, _ := somethingabout(j)
+		log.Printf("user info %#v", info)
 		if info == nil {
 			xonk = xonksaver(user, j, originate(xid))
 		} else if info.What == SomeActor {
@@ -2110,11 +2113,54 @@ func somedays() string {
 	return fmt.Sprintf("%d", secs)
 }
 
-func avatate(w http.ResponseWriter, r *http.Request) {
+func avatarWebHandler(w http.ResponseWriter, r *http.Request) {
 	if develMode {
 		loadAvatarColors()
 	}
 	n := r.FormValue("a")
+	hasher := sha512.New()
+	hasher.Write([]byte(n))
+	hashString := hex.EncodeToString(hasher.Sum(nil))
+
+	fileKey := fmt.Sprintf("%s/avatarcache/%s", dataDir, hashString)
+	s, err := os.Stat(fileKey)
+	if err == nil {
+		if time.Since(s.ModTime()) < (time.Hour * 24 * 7) { // Expire the cache
+			b, _ := os.ReadFile(fileKey)
+			w.Header().Set("Content-Type", http.DetectContentType(b))
+			w.Write(b)
+			return
+		}
+	}
+	// Else, we fetch it now
+	xid := n
+	// j, err := GetJunk(u.UserID, xid)
+	j, err := GetJunk(0, xid)
+	if err != nil {
+		easyAvatar(r, n, w)
+		return
+	}
+
+	info, _ := somethingabout(j)
+	if info.AvatarURL == "" {
+		easyAvatar(r, n, w)
+		return
+	}
+	imageBytes, err := fetchsome(info.AvatarURL)
+	if err != nil {
+		easyAvatar(r, n, w)
+		return
+	}
+	w.Header().Set("Content-Type", http.DetectContentType(imageBytes))
+	w.Write(imageBytes)
+
+	go func() {
+		os.MkdirAll(fmt.Sprintf("%s/avatarcache/", dataDir), 0777)
+		os.WriteFile(fileKey, imageBytes, 0644)
+	}()
+}
+
+func easyAvatar(r *http.Request, n string, w http.ResponseWriter) {
 	hex := r.FormValue("hex") == "1"
 	a := genAvatar(n, hex)
 	if !develMode {
@@ -2520,7 +2566,7 @@ func serve() {
 	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/outbox", outbox)
 	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/followers", emptiness)
 	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}/following", emptiness)
-	GetSubrouter.HandleFunc("/a", avatate)
+	GetSubrouter.HandleFunc("/a", avatarWebHandler)
 	GetSubrouter.HandleFunc("/o", thelistingoftheontologies)
 	GetSubrouter.HandleFunc("/o/{name:.+}", showontology)
 	GetSubrouter.HandleFunc("/d/{xid:[\\pL[:digit:].]+}", servefile)
