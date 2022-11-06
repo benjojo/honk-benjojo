@@ -402,7 +402,7 @@ func main() {
 		}
 		name := args[1]
 		targ := args[2]
-		user, err := butwhatabout(name)
+		user, err := getUserBio(name)
 		if err != nil {
 			elog.Printf("unknown user")
 			return

@@ -58,7 +58,7 @@ func getuserstyle(u *login.UserInfo) template.CSS {
 	if u == nil {
 		return ""
 	}
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	css := template.CSS("")
 	if user.Options.SkinnyCSS {
 		css += "main { max-width: 700px; }\n"
@@ -70,7 +70,7 @@ func getmaplink(u *login.UserInfo) string {
 	if u == nil {
 		return "osm"
 	}
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	ml := user.Options.MapLink
 	if ml == "" {
 		ml = "osm"
@@ -88,7 +88,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 	templinfo["IconName"] = iconName
 	templinfo["UserSep"] = userSep
 	if u := login.GetUserInfo(r); u != nil {
-		templinfo["UserInfo"], _ = butwhatabout(u.Username)
+		templinfo["UserInfo"], _ = getUserBio(u.Username)
 		templinfo["UserStyle"] = getuserstyle(u)
 		var combos []string
 		combocache.Get(u.UserID, &combos)
@@ -329,7 +329,7 @@ func pong(user *WhatAbout, who string, obj string) {
 
 func inbox(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -563,7 +563,7 @@ func ximport(w http.ResponseWriter, r *http.Request) {
 		}
 		allinjest(originate(xid), j)
 		dlog.Printf("importing %s", xid)
-		user, _ := butwhatabout(u.Username)
+		user, _ := getUserBio(u.Username)
 
 		info, _ := somethingabout(j)
 		if info == nil {
@@ -614,7 +614,7 @@ func xzone(w http.ResponseWriter, r *http.Request) {
 }
 
 var oldoutbox = cache.New(cache.Options{Filler: func(name string) ([]byte, bool) {
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		return nil, false
 	}
@@ -642,7 +642,7 @@ var oldoutbox = cache.New(cache.Options{Filler: func(name string) ([]byte, bool)
 
 func outbox(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -680,7 +680,7 @@ var oldempties = cache.New(cache.Options{Filler: func(url string) ([]byte, bool)
 
 func emptiness(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -701,7 +701,7 @@ func emptiness(w http.ResponseWriter, r *http.Request) {
 
 func showuser(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		ilog.Printf("user not found %s: %s", name, err)
 		http.NotFound(w, r)
@@ -1014,7 +1014,7 @@ func trackback(xid string, r *http.Request) {
 
 func showonehonk(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -1081,7 +1081,7 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*ActivityPubActi
 	var userid int64 = -1
 	if u != nil {
 		userid = u.UserID
-		templinfo["User"], _ = butwhatabout(u.Username)
+		templinfo["User"], _ = getUserBio(u.Username)
 	}
 	reverbolate(userid, honks)
 	templinfo["Honks"] = honks
@@ -1103,10 +1103,10 @@ func honkpage(w http.ResponseWriter, u *login.UserInfo, honks []*ActivityPubActi
 }
 
 func saveuser(w http.ResponseWriter, r *http.Request) {
-	whatabout := r.FormValue("whatabout")
-	whatabout = strings.Replace(whatabout, "\r", "", -1)
+	userBio := r.FormValue("whatabout")
+	userBio = strings.Replace(userBio, "\r", "", -1)
 	u := login.GetUserInfo(r)
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	db := opendatabase()
 
 	options := user.Options
@@ -1138,39 +1138,42 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	options.Reaction = r.FormValue("reaction")
 
 	sendupdate := false
-	ava := re_avatar.FindString(whatabout)
+	log.Printf("UserBio: %v", userBio)
+	ava := re_avatar.FindString(userBio)
 	if ava != "" {
-		whatabout = re_avatar.ReplaceAllString(whatabout, "")
+		userBio = re_avatar.ReplaceAllString(userBio, "")
 		ava = ava[7:]
 		if ava[0] == ' ' {
 			ava = ava[1:]
 		}
 		ava = fmt.Sprintf("https://%s/meme/%s", serverName, ava)
+		log.Printf("UserBio Avatar: %v", ava)
 	}
 	if ava != options.Avatar {
 		options.Avatar = ava
 		sendupdate = true
 	}
-	ban := re_banner.FindString(whatabout)
+	ban := re_banner.FindString(userBio)
 	if ban != "" {
-		whatabout = re_banner.ReplaceAllString(whatabout, "")
+		userBio = re_banner.ReplaceAllString(userBio, "")
 		ban = ban[7:]
 		if ban[0] == ' ' {
 			ban = ban[1:]
 		}
 		ban = fmt.Sprintf("https://%s/meme/%s", serverName, ban)
+		log.Printf("UserBio Banner: %v", ava)
 	}
 	if ban != options.Banner {
 		options.Banner = ban
 		sendupdate = true
 	}
-	whatabout = strings.TrimSpace(whatabout)
-	if whatabout != user.About {
+	userBio = strings.TrimSpace(userBio)
+	if userBio != user.About {
 		sendupdate = true
 	}
 	j, err := encodeJson(options)
 	if err == nil {
-		_, err = db.Exec("update users set about = ?, options = ? where username = ?", whatabout, j, u.Username)
+		_, err = db.Exec("update users set about = ?, options = ? where username = ?", userBio, j, u.Username)
 	}
 	if err != nil {
 		elog.Printf("error bouting what: %s", err)
@@ -1246,7 +1249,7 @@ func bonkit(xid string, user *WhatAbout) {
 func submitbonk(w http.ResponseWriter, r *http.Request) {
 	xid := r.FormValue("xid")
 	userinfo := login.GetUserInfo(r)
-	user, _ := butwhatabout(userinfo.Username)
+	user, _ := getUserBio(userinfo.Username)
 
 	bonkit(xid, user)
 
@@ -1278,7 +1281,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	wherefore := r.FormValue("wherefore")
 	what := r.FormValue("what")
 	userinfo := login.GetUserInfo(r)
-	user, _ := butwhatabout(userinfo.Username)
+	user, _ := getUserBio(userinfo.Username)
 
 	if wherefore == "save" {
 		xonk := getActivityPubActivity(userinfo.UserID, what)
@@ -1364,7 +1367,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wherefore == "bonk" {
-		user, _ := butwhatabout(userinfo.Username)
+		user, _ := getUserBio(userinfo.Username)
 		bonkit(what, user)
 		return
 	}
@@ -1417,7 +1420,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 
 func edithonkpage(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	xid := r.FormValue("xid")
 	honk := getActivityPubActivity(u.UserID, xid)
 	if !canedithonk(user, honk) {
@@ -1591,7 +1594,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 	}
 
 	userinfo := login.GetUserInfo(r)
-	user, _ := butwhatabout(userinfo.Username)
+	user, _ := getUserBio(userinfo.Username)
 
 	dt := time.Now().UTC()
 	updatexid := r.FormValue("updatexid")
@@ -1827,7 +1830,7 @@ func showchatter(w http.ResponseWriter, r *http.Request) {
 
 func submitchonk(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	noise := r.FormValue("noise")
 	target := r.FormValue("target")
 	format := "markdown"
@@ -1897,7 +1900,7 @@ func showcombos(w http.ResponseWriter, r *http.Request) {
 
 func submithonker(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	name := strings.TrimSpace(r.FormValue("name"))
 	url := strings.TrimSpace(r.FormValue("url"))
 	peep := r.FormValue("peep")
@@ -2025,7 +2028,7 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 
 func accountpage(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 	templinfo := getInfo(r)
 	templinfo["UserCSRF"] = login.GetCSRF("saveuser", r)
 	templinfo["LogoutCSRF"] = login.GetCSRF("logout", r)
@@ -2079,7 +2082,7 @@ func fingerlicker(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2277,12 +2280,12 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	}
 	reverbolate(userid, honks)
 
-	user, _ := butwhatabout(u.Username)
+	user, _ := getUserBio(u.Username)
 
 	var buf strings.Builder
 	templinfo["Honks"] = honks
 	templinfo["MapLink"] = getmaplink(u)
-	templinfo["User"], _ = butwhatabout(u.Username)
+	templinfo["User"], _ = getUserBio(u.Username)
 	err := readviews.Execute(&buf, "honkfrags.html", templinfo)
 	if err != nil {
 		elog.Printf("frag error: %s", err)
@@ -2370,7 +2373,7 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 		j["honks"] = honks
 		j.Write(w)
 	case "sendactivity":
-		user, _ := butwhatabout(u.Username)
+		user, _ := getUserBio(u.Username)
 		public := r.FormValue("public") == "1"
 		rcpts := boxuprcpts(user, r.Form["rcpt"], public)
 		msg := []byte(r.FormValue("msg"))

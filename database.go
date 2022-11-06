@@ -98,7 +98,7 @@ func getserveruser() *WhatAbout {
 	return user
 }
 
-func butwhatabout(name string) (*WhatAbout, error) {
+func getUserBio(name string) (*WhatAbout, error) {
 	var user *WhatAbout
 	ok := somenamedusers.Get(name, &user)
 	if !ok {

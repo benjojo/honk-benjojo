@@ -1318,7 +1318,7 @@ var oldjonks = cache.New(cache.Options{Filler: func(xid string) ([]byte, bool) {
 	if honk == nil || !honk.Public {
 		return nil, true
 	}
-	user, _ := butwhatabout(honk.Username)
+	user, _ := getUserBio(honk.Username)
 	rawhonks := gethonksbyconvoy(honk.UserID, honk.Convoy, 0)
 	reversehonks(rawhonks)
 	for _, h := range rawhonks {
@@ -1559,7 +1559,7 @@ func junkuser(user *WhatAbout) junk.Junk {
 }
 
 var oldjonkers = cache.New(cache.Options{Filler: func(name string) ([]byte, bool) {
-	user, err := butwhatabout(name)
+	user, err := getUserBio(name)
 	if err != nil {
 		return nil, false
 	}

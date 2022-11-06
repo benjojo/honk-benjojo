@@ -66,7 +66,7 @@ func (obj *TootObject) UnmarshalJSON(b []byte) error {
 }
 
 func importMastodon(username, source string) {
-	user, err := butwhatabout(username)
+	user, err := getUserBio(username)
 	if err != nil {
 		elog.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func importMastotooters(user *WhatAbout, source string) {
 }
 
 func importTwitter(username, source string) {
-	user, err := butwhatabout(username)
+	user, err := getUserBio(username)
 	if err != nil {
 		elog.Fatal(err)
 	}

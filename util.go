@@ -211,7 +211,7 @@ func adduser() {
 }
 
 func deluser(username string) {
-	user, _ := butwhatabout(username)
+	user, _ := getUserBio(username)
 	if user == nil {
 		elog.Printf("no userfound")
 		return
@@ -241,7 +241,7 @@ func chpass() {
 		fmt.Printf("need a username\n")
 		os.Exit(1)
 	}
-	user, err := butwhatabout(os.Args[2])
+	user, err := getUserBio(os.Args[2])
 	if err != nil {
 		elog.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func createuser(db *sql.DB, r *bufio.Reader) error {
 	if !re_plainname.MatchString(name) {
 		return fmt.Errorf("alphanumeric only please")
 	}
-	if _, err := butwhatabout(name); err == nil {
+	if _, err := getUserBio(name); err == nil {
 		return fmt.Errorf("user already exists")
 	}
 	pass, err := askpassword(r)
