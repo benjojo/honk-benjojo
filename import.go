@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -223,26 +224,136 @@ func importTwitter(username, source string) {
 	}
 
 	type Tweet struct {
-		ID_str                  string
-		Created_at              string
-		Full_text               string
-		In_reply_to_screen_name string
-		In_reply_to_status_id   string
-		Entities                struct {
-			Hashtags []struct {
-				Text string
-			}
-			Media []struct {
-				Url       string
-				Media_url string
-			}
-			Urls []struct {
-				Url          string
-				Expanded_url string
-			}
-		}
+		// ID_str string
+		// Created_at              string
+		// Full_text               string
+		// In_reply_to_screen_name string
+		// In_reply_to_status_id   string
+		// Entities                struct {
+		// 	Hashtags []struct {
+		// 		Text string
+		// 	}
+		// 	Media []struct {
+		// 		Url       string
+		// 		Media_url string
+		// 	}
+		// 	Urls []struct {
+		// 		Url          string
+		// 		Expanded_url string
+		// 	}
+		// }
 		date   time.Time
 		convoy string
+		Tweet  struct {
+			CreatedAt        string   `json:"created_at"`
+			DisplayTextRange []string `json:"display_text_range"`
+			EditInfo         struct {
+				Initial struct {
+					EditTweetIds   []string `json:"editTweetIds"`
+					EditableUntil  string   `json:"editableUntil"`
+					EditsRemaining string   `json:"editsRemaining"`
+					IsEditEligible bool     `json:"isEditEligible"`
+				} `json:"initial"`
+			} `json:"edit_info"`
+			Entities struct {
+				Hashtags []struct {
+					Indices []string `json:"indices"`
+					Text    string   `json:"text"`
+				} `json:"hashtags"`
+				Media []struct {
+					DisplayURL    string   `json:"display_url"`
+					ExpandedURL   string   `json:"expanded_url"`
+					ID            string   `json:"id"`
+					IdStr         string   `json:"id_str"`
+					Indices       []string `json:"indices"`
+					MediaURL      string   `json:"media_url"`
+					MediaUrlHttps string   `json:"media_url_https"`
+					Sizes         struct {
+						Large struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"large"`
+						Medium struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"medium"`
+						Small struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"small"`
+						Thumb struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"thumb"`
+					} `json:"sizes"`
+					Type string `json:"type"`
+					URL  string `json:"url"`
+				} `json:"media"`
+				Symbols []interface{} `json:"symbols"`
+				Urls    []struct {
+					DisplayURL  string   `json:"display_url"`
+					ExpandedURL string   `json:"expanded_url"`
+					Indices     []string `json:"indices"`
+					URL         string   `json:"url"`
+				} `json:"urls"`
+				UserMentions []interface{} `json:"user_mentions"`
+			} `json:"entities"`
+			ExtendedEntities struct {
+				Media []struct {
+					DisplayURL    string   `json:"display_url"`
+					ExpandedURL   string   `json:"expanded_url"`
+					ID            string   `json:"id"`
+					IdStr         string   `json:"id_str"`
+					Indices       []string `json:"indices"`
+					MediaURL      string   `json:"media_url"`
+					MediaUrlHttps string   `json:"media_url_https"`
+					Sizes         struct {
+						Large struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"large"`
+						Medium struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"medium"`
+						Small struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"small"`
+						Thumb struct {
+							H      string `json:"h"`
+							Resize string `json:"resize"`
+							W      string `json:"w"`
+						} `json:"thumb"`
+					} `json:"sizes"`
+					Type string `json:"type"`
+					URL  string `json:"url"`
+				} `json:"media"`
+			} `json:"extended_entities"`
+			FavoriteCount        string `json:"favorite_count"`
+			Favorited            bool   `json:"favorited"`
+			FullText             string `json:"full_text"`
+			ID                   string `json:"id"`
+			IdStr                string `json:"id_str"`
+			InReplyToScreenName  string `json:"in_reply_to_screen_name"`
+			InReplyToStatusID    string `json:"in_reply_to_status_id"`
+			InReplyToStatusIdStr string `json:"in_reply_to_status_id_str"`
+			InReplyToUserID      string `json:"in_reply_to_user_id"`
+			InReplyToUserIdStr   string `json:"in_reply_to_user_id_str"`
+			Lang                 string `json:"lang"`
+			PossiblySensitive    bool   `json:"possibly_sensitive"`
+			RetweetCount         string `json:"retweet_count"`
+			Retweeted            bool   `json:"retweeted"`
+			Source               string `json:"source"`
+			Truncated            bool   `json:"truncated"`
+		} `json:"tweet"`
 	}
 
 	var tweets []*Tweet
@@ -260,8 +371,8 @@ func importTwitter(username, source string) {
 	fd.Close()
 	tweetmap := make(map[string]*Tweet)
 	for _, t := range tweets {
-		t.date, _ = time.Parse("Mon Jan 02 15:04:05 -0700 2006", t.Created_at)
-		tweetmap[t.ID_str] = t
+		t.date, _ = time.Parse("Mon Jan 02 15:04:05 -0700 2006", t.Tweet.CreatedAt)
+		tweetmap[t.Tweet.IdStr] = t
 	}
 	sort.Slice(tweets, func(i, j int) bool {
 		return tweets[i].date.Before(tweets[j].date)
@@ -271,26 +382,33 @@ func importTwitter(username, source string) {
 		row := stmtFindXonk.QueryRow(user.ID, xid)
 		err := row.Scan(&id)
 		if err == nil {
+			log.Printf("id = %v", id)
 			return true
 		}
 		return false
 	}
-
+	log.Printf("importing %v tweets", len(tweets))
 	for _, t := range tweets {
-		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, t.ID_str)
+		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, t.Tweet.IdStr)
 		if havetwid(xid) {
 			continue
 		}
+
+		if t.Tweet.FavoriteCount == "0" || t.Tweet.FavoriteCount == "" {
+			log.Printf("skipping, unworthy tweet")
+			continue
+		}
+
 		what := "honk"
 		noise := ""
-		if parent := tweetmap[t.In_reply_to_status_id]; parent != nil {
+		if parent := tweetmap[t.Tweet.InReplyToStatusID]; parent != nil {
 			t.convoy = parent.convoy
 			what = "tonk"
 		} else {
-			t.convoy = "data:,acoustichonkytonk-" + t.ID_str
-			if t.In_reply_to_screen_name != "" {
+			t.convoy = "data:,acoustichonkytonk-" + t.Tweet.IdStr
+			if t.Tweet.InReplyToScreenName != "" {
 				noise = fmt.Sprintf("re: https://twitter.com/%s/status/%s\n\n",
-					t.In_reply_to_screen_name, t.In_reply_to_status_id)
+					t.Tweet.InReplyToScreenName, t.Tweet.InReplyToStatusID)
 				what = "tonk"
 			}
 		}
@@ -308,17 +426,17 @@ func importTwitter(username, source string) {
 			Public:   true,
 			Whofore:  2,
 		}
-		noise += t.Full_text
+		noise += t.Tweet.FullText
 		// unbelievable
 		noise = html.UnescapeString(noise)
-		for _, r := range t.Entities.Urls {
-			noise = strings.Replace(noise, r.Url, r.Expanded_url, -1)
+		for _, r := range t.Tweet.Entities.Urls {
+			noise = strings.Replace(noise, r.URL, r.ExpandedURL, -1)
 		}
-		for _, m := range t.Entities.Media {
-			u := m.Media_url
+		for _, m := range t.Tweet.Entities.Media {
+			u := m.MediaURL
 			idx := strings.LastIndexByte(u, '/')
 			u = u[idx+1:]
-			fname := fmt.Sprintf("%s/tweet_media/%s-%s", source, t.ID_str, u)
+			fname := fmt.Sprintf("%s/tweets_media/%s-%s", source, t.Tweet.IdStr, u)
 			data, err := ioutil.ReadFile(fname)
 			if err != nil {
 				elog.Printf("error reading media: %s", fname)
@@ -335,12 +453,13 @@ func importTwitter(username, source string) {
 				FileID: fileid,
 			}
 			honk.Donks = append(honk.Donks, donk)
-			noise = strings.Replace(noise, m.Url, "", -1)
+			noise = strings.Replace(noise, m.URL, "", -1)
 		}
-		for _, ht := range t.Entities.Hashtags {
+		for _, ht := range t.Tweet.Entities.Hashtags {
 			honk.Onts = append(honk.Onts, "#"+ht.Text)
 		}
 		honk.Noise = noise
-		savehonk(&honk)
+		err := savehonk(&honk)
+		log.Printf("honk saved %v -> %v", xid, err)
 	}
 }
