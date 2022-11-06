@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	notrand "math/rand"
 	"net/http"
 	"net/url"
@@ -1812,7 +1813,7 @@ func updateMe(username string) {
 func followme(user *WhatAbout, who string, name string, j junk.Junk) {
 	folxid, _ := j.GetString("id")
 
-	ilog.Printf("updating honker follow: %s %s", who, folxid)
+	log.Printf("updating honker follow: %s %s", who, folxid)
 
 	var x string
 	db := opendatabase()
