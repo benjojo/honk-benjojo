@@ -2238,6 +2238,8 @@ func servefile(w http.ResponseWriter, r *http.Request) {
 
 func robotsTxtHandler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "User-agent: *\n")
+	io.WriteString(w, "Allow: /\n")
+	io.WriteString(w, "Allow: /fp/\n")
 	io.WriteString(w, "Disallow: /a\n")
 	io.WriteString(w, "Disallow: /d/\n")
 	io.WriteString(w, "Disallow: /meme/\n")
@@ -2245,7 +2247,7 @@ func robotsTxtHandler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "Disallow: /o/\n")
 	io.WriteString(w, "Disallow: /help/\n")
 	for _, u := range allusers() {
-		fmt.Fprintf(w, "Disallow: /%s/%s/%s/\n", userSep, u.Username, honkSep)
+		fmt.Fprintf(w, "Allow: /%s/%s/%s/\n", userSep, u.Username, honkSep)
 	}
 }
 
