@@ -17,6 +17,7 @@ golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/ed25519
 # golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9
+## explicit
 golang.org/x/image/draw
 golang.org/x/image/math/f64
 golang.org/x/image/riff
@@ -50,3 +51,4 @@ humungus.tedunangst.com/r/webs/mz
 humungus.tedunangst.com/r/webs/rss
 humungus.tedunangst.com/r/webs/synlight
 humungus.tedunangst.com/r/webs/templates
+# humungus.tedunangst.com/r/webs/image => ./image

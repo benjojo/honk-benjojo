@@ -77,10 +77,6 @@ var rotateRightSigs = [][]byte{
 
 // Read an image and shrink it down to web scale
 func Vacuum(reader io.Reader, params Params) (*Image, error) {
-	var totalBuf bytes.Buffer
-
-	reader = io.TeeReader(reader, &totalBuf)
-
 	var tmpbuf bytes.Buffer
 	tee := io.TeeReader(reader, &tmpbuf)
 	conf, _, err := image.DecodeConfig(tee)
@@ -156,10 +152,8 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 	for {
 		switch format {
 		case "gif":
-			// format = "png"
-			// io.Copy(buf, io.MultiReader(bytes.NewReader(peek), bytes.NewReader(tmpFullbuf.Bytes())))
-			buf.Write(totalBuf.Bytes())
-			// png.Encode(&buf, img)
+			format = "png"
+			png.Encode(&buf, img)
 		case "png":
 			png.Encode(&buf, img)
 		case "webp":

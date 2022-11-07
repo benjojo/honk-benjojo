@@ -357,7 +357,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	}
 	what, _ := j.GetString("type")
 	obj, _ := j.GetString("object")
-	if what == "Like" || (what == "EmojiReact" && originate(obj) != serverName) {
+	if what == "EmojiReact" && originate(obj) != serverName {
 		return
 	}
 	who, _ := j.GetString("actor")
@@ -447,6 +447,12 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 			content, _ := j.GetString("content")
 			addReaction(user, obj, who, content)
 		}
+	case "Like":
+		obj, ok := j.GetString("object")
+		if ok {
+			log.Printf("%v obj was liked by %v - well done", obj, who)
+		}
+
 	default:
 		go xonksaver(user, j, origin)
 	}

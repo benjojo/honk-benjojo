@@ -924,11 +924,11 @@ func saveextras(tx *sql.Tx, h *ActivityPubActivity) error {
 	return nil
 }
 
-var baxonker sync.Mutex
+var reactionLock sync.Mutex
 
 func addReaction(user *WhatAbout, xid string, who, react string) {
-	baxonker.Lock()
-	defer baxonker.Unlock()
+	reactionLock.Lock()
+	defer reactionLock.Unlock()
 	h := getActivityPubActivity(user.ID, xid)
 	if h == nil {
 		return
