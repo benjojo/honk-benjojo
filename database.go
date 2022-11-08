@@ -1178,7 +1178,7 @@ func prepareStatements(db *sql.DB) {
 	stmtGetFileData = sqlMustPrepare(blobdb, "select media, content from filedata where xid = ?")
 	stmtFindXonk = sqlMustPrepare(db, "select honkid from honks where userid = ? and xid = ?")
 	stmtFindFile = sqlMustPrepare(db, "select fileid, xid from filemeta where url = ? and local = 1")
-	stmtUserByName = sqlMustPrepare(db, "select userid, username, displayname, about, pubkey, seckey, options from users where username = ? and userid > 0")
+	stmtUserByName = sqlMustPrepare(db, "select userid, username, displayname, about, pubkey, seckey, options from users where username = ?")
 	stmtUserByNumber = sqlMustPrepare(db, "select userid, username, displayname, about, pubkey, seckey, options from users where userid = ?")
 	stmtSaveDub = sqlMustPrepare(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta, folxid) values (?, ?, ?, ?, '', '', '', ?)")
 	stmtAddDoover = sqlMustPrepare(db, "insert into doovers (dt, tries, userid, rcpt, msg) values (?, ?, ?, ?, ?)")

@@ -2097,6 +2097,7 @@ func fingerlicker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stealthmode(user.ID, r) {
+		log.Printf("not serving webfinger due to user agent not having a link: %v", r.UserAgent())
 		http.NotFound(w, r)
 		return
 	}

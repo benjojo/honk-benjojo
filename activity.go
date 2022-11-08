@@ -134,6 +134,7 @@ var flightdeck = gate.NewSerializer()
 var signGets = true
 
 func junkGet(userid int64, url string, args junk.GetArgs) (junk.Junk, error) {
+	log.Printf("Outbound (junkGet) Request: %v", url)
 	client := http.DefaultClient
 	if args.Client != nil {
 		client = args.Client
@@ -167,12 +168,15 @@ func junkGet(userid int64, url string, args junk.GetArgs) (junk.Junk, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("http get status: %d", resp.StatusCode)
+		errorSample := make([]byte, 100)
+		io.ReadFull(resp.Body, errorSample)
+		return nil, fmt.Errorf("http get status: %d [%s]", resp.StatusCode, errorSample)
 	}
 	return junk.Read(resp.Body)
 }
 
 func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk, error) {
+	log.Printf("Outbound (GetJunkTimeout) Request: %v", url)
 	client := http.DefaultClient
 	if develMode {
 		client = develClient
@@ -189,6 +193,9 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 			Client:  client,
 		})
 		// log.Printf("debug junk %#v", j)
+		if err != nil {
+			log.Printf("Outbound (GetJunkTimeout) Request: %v Failed! %v", url, err)
+		}
 		return j, err
 	}
 	ji, err := flightdeck.Call(url, fn)
@@ -200,6 +207,7 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 }
 
 func fetchsome(url string) ([]byte, error) {
+	log.Printf("Outbound (fetchsome) Request: %v", url)
 	client := http.DefaultClient
 	if develMode {
 		client = develClient
