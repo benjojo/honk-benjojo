@@ -1533,7 +1533,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 			maxsize := 10000000
 			if len(data) > maxsize {
 				ilog.Printf("bad image: %s too much pdf: %d", err, len(data))
-				http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+				http.Error(w, "didn't like your PDF attachment", http.StatusUnsupportedMediaType)
 				return nil, err
 			}
 			media = ct
@@ -1541,17 +1541,29 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 			if name == "" {
 				name = xfiltrate() + ".pdf"
 			}
+		case "video/mp4":
+			maxsize := 10000000
+			if len(data) > maxsize {
+				ilog.Printf("bad video: %s too much mp4: %d", err, len(data))
+				http.Error(w, "didn't like your MP4 attachment", http.StatusUnsupportedMediaType)
+				return nil, err
+			}
+			media = ct
+			name = filehdr.Filename
+			if name == "" {
+				name = xfiltrate() + ".mp4"
+			}
 		default:
 			maxsize := 100000
 			if len(data) > maxsize {
 				ilog.Printf("bad image: %s too much text: %d", err, len(data))
-				http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+				http.Error(w, "didn't like your text attachment", http.StatusUnsupportedMediaType)
 				return nil, err
 			}
 			for i := 0; i < len(data); i++ {
 				if data[i] < 32 && data[i] != '\t' && data[i] != '\r' && data[i] != '\n' {
 					ilog.Printf("bad image: %s not text: %d", err, data[i])
-					http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+					http.Error(w, "didn't like your text? attachment", http.StatusUnsupportedMediaType)
 					return nil, err
 				}
 			}
