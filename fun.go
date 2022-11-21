@@ -338,7 +338,7 @@ func redoimages(honk *ActivityPubActivity) {
 	honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
 }
 
-func xcelerate(b []byte) string {
+func randomString(b []byte) string {
 	letters := "BCDFGHJKLMNPQRSTVWXYZbcdfghjklmnpqrstvwxyz1234567891234567891234"
 	for i, c := range b {
 		b[i] = letters[c&63]
@@ -350,13 +350,13 @@ func xcelerate(b []byte) string {
 func shortxid(xid string) string {
 	h := sha512.New512_256()
 	io.WriteString(h, xid)
-	return xcelerate(h.Sum(nil)[:20])
+	return randomString(h.Sum(nil)[:20])
 }
 
-func xfiltrate() string {
+func make18CharRandomString() string {
 	var b [18]byte
 	rand.Read(b[:])
-	return xcelerate(b[:])
+	return randomString(b[:])
 }
 
 func grapevine(mentions []Mention) []string {

@@ -1027,7 +1027,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *ActivityPubActiv
 				convoy = currenttid
 			}
 			if convoy == "" {
-				convoy = "data:,missing-" + xfiltrate()
+				convoy = "data:,missing-" + make18CharRandomString()
 				currenttid = convoy
 			}
 			xonk.Convoy = convoy
@@ -1062,7 +1062,7 @@ func rubadubdub(user *WhatAbout, req junk.Junk) {
 	actor, _ := req.GetString("actor")
 	j := junk.New()
 	j["@context"] = atContextString
-	j["id"] = user.URL + "/dub/" + xfiltrate()
+	j["id"] = user.URL + "/dub/" + make18CharRandomString()
 	j["type"] = "Accept"
 	j["actor"] = user.URL
 	j["to"] = actor
@@ -1885,7 +1885,7 @@ func followyou(user *WhatAbout, honkerid int64) {
 		elog.Printf("can't get honker xid: %s", err)
 		return
 	}
-	folxid := xfiltrate()
+	folxid := make18CharRandomString()
 	ilog.Printf("subscribing to %s", url)
 	_, err = db.Exec("update honkers set flavor = ?, folxid = ? where honkerid = ?", "presub", folxid, honkerid)
 	if err != nil {

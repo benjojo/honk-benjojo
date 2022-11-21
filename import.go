@@ -161,7 +161,7 @@ func importMastotoots(user *WhatAbout, source string) {
 					elog.Printf("error reading media: %s", fname)
 					continue
 				}
-				u := xfiltrate()
+				u := make18CharRandomString()
 				name := att.Name
 				desc := name
 				newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)

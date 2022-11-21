@@ -554,7 +554,7 @@ func savefileandxid(name string, desc string, url string, media string, local bo
 		row := stmtCheckFileData.QueryRow(hash)
 		err := row.Scan(&xid)
 		if err == sql.ErrNoRows {
-			xid = xfiltrate()
+			xid = make18CharRandomString()
 			switch media {
 			case "image/png":
 				xid += ".png"

@@ -290,7 +290,7 @@ func ping(user *WhatAbout, who string) {
 	j := junk.New()
 	j["@context"] = atContextString
 	j["type"] = "Ping"
-	j["id"] = user.URL + "/ping/" + xfiltrate()
+	j["id"] = user.URL + "/ping/" + make18CharRandomString()
 	j["actor"] = user.URL
 	j["to"] = who
 	ki := getPrivateKey(user.ID)
@@ -315,7 +315,7 @@ func pong(user *WhatAbout, who string, obj string) {
 	j := junk.New()
 	j["@context"] = atContextString
 	j["type"] = "Pong"
-	j["id"] = user.URL + "/pong/" + xfiltrate()
+	j["id"] = user.URL + "/pong/" + make18CharRandomString()
 	j["actor"] = user.URL
 	j["to"] = who
 	j["object"] = obj
@@ -1526,7 +1526,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 		if format == "jpeg" {
 			format = "jpg"
 		}
-		name = xfiltrate() + "." + format
+		name = make18CharRandomString() + "." + format
 	} else {
 		ct := http.DetectContentType(data)
 		switch ct {
@@ -1540,7 +1540,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 			media = ct
 			name = filehdr.Filename
 			if name == "" {
-				name = xfiltrate() + ".pdf"
+				name = make18CharRandomString() + ".pdf"
 			}
 		case "video/mp4":
 			maxsize := 10000000
@@ -1552,7 +1552,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 			media = ct
 			name = filehdr.Filename
 			if name == "" {
-				name = xfiltrate() + ".mp4"
+				name = make18CharRandomString() + ".mp4"
 			}
 		default:
 			maxsize := 100000
@@ -1571,7 +1571,7 @@ func submitdonk(w http.ResponseWriter, r *http.Request) (*Donk, error) {
 			media = "text/plain"
 			name = filehdr.Filename
 			if name == "" {
-				name = xfiltrate() + ".txt"
+				name = make18CharRandomString() + ".txt"
 			}
 		}
 	}
@@ -1631,7 +1631,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 		honk.What = "update"
 		honk.Format = format
 	} else {
-		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, xfiltrate())
+		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, make18CharRandomString())
 		what := "honk"
 		if rid != "" {
 			what = "tonk"
@@ -1692,7 +1692,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 	}
 
 	if convoy == "" {
-		convoy = "data:,electrichonkytonk-" + xfiltrate()
+		convoy = "data:,electrichonkytonk-" + make18CharRandomString()
 	}
 	butnottooloud(honk.Audience)
 	honk.Audience = stringArrayTrimUntilDupe(honk.Audience)
@@ -1857,7 +1857,7 @@ func submitchonk(w http.ResponseWriter, r *http.Request) {
 	target := r.FormValue("target")
 	format := "markdown"
 	dt := time.Now().UTC()
-	xid := fmt.Sprintf("%s/%s/%s", user.URL, "chonk", xfiltrate())
+	xid := fmt.Sprintf("%s/%s/%s", user.URL, "chonk", make18CharRandomString())
 
 	if !strings.HasPrefix(target, "https://") {
 		target = fullname(target, u.UserID)
