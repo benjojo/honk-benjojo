@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -2567,7 +2568,7 @@ func serve() {
 	}
 
 	mux := mux.NewRouter()
-	mux.NotFoundHandler = http.HandlerFunc(serveBenjojoCoUk)
+	mux.NotFoundHandler = http.HandlerFunc(serveStaticSiteInstead)
 	mux.Use(login.Checker)
 	mux.Handle("/api", login.TokenRequired(http.HandlerFunc(apihandler)))
 
@@ -2687,8 +2688,12 @@ func redirect(w http.ResponseWriter, req *http.Request) {
 		http.StatusTemporaryRedirect)
 }
 
-func serveBenjojoCoUk(w http.ResponseWriter, r *http.Request) {
-	http.FileServer(http.FS(os.DirFS("/var/www/benjojo.co.uk"))).ServeHTTP(w, r)
+var webRoot = flag.String("www.root", "/var/www/benjojo.co.uk", "Where you want to serve your actual website from (that isnt honk)")
+var tlsRoot = flag.String("tls.names", "benjojo.co.uk,www.benjojo.co.uk", "What to lets encrypt for")
+var tlsEmail = flag.String("tls.email", "www@benjojo.co.uk", "What email to tell let's encrypt")
+
+func serveStaticSiteInstead(w http.ResponseWriter, r *http.Request) {
+	http.FileServer(http.FS(os.DirFS(*webRoot))).ServeHTTP(w, r)
 }
 
 func setupSSLConfig(httpsSrv *http.Server, httpMux *http.ServeMux) (handler http.Handler) {
@@ -2704,19 +2709,20 @@ func getNormalACMEConfig(httpMux *http.ServeMux) (h func(*tls.ClientHelloInfo) (
 	// this is where cached certificates are stored
 	dataDir := "."
 	hostPolicy := func(ctx context.Context, host string) error {
-
-		if host == "benjojo.co.uk" || host == "www.benjojo.co.uk" {
-			return nil
+		for _, name := range strings.Split(*tlsRoot, ",") {
+			if name == host {
+				return nil
+			}
 		}
 
-		return fmt.Errorf("acme/autocert: only benjojo.co.uk or www.benjojo.co.uk host is allowed")
+		return fmt.Errorf("acme/autocert: only %v host is allowed", tlsRoot)
 	}
 
 	m := &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: hostPolicy,
 		Cache:      autocert.DirCache(dataDir),
-		Email:      "www@benjojo.co.uk",
+		Email:      *tlsEmail,
 	}
 
 	return m.GetCertificate, m.HTTPHandler(httpMux)
