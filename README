@@ -3,6 +3,9 @@ honk-benjojo
 
 Remix of honk. has the following improvments 
 
+0) / is a file server, rather than honk, access by /honk
+ (You can co-exist with your static site!), TLS is now supported
+ directly via golang's autocert (aka letsencrypt)
 1) Avatar support
 2) Twitter-like styles, less purple
 3) Source code has functions I've tried to understand renamed
