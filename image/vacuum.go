@@ -24,11 +24,16 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log"
 	"math"
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
+
+func init() {
+	log.Printf("Patched image libary running")
+}
 
 // A returned image in compressed format
 type Image struct {

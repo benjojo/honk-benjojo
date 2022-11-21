@@ -22,8 +22,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/benjojo/honk-benjojo/image"
 	"humungus.tedunangst.com/r/webs/gate"
-	"humungus.tedunangst.com/r/webs/image"
 )
 
 type Shrinker struct {

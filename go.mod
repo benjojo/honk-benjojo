@@ -1,4 +1,4 @@
-module humungus.tedunangst.com/r/honk
+module github.com/benjojo/honk-benjojo
 
 go 1.16
 
