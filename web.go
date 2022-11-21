@@ -2166,6 +2166,12 @@ func avatarWebHandler(w http.ResponseWriter, r *http.Request) {
 		easyAvatar(r, n, w)
 		return
 	}
+	if strings.Contains(xid, serverName) {
+		// Hack to avoid infini loop
+		easyAvatar(r, n, w)
+		return
+	}
+
 	imageBytes, err := fetchsome(info.AvatarURL)
 	if err != nil {
 		easyAvatar(r, n, w)
