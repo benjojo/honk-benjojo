@@ -1119,6 +1119,7 @@ var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteOneMeta, stmtDeleteSomeMeta, stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
 var stmtGetTracks *sql.Stmt
 var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
+var stmtGetTopDubbed *sql.Stmt
 
 func sqlMustPrepare(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
@@ -1204,4 +1205,5 @@ func prepareStatements(db *sql.DB) {
 	stmtSaveChonk = sqlMustPrepare(db, "insert into chonks (userid, xid, who, target, dt, noise, format) values (?, ?, ?, ?, ?, ?, ?)")
 	stmtLoadChonks = sqlMustPrepare(db, "select chonkid, userid, xid, who, target, dt, noise, format from chonks where userid = ? and dt > ? order by chonkid asc")
 	stmtGetChatters = sqlMustPrepare(db, "select distinct(target) from chonks where userid = ?")
+	stmtGetTopDubbed = sqlMustPrepare(db, `SELECT COUNT(*) as c,userid FROM honkers WHERE flavor = "dub" GROUP BY userid`)
 }
