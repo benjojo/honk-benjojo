@@ -165,6 +165,7 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 			// io.Copy(buf, io.MultiReader(bytes.NewReader(peek), bytes.NewReader(tmpFullbuf.Bytes())))
 			buf.Write(totalBuf.Bytes())
 			// png.Encode(&buf, img)
+			goto zoop
 		case "png":
 			png.Encode(&buf, img)
 		case "webp":
@@ -187,6 +188,7 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 		}
 		break
 	}
+zoop:
 	rv := &Image{
 		Data:   buf.Bytes(),
 		Format: format,
