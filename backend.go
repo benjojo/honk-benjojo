@@ -64,7 +64,7 @@ func shrinkit(data []byte) (*image.Image, error) {
 	var res ShrinkerResult
 	err = cl.Call("Shrinker.Shrink", &ShrinkerArgs{
 		Buf:    data,
-		Params: image.Params{LimitSize: 4200 * 4200, MaxWidth: 2048, MaxHeight: 2048},
+		Params: image.Params{LimitSize: 8000 * 8000, MaxWidth: 2048, MaxHeight: 2048},
 	}, &res)
 	if err != nil {
 		return nil, err
