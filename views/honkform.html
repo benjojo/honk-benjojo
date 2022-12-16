@@ -14,7 +14,7 @@
 <p id="donkdescriptor"><label for=donkdesc>description:</label><br>
 <input type="text" name="donkdesc" value="{{ .DonkDesc }}" autocomplete=off>
 {{ with .SavedPlace }}
-<p><button id=checkinbutton type=button onclick="fillcheckin()">checkin</button>
+<p><button id=checkinbutton type=button onclick="fillcheckin()">assassination coordinates</button>
 <div id=placedescriptor>
 	<p><label>name:</label><br><input type="text" name="placename" id=placenameinput value="{{ .Name }}">
 	<p><label>url:</label><br><input type="text" name="placeurl" id=placeurlinput value="{{ .Url }}">
@@ -22,7 +22,7 @@
 	<label>lon: </label><input type="text" size=9 name="placelong" id=placelonginput value="{{ .Longitude }}">
 </div>
 {{ else }}
-<p><button id=checkinbutton type=button onclick="fillcheckin()">checkin</button>
+<p><button id=checkinbutton type=button onclick="fillcheckin()">assassination coordinates</button>
 <div id=placedescriptor style="display: none">
 <p><label>name:</label><br><input type="text" name="placename" id=placenameinput value="">
 <p><label>url:</label><br><input type="text" name="placeurl" id=placeurlinput value="">
