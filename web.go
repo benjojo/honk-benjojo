@@ -2649,6 +2649,8 @@ func serve() {
 	GetSubrouter.HandleFunc("/home", homepage)
 	GetSubrouter.HandleFunc("/front", homepage)
 	GetSubrouter.HandleFunc("/events", homepage)
+	GetSubrouter.HandleFunc("/api/v1/instance", handleAPIInstance)
+	GetSubrouter.HandleFunc("/nodeinfo/2.0", handleNodeInfo)
 	GetSubrouter.HandleFunc("/robots.txt", robotsTxtHandler)
 	GetSubrouter.HandleFunc("/rss", showrss)
 	GetSubrouter.HandleFunc("/"+userSep+"/{name:[\\pL[:digit:]]+}", showuser)
