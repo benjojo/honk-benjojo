@@ -8,8 +8,8 @@ require (
 	github.com/mattn/go-runewidth v0.0.13
 	github.com/prometheus/client_golang v1.14.0
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+	golang.org/x/image v0.7.0
+	golang.org/x/net v0.9.0
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
 	humungus.tedunangst.com/r/webs v0.6.56
 )
