@@ -342,7 +342,7 @@ func redoimages(honk *ActivityPubActivity) {
 	honk.Donks = honk.Donks[:j]
 
 	honk.Noise = re_memes.ReplaceAllString(honk.Noise, "")
-	honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
+	// honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
 }
 
 func randomString(b []byte) string {
