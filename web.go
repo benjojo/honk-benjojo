@@ -221,7 +221,7 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 		}
 		desc := string(honk.HTML)
 		if t := honk.Time; t != nil {
-			desc += fmt.Sprintf(`<p>Time: %s`, t.StartTime.Local().Format("03:04PM EDT Mon Jan 02"))
+			desc += fmt.Sprintf(`<p>Time: %s`, t.StartTime.Local().Format("03:04PM MST Mon Jan 02"))
 			if t.Duration != 0 {
 				desc += fmt.Sprintf(`<br>Duration: %s`, t.Duration)
 			}
