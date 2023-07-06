@@ -1337,6 +1337,9 @@ var oldjonks = cache.New(cache.Options{Filler: func(xid string) ([]byte, bool) {
 	}
 	donksforhonks([]*ActivityPubActivity{honk})
 	_, j := jonkjonk(user, honk)
+	if j == nil {
+		return nil, false
+	}
 	j["@context"] = atContextString
 
 	return j.ToBytes(), true
