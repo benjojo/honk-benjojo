@@ -11,7 +11,7 @@ require (
 	golang.org/x/image v0.7.0
 	golang.org/x/net v0.9.0
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
-	humungus.tedunangst.com/r/webs v0.6.56
+	humungus.tedunangst.com/r/webs v0.6.62
 )
 
 require (

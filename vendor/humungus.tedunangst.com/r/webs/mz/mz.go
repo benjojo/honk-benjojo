@@ -36,8 +36,8 @@ var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
 var re_lister = regexp.MustCompile(`((^|\n)(\+|-).*)+\n?`)
 var re_tabler = regexp.MustCompile(`((^|\n)\|.*)+\n?`)
 var re_header = regexp.MustCompile(`(^|\n)(#+) (.*)\n?`)
-var re_hashes = regexp.MustCompile(`(?:^| |>)#[\pL\pN]*[\pL][\pL\pN_-]*`)
-var re_mentions = regexp.MustCompile(`@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]`)
+var re_hashes = regexp.MustCompile(`(?:^|[ \n>])#[\pL\pN]*[\pL][\pL\pN_-]*`)
+var re_mentions = regexp.MustCompile(`(^|[ \n])@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]\b`)
 
 var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
 
@@ -96,7 +96,20 @@ func (marker *Marker) Mark(s string) string {
 	if strings.Contains(s, "http") {
 		s = re_link.ReplaceAllStringFunc(s, linkreplacer)
 	}
-	s = re_zerolink.ReplaceAllString(s, `<a href="$2">$1</a>`)
+	s = re_zerolink.ReplaceAllStringFunc(s, func(a string) string {
+		m := re_zerolink.FindStringSubmatch(a)
+		url := m[2]
+		addparen := false
+		if strings.HasSuffix(url, ")") && strings.IndexByte(url, '(') == -1 {
+			url = url[:len(url)-1]
+			addparen = true
+		}
+		r := fmt.Sprintf(`<a href="%s">%s</a>`, url, m[1])
+		if addparen {
+			r += ")"
+		}
+		return r
+	})
 	if strings.Contains(s, "*") {
 		s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
 		s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
@@ -168,9 +181,6 @@ func (marker *Marker) Mark(s string) string {
 		return img
 	})
 
-	s = strings.Replace(s, "\n\n", "<p>", -1)
-	s = strings.Replace(s, "\n", "<br>", -1)
-
 	if marker.HashLinker != nil {
 		s = re_hashes.ReplaceAllStringFunc(s, func(o string) string {
 			p := ""
@@ -185,14 +195,27 @@ func (marker *Marker) Mark(s string) string {
 	}
 	if marker.AtLinker != nil {
 		s = re_mentions.ReplaceAllStringFunc(s, func(m string) string {
+			prefix := ""
+			if m[0] == ' ' || m[0] == '\n' {
+				prefix = m[:1]
+				m = m[1:]
+			}
+			tail := ""
+			if last := m[len(m)-1]; last == ' ' || last == '\n' || last == '.' {
+				tail = m[len(m)-1:]
+				m = m[:len(m)-1]
+			}
 			r := marker.AtLinker(m)
 			if r == "" {
-				return m
+				return prefix + m + tail
 			}
 			marker.Mentions = append(marker.Mentions, m)
-			return r
+			return prefix + r + tail
 		})
 	}
+
+	s = strings.Replace(s, "\n\n", "<p>", -1)
+	s = strings.Replace(s, "\n", "<br>", -1)
 
 	// now restore the code blocks
 	s = re_coder.ReplaceAllStringFunc(s, func(string) string {

@@ -173,6 +173,7 @@ func loginredirect(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		Secure:   securecookies,
 		HttpOnly: true,
+		SameSite: samesitecookie,
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -184,6 +185,7 @@ var stmtUserName, stmtUserAuth, stmtUpdateUser, stmtSaveAuth, stmtDeleteAuth *sq
 var stmtUpdateExpiry, stmtDeleteOneAuth *sql.Stmt
 var csrfkey string
 var securecookies bool
+var samesitecookie http.SameSite
 
 func getconfig(db *sql.DB, key string, value interface{}) error {
 	row := db.QueryRow("select value from config where key = ?", key)
@@ -195,9 +197,10 @@ func getconfig(db *sql.DB, key string, value interface{}) error {
 }
 
 type InitArgs struct {
-	Db       *sql.DB
-	Logger   *log.Logger
-	Insecure bool
+	Db             *sql.DB
+	Logger         *log.Logger
+	Insecure       bool
+	SameSiteStrict bool
 }
 
 // Init. Must be called with the database.
@@ -241,6 +244,9 @@ func Init(args InitArgs) {
 		logger.Panic(err)
 	}
 	securecookies = !args.Insecure
+	if args.SameSiteStrict {
+		samesitecookie = http.SameSiteStrictMode
+	}
 	getconfig(db, "csrfkey", &csrfkey)
 }
 
@@ -418,6 +424,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 			Value:    auth,
 			MaxAge:   maxage,
 			Secure:   securecookies,
+			SameSite: samesitecookie,
 			HttpOnly: true,
 		})
 	}
@@ -540,6 +547,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 		Value:    auth,
 		MaxAge:   maxage,
 		Secure:   securecookies,
+		SameSite: samesitecookie,
 		HttpOnly: true,
 	})
 

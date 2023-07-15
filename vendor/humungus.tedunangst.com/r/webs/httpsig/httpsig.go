@@ -108,7 +108,10 @@ func sb64sha256(content []byte) string {
 
 // Sign a request and add Signature header
 func SignRequest(keyname string, key PrivateKey, req *http.Request, content []byte) {
-	headers := []string{"(request-target)", "date", "host", "content-type", "digest"}
+	headers := []string{"(request-target)", "date", "host"}
+	if strings.ToLower(req.Method) != "get" {
+		headers = append(headers, "content-type", "digest")
+	}
 	var stuff []string
 	for _, h := range headers {
 		var s string
@@ -193,9 +196,11 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 	}
 	required := make(map[string]bool)
 	required["(request-target)"] = true
-	required["host"] = true
-	required["digest"] = true
 	required["date"] = true
+	required["host"] = true
+	if strings.ToLower(req.Method) != "get" {
+		required["digest"] = true
+	}
 	headers := strings.Split(heads, " ")
 	var stuff []string
 	for _, h := range headers {
@@ -264,7 +269,6 @@ func DecodeKey(s string) (pri PrivateKey, pub PublicKey, err error) {
 			switch k.(type) {
 			case *rsa.PublicKey:
 				pub.Type = RSA
-
 			case ed25519.PublicKey:
 				pub.Type = Ed25519
 			}
@@ -273,12 +277,12 @@ func DecodeKey(s string) (pri PrivateKey, pub PublicKey, err error) {
 		var k interface{}
 		k, err = x509.ParsePKCS8PrivateKey(block.Bytes)
 		if err == nil {
-			pub.Key = k
+			pri.Key = k
 			switch k.(type) {
 			case *rsa.PrivateKey:
-				pub.Type = RSA
+				pri.Type = RSA
 			case ed25519.PrivateKey:
-				pub.Type = Ed25519
+				pri.Type = Ed25519
 			}
 		}
 	case "RSA PUBLIC KEY":
