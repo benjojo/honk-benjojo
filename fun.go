@@ -690,6 +690,9 @@ func savingthrow(keyname string) {
 func keymatch(keyname string, actor string) string {
 	hash := strings.IndexByte(keyname, '#')
 	if hash == -1 {
+		// bodge in support for GoToSocial, which uses /main-key instead
+		keyname = strings.TrimSuffix(keyname, "/main-key")
+
 		hash = len(keyname)
 	}
 	owner := keyname[0:hash]
