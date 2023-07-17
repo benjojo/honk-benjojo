@@ -1778,13 +1778,14 @@ func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 			donkxid = d.XID
 		}
 	} else {
-		xid := donkxid
-		url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
-		donk := finddonk(url)
-		if donk != nil {
-			honk.Donks = append(honk.Donks, donk)
-		} else {
-			ilog.Printf("can't find file: %s", xid)
+		for _, xid := range r.Form["donkxid"] {
+			url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
+			donk := finddonk(url)
+			if donk != nil {
+				honk.Donks = append(honk.Donks, donk)
+			} else {
+				ilog.Printf("can't find file: %s", xid)
+			}
 		}
 	}
 	memetize(honk)
