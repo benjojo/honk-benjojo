@@ -2219,7 +2219,8 @@ func avatarWebHandler(w http.ResponseWriter, r *http.Request) {
 	// Else, we fetch it now
 	xid := n
 	// j, err := GetJunk(u.UserID, xid)
-	j, err := GetJunk(0, xid)
+	j, err := GetJunk(1, /*Terrible hack, this hard codes avatar fetchs to be done by the first user of the instance*/
+		xid)
 	if err != nil {
 		easyAvatar(r, n, w)
 		return
