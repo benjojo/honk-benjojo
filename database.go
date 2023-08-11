@@ -300,8 +300,12 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*ActivityPubActivi
 	queries = append(queries, "honks.userid = ?")
 	params = append(params, userid)
 
-	terms := strings.Split(q, " ")
+	terms := strings.Fields(q)
 	for _, t := range terms {
+		if strings.HasPrefix(t, "alt:") {
+			return gethonksbyaltsearch(userid, t[4:], wanted) // hehe bye!
+		}
+
 		if t == "" {
 			continue
 		}
@@ -345,6 +349,20 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*ActivityPubActivi
 	honks := getsomehonks(rows, err)
 	return honks
 }
+
+func gethonksbyaltsearch(userid int64, q string, wanted int64) []*ActivityPubActivity {
+	query := `select honks.honkid, honks.userid, username, what, honker, oonker, honks.xid, honks.rid, honks.dt, honks.url, honks.audience, honks.noise, honks.precis, honks.format, honks.convoy, whofore, flags
+		from honks, filemeta, donks
+		join users on honks.userid = users.userid
+		where filemeta.description LIKE ? AND donks.honkid = honks.honkid AND donks.fileid = filemeta.fileid order by honks.honkid desc limit 250`
+
+	p := "%" + q + "%"
+	rows, err := opendatabase().Query(query, p)
+	honks := getsomehonks(rows, err)
+
+	return honks
+}
+
 func gethonksbyontology(userid int64, name string, wanted int64) []*ActivityPubActivity {
 	rows, err := stmtHonksByOntology.Query(wanted, name, userid, userid)
 	honks := getsomehonks(rows, err)
