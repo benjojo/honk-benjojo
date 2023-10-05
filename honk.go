@@ -158,7 +158,12 @@ const (
 	flagIsUntagged = 8
 	flagIsReacted  = 16
 	flagIsWonked   = 32
+	flagIsBSkyd    = 128
 )
+
+func (honk *ActivityPubActivity) IsBSkyd() bool {
+	return honk.Flags&flagIsBSkyd != 0
+}
 
 func (honk *ActivityPubActivity) IsAcked() bool {
 	return honk.Flags&flagIsAcked != 0

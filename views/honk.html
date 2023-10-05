@@ -127,6 +127,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ else }}
 <button onclick="return flogit(this, 'ack', '{{ .Honk.XID }}');">ack</button>
 {{ end }}
+{{ if .Honk.IsBSkyd }}
+<button onclick="return flogit(this, 'debsky', '{{ .Honk.XID }}');">unbluesky</button>
+{{ else }}
+<button onclick="return flogit(this, 'bsky', '{{ .Honk.XID }}');">bluesky</button>
+{{ end }}
 {{ if .Honk.IsSaved }}
 <button onclick="return flogit(this, 'unsave', '{{ .Honk.XID }}');">unsave</button>
 {{ else }}

@@ -1439,6 +1439,29 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if wherefore == "bsky" {
+		xonk := getActivityPubActivity(userinfo.UserID, what)
+		if xonk != nil && !xonk.IsBSkyd() {
+			_, err := stmtUpdateFlags.Exec(flagIsBSkyd, xonk.ID)
+			if err != nil {
+				elog.Printf("error debsky: %s", err)
+			}
+		}
+		goBlue(what, user)
+		return
+	}
+
+	if wherefore == "debsky" {
+		xonk := getActivityPubActivity(userinfo.UserID, what)
+		if xonk != nil && xonk.IsBSkyd() {
+			_, err := stmtClearFlags.Exec(flagIsBSkyd, xonk.ID)
+			if err != nil {
+				elog.Printf("error deacking: %s", err)
+			}
+		}
+		return
+	}
+
 	if wherefore == "bonk" {
 		user, _ := getUserBio(userinfo.Username)
 		bonkit(what, user)
