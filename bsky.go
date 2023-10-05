@@ -56,6 +56,7 @@ func goBlue(xid string, user *WhatAbout) {
 
 	// Initialize Client
 	c := client.New("https://bsky.social", "https://plc.directory")
+	c.AutoRefreshAuth = false
 
 	// Authenticate
 	err = c.Login(ctx, fetchDirtyConfigStringYolo("benjojo.bsky.social"), fetchDirtyConfigStringYolo("bskypassword"))
