@@ -1817,13 +1817,25 @@ func formtodonk(w http.ResponseWriter, r *http.Request, filehdr *multipart.FileH
 			maxsize := 10000000
 			if len(data) > maxsize {
 				ilog.Printf("bad image: %s too much pdf: %d", err, len(data))
-				http.Error(w, "didn't like your attachment", http.StatusUnsupportedMediaType)
+				http.Error(w, "didn't like your PDF attachment", http.StatusUnsupportedMediaType)
 				return nil, err
 			}
 			media = ct
 			name = filehdr.Filename
 			if name == "" {
 				name = make18CharRandomString() + ".pdf"
+			}
+		case "video/mp4":
+			maxsize := 10000000
+			if len(data) > maxsize {
+				ilog.Printf("bad video: %s too much mp4: %d", err, len(data))
+				http.Error(w, "didn't like your MP4 attachment", http.StatusUnsupportedMediaType)
+				return nil, err
+			}
+			media = ct
+			name = filehdr.Filename
+			if name == "" {
+				name = make18CharRandomString() + ".mp4"
 			}
 		default:
 			maxsize := 100000
