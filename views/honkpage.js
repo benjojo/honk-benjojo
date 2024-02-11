@@ -1,10 +1,16 @@
+var csrftoken = ""
+var honksforpage = { }
+var curpagestate = { name: "", arg : "" }
+var tophid = { }
+var servermsgs = { }
+
 function encode(hash) {
-        var s = []
-        for (var key in hash) {
-                var val = hash[key]
-                s.push(escape(key) + "=" + escape(val))
-        }
-        return s.join("&")
+	var s = []
+	for (var key in hash) {
+		var val = hash[key]
+		s.push(encodeURIComponent(key) + "=" + encodeURIComponent(val))
+	}
+	return s.join("&")
 }
 function post(url, data) {
 	var x = new XMLHttpRequest()
@@ -76,7 +82,7 @@ var lehonkbutton = document.getElementById("honkingtime")
 function oldestnewest(btn) {
 	var els = document.getElementsByClassName("glow")
 	if (els.length) {
-		els[els.length-1].scrollIntoView()
+		els[els.length-1].scrollIntoView({ behavior: "smooth" })
 	}
 }
 function removeglow() {
@@ -125,7 +131,7 @@ function fillinhonks(xhr, glowit) {
 	var holder = honksonpage.children[0]
 	var lenhonks = honks.length
 	for (var i = honks.length; i > 0; i--) {
-		var h = honks[i-1]
+		var h = honks[frontload ? i-1 : 0]
 		if (glowit)
 			h.classList.add("glow")
 		if (frontload) {
@@ -133,7 +139,6 @@ function fillinhonks(xhr, glowit) {
 		} else {
 			holder.append(h)
 		}
-			
 	}
 	relinklinks()
 	return lenhonks
@@ -206,7 +211,7 @@ function switchtopage(name, arg) {
 	curpagestate.name = name
 	curpagestate.arg = arg
 	// get the holder for the target page
-	var stash = name + ":" + arg
+	stash = name + ":" + arg
 	holder = honksforpage[stash]
 	if (holder) {
 		honksonpage.prepend(holder)
@@ -220,7 +225,7 @@ function switchtopage(name, arg) {
 		var args = hydrargs()
 		get("/hydra?" + encode(args), function(xhr) {
 			if (xhr.status == 200) {
-				var lenhonks = fillinhonks(xhr, false)
+				fillinhonks(xhr, false)
 			} else {
 				refreshupdate(" status: " + xhr.status)
 			}
@@ -268,25 +273,72 @@ function relinklinks() {
 		el.onclick = pageswitcher("honker", xid)
 		el.classList.remove("honkerlink")
 	}
+
+	els = document.querySelectorAll("#honksonpage article button")
+	els.forEach(function(el) {
+		var honk = el.closest("article")
+		var convoy = honk.dataset.convoy
+		var hname = honk.dataset.hname
+		var xid = honk.dataset.xid
+		var id = Number(honk.dataset.id)
+
+		if (!(id > 0)) {
+			console.error("could not determine honk id")
+			return
+		}
+
+		if (el.classList.contains("unbonk")) {
+			el.onclick = function() {
+				unbonk(el, xid);
+			}
+		} else if (el.classList.contains("bonk")) {
+			el.onclick = function() {
+				bonk(el, xid)
+			}
+		} else if (el.classList.contains("honkback")) {
+			el.onclick = function() {
+				return showhonkform(el, xid, hname)
+			}
+		} else if (el.classList.contains("mute")) {
+			el.onclick = function() {
+				muteit(el, convoy);
+			}
+		} else if (el.classList.contains("evenmore")) {
+			var more = document.querySelector("#evenmore"+id);
+			el.onclick = function() {
+				more.classList.toggle("hide");
+			}
+		} else if (el.classList.contains("zonk")) {
+			el.onclick = function() {
+				zonkit(el, xid);
+			}
+		} else if (el.classList.contains("flogit-deack")) {
+			el.onclick = function() {
+				flogit(el, "deack", xid);
+			}
+		} else if (el.classList.contains("flogit-ack")) {
+			el.onclick = function() {
+				flogit(el, "ack", xid);
+			}
+		} else if (el.classList.contains("flogit-unsave")) {
+			el.onclick = function() {
+				flogit(el, "unsave", xid);
+			}
+		} else if (el.classList.contains("flogit-save")) {
+			el.onclick = function() {
+				flogit(el, "save", xid);
+			}
+		} else if (el.classList.contains("flogit-untag")) {
+			el.onclick = function() {
+				flogit(el, "untag", xid);
+			}
+		} else if (el.classList.contains("flogit-react")) {
+			el.onclick = function() {
+				flogit(el, "react", xid);
+			}
+		}
+	})
 }
-(function() {
-	var el = document.getElementById("homelink")
-	el.onclick = pageswitcher("home", "")
-	el = document.getElementById("atmelink")
-	el.onclick = pageswitcher("atme", "")
-	el = document.getElementById("firstlink")
-	el.onclick = pageswitcher("first", "")
-	el = document.getElementById("savedlink")
-	el.onclick = pageswitcher("saved", "")
-	el = document.getElementById("longagolink")
-	el.onclick = pageswitcher("longago", "")
-	relinklinks()
-	window.onpopstate = statechanger
-	history.replaceState(curpagestate, "some title", "")
-})();
-(function() {
-	hideelement("donkdescriptor")
-})();
 function showhonkform(elem, rid, hname) {
 	var form = lehonkform
 	form.style = "display: block"
@@ -299,6 +351,7 @@ function showhonkform(elem, rid, hname) {
 		elem.insertAdjacentElement('afterend', form)
 	}
 	var ridinput = document.getElementById("ridinput")
+	var honknoise = document.getElementById("honknoise")
 	if (rid) {
 		ridinput.value = rid
 		if (hname) {
@@ -312,7 +365,7 @@ function showhonkform(elem, rid, hname) {
 	}
 	var updateinput = document.getElementById("updatexidinput")
 	updateinput.value = ""
-	document.getElementById("honknoise").focus()
+	honknoise.focus()
 	return false
 }
 function cancelhonking() {
@@ -331,13 +384,13 @@ function hideelement(el) {
 	if (!el) return
 	el.style.display = "none"
 }
-function updatedonker() {
-	var el = document.getElementById("donker")
+function updatedonker(ev) {
+	var el = ev.target.parentElement
 	el.children[1].textContent = el.children[0].value.slice(-20)
-	var el = document.getElementById("donkdescriptor")
-	el.style.display = ""
-	var el = document.getElementById("saveddonkxid")
+	el = el.nextSibling
 	el.value = ""
+	el = el.parentElement.nextSibling
+	el.style.display = ""
 }
 var checkinprec = 100.0
 var gpsoptions = {
@@ -358,8 +411,167 @@ function fillcheckin() {
 			gpsoptions.timeout = 2000
 		}, function(err) {
 			showelement("placedescriptor")
-			el = document.getElementById("placenameinput")
+			var el = document.getElementById("placenameinput")
 			el.value = err.message
 		}, gpsoptions)
 	}
 }
+
+function scrollnexthonk() {
+	var honks = document.getElementsByClassName("honk");
+	for (var i = 0; i < honks.length; i++) {
+		var h = honks[i];
+		var b = h.getBoundingClientRect();
+		if (b.top > 1.0) {
+			h.scrollIntoView()
+			var a = h.querySelector(".actions summary")
+			if (a) a.focus({ preventScroll: true })
+			break
+		}
+	}
+}
+
+function scrollprevioushonk() {
+	var honks = document.getElementsByClassName("honk");
+	for (var i = 1; i < honks.length; i++) {
+		var b = honks[i].getBoundingClientRect();
+		if (b.top > -1.0) {
+			honks[i-1].scrollIntoView()
+			var a = honks[i-1].querySelector(".actions summary")
+			if (a) a.focus({ preventScroll: true })
+			break
+		}
+	}
+}
+
+function hotkey(e) {
+	if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+		return
+	if (e.ctrlKey || e.altKey)
+		return
+
+	switch (e.code) {
+	case "KeyR":
+		refreshhonks(document.getElementById("honkrefresher"));
+		break;
+	case "KeyS":
+		oldestnewest(document.getElementById("newerscroller"));
+		break;
+	case "KeyJ":
+		scrollnexthonk();
+		break;
+	case "KeyK":
+		scrollprevioushonk();
+		break;
+	case "KeyM":
+		var menu = document.getElementById("topmenu")
+		if (!menu.open) {
+			menu.open = true
+			menu.querySelector("a").focus()
+		} else {
+			menu.open = false
+		}
+		break
+	case "Escape":
+		var menu = document.getElementById("topmenu")
+		menu.open = false
+		break
+	case "Slash":
+		document.getElementById("topmenu").open = true
+		document.getElementById("searchbox").focus()
+		e.preventDefault()
+		break
+	}
+}
+
+document.addEventListener("keydown", hotkey)
+
+function addemu(elem) {
+	const data = elem.alt
+	const box = document.getElementById("honknoise");
+	box.value += data;
+}
+function loademus() {
+	var div = document.getElementById("emupicker")
+	var request = new XMLHttpRequest()
+	request.open('GET', '/emus')
+	request.onload = function() {
+		div.innerHTML = request.responseText
+		div.querySelectorAll(".emu").forEach(function(el) {
+			el.onclick = function() {
+				addemu(el)
+			}
+		})
+	}
+	if (div.style.display === "none") {
+		div.style.display = "block";
+	} else {
+		div.style.display = "none";
+	}
+	request.send()
+}
+
+// init
+(function() {
+	var me = document.currentScript;
+	csrftoken = me.dataset.csrf
+	curpagestate.name = me.dataset.pagename
+	curpagestate.arg = me.dataset.pagearg
+	tophid[curpagestate.name + ":" + curpagestate.arg] = me.dataset.tophid
+	servermsgs[curpagestate.name + ":" + curpagestate.arg] = me.dataset.srvmsg
+
+	var el = document.getElementById("homelink")
+	el.onclick = pageswitcher("home", "")
+	el = document.getElementById("atmelink")
+	el.onclick = pageswitcher("atme", "")
+	el = document.getElementById("firstlink")
+	el.onclick = pageswitcher("first", "")
+	el = document.getElementById("savedlink")
+	el.onclick = pageswitcher("saved", "")
+	el = document.getElementById("longagolink")
+	el.onclick = pageswitcher("longago", "")
+
+	var totop = document.querySelector(".nophone")
+	if (totop) {
+		totop.onclick = function() {
+			window.scrollTo(0,0)
+		}
+	}
+
+	var refreshbox = document.getElementById("refreshbox")
+	if (refreshbox) {
+		refreshbox.querySelectorAll("button").forEach(function(el) {
+			if (el.classList.contains("refresh")) {
+				el.onclick = function() {
+					refreshhonks(el)
+				}
+			} else if (el.classList.contains("scrolldown")) {
+				el.onclick = function() {
+					oldestnewest(el)
+				}
+			}
+		})
+
+		if (me.dataset.srvmsg == "one honk maybe more") {
+			hideelement(refreshbox)
+		}
+	}
+
+	var td = document.getElementById("timedescriptor")
+	document.getElementById("addtimebutton").onclick = function() {
+		td.classList.toggle("hide")
+	}
+	document.getElementById("honkingtime").onclick = function() {
+		return showhonkform()
+	}
+	document.getElementById("checkinbutton").onclick = fillcheckin
+	document.getElementById("emuload").onclick = loademus
+	document.querySelector("#donker input").onchange = updatedonker
+	document.querySelector("button[name=cancel]").onclick = cancelhonking
+
+	relinklinks()
+	window.onpopstate = statechanger
+	history.replaceState(curpagestate, "some title", "")
+
+	hideelement("donkdescriptor")
+})();

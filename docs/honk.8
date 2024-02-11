@@ -38,10 +38,12 @@ Make sure to pass the Host header, if necessary (as for nginx).
 .Bd -literal -offset indent
 proxy_set_header Host $http_host;
 .Ed
+.Pp
+FastCGI can be used by prefixing the listen address with "fcgi:".
 .Ss Build
 Building
 .Nm
-requires a go compiler 1.13 and libsqlite.
+requires a go compiler 1.18 and libsqlite.
 On
 .Ox
 this is the go and sqlite3 packages.
@@ -142,6 +144,11 @@ command.
 Users may be deleted with the
 .Ic deluser Ar username
 command.
+.Pp
+Follow and unfollow requests can be sent via command line with
+.Ic follow Ar username Ar url
+and
+.Ic unfollow Ar username Ar url .
 .Ss Maintenance
 The database may grow large over time.
 The
@@ -149,6 +156,10 @@ The
 command exists to purge old external data, by default 30 days.
 This removes unreferenced, unsaved posts and attachments.
 It does not remove any original content.
+This will not immediately reduce the size of the database, but frees space
+for future use.
+A vacuum may be performed manually if necessary, but will require more time
+and additional disk space.
 .Pp
 Backups may be performed by running
 .Ic backup dirname .
@@ -185,9 +196,12 @@ and templates are reloaded every request.
 Data may be imported and converted from other services using the
 .Ic import
 command.
-Currently supports Mastodon and Twitter exported data.
+Currently supports Honk, Mastodon, Twitter, and Instagram exported data.
 Posts are imported and backdated to appear as old honks.
 The Mastodon following list is imported, but must be refollowed.
+.Pp
+To prepare a Honk data archive, extract the export.zip file.
+.Dl ./honk import username honk source-directory
 .Pp
 To prepare a Mastodon data archive, extract the archive-longhash.tar.gz file.
 .Dl ./honk import username mastodon source-directory
@@ -196,6 +210,16 @@ To prepare a Twitter data archive, extract the twitter-longhash.zip file.
 After unzipping the data archive, navigate to the tweet_media directory
 and unzip any zip files contained within.
 .Dl ./honk import username twitter source-directory
+.Pp
+To prepare an Instagram data archive, extract the igusername.zip file.
+.Dl ./honk import username instagram source-directory
+.Ss Export
+User data may be exported to a zip archive using the
+.Ic export
+command.
+This will export the user's outbox and inbox in ActivityPub json format,
+along with associated media.
+.Dl ./honk export username zipname
 .Ss Advanced Options
 Advanced configuration values may be set by running the
 .Ic setconfig Ar key value
@@ -251,13 +275,13 @@ password: OxychromaticBlowfishSwatDynamite
 listen address: /var/www/honk.sock
 server name: honk.example.com
 honk-v98> ./honk -datadir ../honkdata admin
-honk-v98> date; ./honk -datadir ../honkdata >> log 2>&1
+honk-v98> date; ./honk -log honk.log -datadir ../honkdata
 .Ed
 .Pp
-The views directory includes a sample pleroma.css to change color scheme.
+The views directory includes a sample mastodon.css to change color scheme.
 .Bd -literal -offset indent
 honk-v98> mkdir ../honkdata/views
-honk-v98> cp views/pleroma.css ../honkdata/views/local.css
+honk-v98> cp views/mastodon.css ../honkdata/views/local.css
 .Ed
 .Pp
 Upgrade to the next version.
@@ -268,7 +292,7 @@ datadir> cd ../honk-v99
 honk-v99> make
 honk-v99> ./honk -datadir ../honkdata upgrade
 honk-v99> ./honk -datadir ../honkdata cleanup
-honk-v99> date; ./honk -datadir ../honkdata >> log 2>&1
+honk-v99> date; ./honk -log honk.log -datadir ../honkdata
 .Ed
 .Sh ENVIRONMENT
 Image processing and scaling requires considerable memory.

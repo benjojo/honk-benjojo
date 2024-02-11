@@ -18,8 +18,12 @@ Honk Filtering and Censorship System
 <input tabindex=1 type="text" name="actor" value="" autocomplete=off>
 <p><span><label class=button for="incaud">include audience:
 <input tabindex=1 type="checkbox" id="incaud" name="incaud" value="yes"><span></span></label></span>
+<span><label class=button for="unknowns">only unknowns:
+<input tabindex=1 type="checkbox" id="unknowns" name="unknowns" value="yes"><span></span></label></span>
 <p><label for="filttext">text matches:</label><br>
 <input tabindex=1 type="text" name="filttext" value="" autocomplete=off>
+<p><span><label class=button for="isreply">is reply:
+<input tabindex=1 type="checkbox" id="isreply" name="isreply" value="yes"><span></span></label></span>
 <p><span><label class=button for="isannounce">is announce:
 <input tabindex=1 type="checkbox" id="isannounce" name="isannounce" value="yes"><span></span></label></span>
 <p><label for="announceof">announce of:</label><br>
@@ -53,7 +57,8 @@ Honk Filtering and Censorship System
 <p>Name: {{ .Name }}
 {{ with .Notes }}<p>Notes: {{ . }}{{ end }}
 <p>Date: {{ .Date.Format "2006-01-02" }}
-{{ with .Actor }}<p>Who: {{ . }}{{ end }} {{ with .IncludeAudience }} (inclusive) {{ end }}
+{{ with .Actor }}<p>Who: {{ . }}{{ end }}{{ if .IncludeAudience }} (inclusive){{ end }}{{ if .OnlyUnknowns }} (unknowns){{ end }}
+{{ if .IsReply }}<p>Reply: y{{ end }}
 {{ if .IsAnnounce }}<p>Announce: {{ .AnnounceOf }}{{ end }}
 {{ with .Text }}<p>Text: {{ . }}{{ end }}
 <p>Actions: {{ range .Actions }} {{ . }} {{ end }}

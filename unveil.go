@@ -1,6 +1,3 @@
-//go:build openbsd
-// +build openbsd
-
 //
 // Copyright (c) 2019 Ted Unangst <tedu@tedunangst.com>
 //
@@ -18,53 +15,15 @@
 
 package main
 
-/*
-#include <stdlib.h>
-#include <unistd.h>
-*/
-import "C"
-
 import (
-	"fmt"
-	"unsafe"
+	"humungus.tedunangst.com/r/gonix"
 )
 
-func Unveil(path string, perms string) error {
-	cpath := C.CString(path)
-	defer C.free(unsafe.Pointer(cpath))
-	cperms := C.CString(perms)
-	defer C.free(unsafe.Pointer(cperms))
-
-	rv, err := C.unveil(cpath, cperms)
-	if rv != 0 {
-		return fmt.Errorf("unveil(%s, %s) failure (%d)", path, perms, err)
+func securitizebackend() {
+	gonix.UnveilEnd()
+	promises := "stdio unix"
+	err := gonix.Pledge(promises)
+	if err != nil {
+		elog.Fatalf("pledge(%s) failure (%d)", promises, err)
 	}
-	return nil
-}
-
-func Pledge(promises string) error {
-	cpromises := C.CString(promises)
-	defer C.free(unsafe.Pointer(cpromises))
-
-	rv, err := C.pledge(cpromises, nil)
-	if rv != 0 {
-		return fmt.Errorf("pledge(%s) failure (%d)", promises, err)
-	}
-	return nil
-}
-
-func init() {
-	preservehooks = append(preservehooks, func() {
-		Unveil("/etc/ssl", "r")
-		if viewDir != dataDir {
-			Unveil(viewDir, "r")
-		}
-		Unveil(dataDir, "rwc")
-		C.unveil(nil, nil)
-		Pledge("stdio rpath wpath cpath flock dns inet unix")
-	})
-	backendhooks = append(backendhooks, func() {
-		C.unveil(nil, nil)
-		Pledge("stdio unix")
-	})
 }

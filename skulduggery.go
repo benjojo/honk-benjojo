@@ -29,6 +29,9 @@ func demoji(s string) string {
 
 	zw := false
 	for _, c := range s {
+		if c == '\n' {
+			continue
+		}
 		if runewidth.RuneWidth(c) == 0 {
 			zw = true
 			break

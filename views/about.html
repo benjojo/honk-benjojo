@@ -3,12 +3,12 @@
 <div class="info">
 {{ .AboutMsg }}
 <p>
-<table style="font-size:0.8em">
+<table class="font08em">
 <tbody>
-<tr><td>version:<td style="text-align:right">{{ .HonkVersion }}
-<tr><td>memory:<td style="text-align:right">{{ printf "%.02f" .Sensors.Memory }}MB
-<tr><td>uptime:<td style="text-align:right">{{ printf "%.02f" .Sensors.Uptime }}s
-<tr><td>cputime:<td style="text-align:right">{{ printf "%.02f" .Sensors.CPU }}s
+<tr><td>version:<td class="text-right">{{ .HonkVersion }}
+<tr><td>memory:<td class="text-right">{{ printf "%.02f" .Sensors.Memory }}MB
+<tr><td>uptime:<td class="text-right">{{ printf "%.02f" .Sensors.Uptime }}s
+<tr><td>cputime:<td class="text-right">{{ printf "%.02f" .Sensors.CPU }}s
 </table>
 <p>
 </div>

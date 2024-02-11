@@ -158,6 +158,27 @@ Delete this honk.
 Mute this thread.
 What should identify a convoy.
 .El
+.Ss gethonkers
+Returns a list of current honkers in json format.
+.Ss savehonker
+Save a new honker, or update an existing one.
+The following fields are used.
+.Bl -tag -width honkerid
+.It Fa honkerid
+The numeric ID of an existing honker to update.
+.It Fa name
+The preferred short name.
+.It Fa url
+The ActivityPub actor url.
+.It Fa combos
+Space separated list of combos.
+.It Fa notes
+Some notes.
+.El
+.Pp
+The honker numeric ID will be returned for success.
+To delete, unsub, or sub, include a form value with name and value equal.
+As in, a form value named delete with the value delete, or unsub=unsub, etc.
 .Ss sendactivity
 Send anything.
 No limits, no error checking.

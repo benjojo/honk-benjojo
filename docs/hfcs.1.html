@@ -51,11 +51,15 @@
   <dd>Match an actor or domain name. Matches against <var class="Ar">actor</var>
       property.</dd>
   <dt><var class="Ar">include audience</var></dt>
-  <dd>Previous match is applied against <var class="Fa">to</var> and
-      <var class="Fa">cc</var> fields as well.</dd>
+  <dd>Previous match is applied against</dd>
+  <dt><var class="Ar">only unknowns</var></dt>
+  <dd>Previous (domain) match is applied only to unknown actors.</dd>
   <dt><var class="Ar">text</var></dt>
-  <dd>Regular expression match against the post
-    <var class="Fa">content</var>.</dd>
+  <dd>Regular expression match against the post <var class="Fa">content</var>.
+      The special value of &quot;.&quot; will match any post with a summary
+      only.</dd>
+  <dt><var class="Ar">is reply</var></dt>
+  <dd>A reply to another post.</dd>
   <dt><var class="Ar">is announce</var></dt>
   <dd>Is announced (shared).</dd>
   <dt><var class="Ar">announce of</var></dt>
@@ -89,6 +93,12 @@
     X days, Y hours, and Z minutes.</p>
 </section>
 <section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">A rudimentary spam filter may be constructed with where set to
+    mastodon.social, checking the only unknowns option, with an action of
+    reject.</p>
+</section>
+<section class="Sh">
 <h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
   ALSO</a></h1>
 <p class="Pp"><a class="Xr" href="honk.1.html">honk(1)</a></p>
@@ -100,8 +110,8 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">May 31, 2022</td>
-    <td class="foot-os">OpenBSD 7.1</td>
+    <td class="foot-date">January 24, 2024</td>
+    <td class="foot-os">macOS 14.2</td>
   </tr>
 </table>
 </body>

@@ -1,0 +1,45 @@
+Informal spec for an encrypted chat message prototype
+
+This is an extension to the ChatMessage activity.
+It could apply to other types, but has limited utility for public activities.
+
+The encryption used is the "nacl box" combination of Curve25519, Salsa20, and Poly1305.
+It's widely available in user proof crypto libraries.
+
+A 32 byte user public key is added to the actor object in base64 format in the "chatKeyV0" property.
+
+If a ChatMessage object has an "chatKeyV0" property it should be decrypted.
+The "content" property is now a base64 encoded message consisting of nonce[24] || cipher[...].
+
+To send an encrypted ChatMessage:
+1. Add "chatKeyV0" with public key (base64) to one's own actor object.
+2. Look up chatKeyV0 for remote actor.
+3. Generate a random nonce and call crypto_box.
+4. Base64 encode nonce and cipher text, storing as "content".
+5. Add "chatKeyV0" property with key.
+
+Receiving and decrypting:
+1. Check for "chatKeyV0" property.
+2. Look up chatKeyV0 for remote actor.
+3. Base64 decode "content" property.
+4. Split into nonce and cipher text, call crypto_box_open.
+5. Replace message content.
+
+The public key is duplicated in the actor and the message.
+
+Notes
+
+This doesn't support shared group keys. Messages need to be encrypted per recipient.
+
+This doesn't use any advanced ratcheting techniques.
+Not sure how well they fit in with ActivityPub.
+Limited library availability.
+
+Random nonces are fine and should be used.
+ActivityPub IDs should be unique, but it's better to avoid the possiblity of duplicates.
+
+Keys should be verified at some point.
+
+It's only secure if the secret keys are kept somewhere secret.
+
+It's V0.

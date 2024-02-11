@@ -1,6 +1,136 @@
 changelog
 
-=== 0.9.8 Tentative Tentacle
+### 1.2.1 Solipsist Satisfaction
+
++ Federation reliability and compat improvements.
+
++ Fix 32 bit support.
+
++ Close databases to give the wal file a chance to checkpoint.
+
++ Dim images in darkmode.
+
+- Remove the hoot: feature. The bird is dead.
+
+### 1.2.0 Forgotten Followup
+
++ Filter option to match unknown actors.
+
++ Update some dependencies.
+
++ Watch local.css for changes.
+
++ MacOS support. lol.
+
++ Wait for requests to drain on shutdown.
+
++ Handle quoteUrl property.
+
++ Reroute memes to donks in emergencies.
+
++ Fix handling of svg with bom fucks.
+
++ FastCGI listening.
+
++ Finally fix slow public queries.
+
+### 1.1.1 Required Refinement
+
++ Fix help file stylesheet link.
+
+### 1.1.0 Eventual Enshittification
+
++ Fix backup command.
+
++ Fixes for markdown.
+
++ Allow bigger image uploads.
+
++ Some hotkeys for the web UI.
+
++ Upload multiple files (but beware).
+
++ Better page titles.
+
++ Refine thread sort.
+
++ Send updates to correct audience.
+
++ Run analyze to improve database performance.
+
++ Delivery performance improvements.
+
++ Export command to ActivityPub data. (And import.)
+
++ Note that we require go 1.18 now.
+
+### 1.0.0 Happy Honker
+
++ A great big honk composition text box.
+
++ More reliable search.
+
++ Secret tags.
+
++ Mentions link locally.
+
++ ::: spoiler markdown
+
++ Fix the bonk and zonk crash.
+
++ New threaded display order.
+
++ Improved search.
+
++ Tuned up superdeliverator.
+
++ Import from instagram.
+
++ Improve handling of some Page and Link objects.
+
++ Other federation fixes.
+
++ Search can now load external posts.
+
++ Some hypercard opengraph markup for previews.
+
+### 0.9.91 One More Time
+
++ Swallow a follow bug.
+
+### 0.9.9 Eat the Bugs
+
++ Some fixes for image descriptions.
+
++ Fix double htmlization of subject lines.
+
++ Remove the wonk support. Fun's over, back to work.
+
++ All inclusive danger zone spoiler alerts.
+
++ Emu peeker
+
++ CSP compliance
+
++ Filter to match anything with summary/warning.
+
++ Start collecting quties.
+
++ Fix http signatures for GET requests.
+
++ Fix adjacent mentions.
+
++ Fix argv for chpass.
+
++ Avoid self mention in reply all.
+
++ Fix markdown links with parens.
+
++ Add a default icon.png.
+
++ Try to fix hoot again because Twitter did a Twitter.
+
+### 0.9.8 Tentative Tentacle
 
 + Switch database to WAL mode.
 
@@ -30,7 +160,7 @@ changelog
 
 + Some improved html and markdown.
 
-=== 0.9.7 Witless Weekender
+### 0.9.7 Witless Weekender
 
 +++ Word guessing game. Wonk wonk!
 
@@ -46,7 +176,7 @@ changelog
 
 + Printing is prettier than ever before.
 
-=== 0.9.6 Virile Vigorous and Potent
+### 0.9.6 Virile Vigorous and Potent
 
 + A bug, a fix, a bug fix, a fix bug.
 
@@ -62,17 +192,17 @@ changelog
 
 + Fix hoot to work with Twitter's latest crap.
 
-=== 0.9.5 Emergency Ejection
+### 0.9.5 Emergency Ejection
 
 + Fix honk init user creation.
 
-=== 0.9.4 Collegiate Colloquialism
+### 0.9.4 Collegiate Colloquialism
 
 + Add validation to some more user inputs to prevent mistakes.
 
 + Easier to use ping command.
 
-=== 0.9.3 Notacanthous Nutshell
+### 0.9.3 Notacanthous Nutshell
 
 ++ backup command.
 
@@ -94,11 +224,11 @@ changelog
 
 - Custom lingo for those who don't like honking.
 
-=== 0.9.2 Malleable Maltote
+### 0.9.2 Malleable Maltote
 
 + Fix compilation on mac.
 
-=== 0.9.1 Late Stage Lusciousness
+### 0.9.1 Late Stage Lusciousness
 
 ++ Boing boom tschak chonky chatter. Chat messages with Pleroma.
 
@@ -118,7 +248,7 @@ changelog
 
 + A few API refinements and additions.
 
-=== 0.9.0 Monitor vs Merrimack
+### 0.9.0 Monitor vs Merrimack
 
 --- Add Reactions.
 
@@ -136,7 +266,7 @@ changelog
 
 + Maybe possible to use @user@example.com wihtout subdomain.
 
-=== 0.8.6 Sartorial Headpiece
+### 0.8.6 Sartorial Headpiece
 
 ++ Import command now supports the elephant in the room.
 
@@ -162,7 +292,7 @@ changelog
 
 + More flexible meme names.
 
-=== 0.8.5 Turnkey Blaster
+### 0.8.5 Turnkey Blaster
 
 + Codenames in changelog.
 
@@ -182,17 +312,17 @@ changelog
 
 + Can never seem to version the changelog correctly.
 
-=== 0.8.4
+### 0.8.4
 
 + Fix bug preventing import of keys
 
 + Option to switch map links to Apple.
 
-=== 0.8.3
+### 0.8.3
 
 - mistag.
 
-=== 0.8.2 Game Warden
+### 0.8.2 Game Warden
 
 ++ Import command to preserve those embarssassing old posts from Twitter.
 
@@ -208,7 +338,7 @@ changelog
 
 + "Bug" fixes.
 
-=== 0.8.1
+### 0.8.1
 
 ++ Make it easier to upgrade by decoupling data dir from ".".
 
@@ -220,7 +350,7 @@ changelog
 	Syntax highlighting for code blocks.
 	Something resembling an actual manual.
 
-=== 0.8.0 Ordinary Octology
+### 0.8.0 Ordinary Octology
 
 +++ Add Honk Filtering and Censorship System (HFCS).
 
@@ -275,7 +405,7 @@ changelog
 - Sometimes the cached state of the @me feed becomes unsynced.
 	Acked status may display incorrectly.
 
-=== 0.7.7 More 7 Than Ever
+### 0.7.7 More 7 Than Ever
 
 + Add another retry to workaround pixelfed's general unreliability.
 
@@ -287,11 +417,11 @@ changelog
 
 + Increase max thread retrieval depth to 10.
 
-=== 0.7.6
+### 0.7.6
 
 + Fix a bug where upgrades would not complete in one step.
 
-=== 0.7.5
+### 0.7.5
 
 + Fix a bug (introdcued 0.7.4) preventing new user creation from working.
 
@@ -303,7 +433,7 @@ changelog
 
 + What may be considered UI improvements.
 
-=== 0.7.4
+### 0.7.4
 
 + Ever more bug fixes.
 
@@ -319,19 +449,19 @@ changelog
 
 + webp image transcoding.
 
-=== 0.7.3
+### 0.7.3
 
 + Better fedicompat so bonks are visible to pleroma followers.
 
-=== 0.7.2
+### 0.7.2
 
 + Add the funzone. Minor other UI tweaks.
 
-=== 0.7.1
+### 0.7.1
 
 + Fix bug preventing unfollow from working.
 
-=== 0.7.0 Father Mother Maiden Crone Honker Bonker Zonker
+### 0.7.0 Father Mother Maiden Crone Honker Bonker Zonker
 
 +++ Auto fetching and inlining of hoots.
 
@@ -361,12 +491,12 @@ changelog
 
 + Add max-width for video tag.
 
-=== 0.6.0 Sixy Delights
+### 0.6.0 Sixy Delights
 
 Most records from this time of primitive development have been lost.
 
-=== 0.5.0 Halfway to Heaven
+### 0.5.0 Halfway to Heaven
 
-=== 0.4.0 Fore Score
+### 0.4.0 Fore Score
 
-=== 0.3.0 Valorous Varaha
+### 0.3.0 Valorous Varaha

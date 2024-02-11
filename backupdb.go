@@ -35,6 +35,7 @@ func backupDatabase(dirname string) {
 	if err != nil {
 		elog.Fatalf("can't open backup database")
 	}
+	_, err = backup.Exec("PRAGMA journal_mode=WAL")
 	for _, line := range strings.Split(sqlSchema, ";") {
 		_, err = backup.Exec(line)
 		if err != nil {
@@ -76,16 +77,16 @@ func backupDatabase(dirname string) {
 
 	honkids := make(map[int64]bool)
 	for c := range convoys {
-		rows = queryDB(orig, "select honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags from honks where convoy = ?", c)
+		rows = queryDB(orig, "select honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags, plain from honks where convoy = ?", c)
 		for rows.Next() {
 			var honkid, userid int64
-			var what, honker, xid, rid, dt, url, audience, noise, convoy string
+			var what, honker, xid, rid, dt, url, audience, noise, convoy, plain string
 			var whofore int64
 			var format, precis, oonker string
 			var flags int64
-			scanDBRow(rows, &honkid, &userid, &what, &honker, &xid, &rid, &dt, &url, &audience, &noise, &convoy, &whofore, &format, &precis, &oonker, &flags)
+			scanDBRow(rows, &honkid, &userid, &what, &honker, &xid, &rid, &dt, &url, &audience, &noise, &convoy, &whofore, &format, &precis, &oonker, &flags, &plain)
 			honkids[honkid] = true
-			sqlMustQuery(tx, "insert into honks (honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags)
+			sqlMustQuery(tx, "insert into honks (honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags, plain) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", honkid, userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags, plain)
 		}
 		rows.Close()
 	}
@@ -169,6 +170,7 @@ func backupDatabase(dirname string) {
 	if err != nil {
 		elog.Fatalf("can't open backup blob database")
 	}
+	_, err = blob.Exec("PRAGMA journal_mode=WAL")
 	sqlMustQuery(blob, "create table filedata (xid text, media text, hash text, content blob)")
 	sqlMustQuery(blob, "create index idx_filexid on filedata(xid)")
 	sqlMustQuery(blob, "create index idx_filehash on filedata(hash)")

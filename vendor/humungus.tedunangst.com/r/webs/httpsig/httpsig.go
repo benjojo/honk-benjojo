@@ -28,13 +28,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/ed25519"
-	"humungus.tedunangst.com/r/webs/junk"
 )
 
 type KeyType int
@@ -152,8 +149,6 @@ func SignRequest(keyname string, key PrivateKey, req *http.Request, content []by
 	req.Header.Set("Signature", sighdr)
 }
 
-var re_sighdrval = regexp.MustCompile(`(.*)="(.*)"`)
-
 // Verify the Signature header for a request is valid.
 // The request body should be provided separately.
 // The lookupPubkey function takes a keyname and returns a public key.
@@ -166,21 +161,23 @@ func VerifyRequest(req *http.Request, content []byte, lookupPubkey func(string) 
 
 	var keyname, algo, heads, bsig string
 	for _, v := range strings.Split(sighdr, ",") {
-		m := re_sighdrval.FindStringSubmatch(v)
-		if len(m) != 3 {
-			return "", fmt.Errorf("bad scan: %s from %s\n", v, sighdr)
+		name, val, ok := strings.Cut(v, "=")
+		if !ok {
+			return "", fmt.Errorf("bad scan: %s from %s", v, sighdr)
 		}
-		switch m[1] {
+		val = strings.TrimPrefix(val, `"`)
+		val = strings.TrimSuffix(val, `"`)
+		switch name {
 		case "keyId":
-			keyname = m[2]
+			keyname = val
 		case "algorithm":
-			algo = m[2]
+			algo = val
 		case "headers":
-			heads = m[2]
+			heads = val
 		case "signature":
-			bsig = m[2]
+			bsig = val
 		default:
-			return "", fmt.Errorf("bad sig val: %s", m[1])
+			return "", fmt.Errorf("bad sig val: %s from %s", name, sighdr)
 		}
 	}
 	if keyname == "" || algo == "" || heads == "" || bsig == "" {
@@ -329,45 +326,4 @@ func EncodeKey(i interface{}) (string, error) {
 		return "", err
 	}
 	return string(pem.EncodeToMemory(&b)), nil
-}
-
-var cachedKeys = make(map[string]PublicKey)
-var cachedKeysLock sync.Mutex
-
-// Get a key as typically used with ActivityPub
-func ActivityPubKeyGetter(keyname string) (key PublicKey, err error) {
-	cachedKeysLock.Lock()
-	key = cachedKeys[keyname]
-	cachedKeysLock.Unlock()
-	if key.Type != None {
-		return
-	}
-	var j junk.Junk
-	j, err = junk.Get(keyname, junk.GetArgs{Accept: "application/activity+json", Timeout: 15 * time.Second})
-	if err != nil {
-		return
-	}
-	keyobj, ok := j.GetMap("publicKey")
-	if ok {
-		j = keyobj
-	}
-	data, ok := j.GetString("publicKeyPem")
-	if !ok {
-		err = fmt.Errorf("error finding %s pubkey", keyname)
-		return
-	}
-	_, ok = j.GetString("owner")
-	if !ok {
-		err = fmt.Errorf("error finding %s pubkey owner", keyname)
-		return
-	}
-	_, key, err = DecodeKey(data)
-	if err != nil {
-		err = fmt.Errorf("error decoding %s pubkey: %s", keyname, err)
-		return
-	}
-	cachedKeysLock.Lock()
-	cachedKeys[keyname] = key
-	cachedKeysLock.Unlock()
-	return
 }

@@ -85,6 +85,8 @@ type GetArgs struct {
 	Agent   string // User-Agent: header
 	Timeout time.Duration
 	Client  *http.Client
+	Fixup   func(*http.Request) error
+	Limit   int64
 }
 
 // Fetch json from url via http and return some junk.
@@ -103,6 +105,12 @@ func Get(url string, args GetArgs) (Junk, error) {
 	if args.Agent != "" {
 		req.Header.Set("User-Agent", args.Agent)
 	}
+	if args.Fixup != nil {
+		err = args.Fixup(req)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if args.Timeout != 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), args.Timeout)
 		defer cancel()
@@ -114,10 +122,18 @@ func Get(url string, args GetArgs) (Junk, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	switch resp.StatusCode {
+	case 200:
+	case 201:
+	case 202:
+	default:
 		return nil, fmt.Errorf("http get status: %d", resp.StatusCode)
 	}
-	return Read(resp.Body)
+	var r io.Reader = resp.Body
+	if args.Limit > 0 {
+		r = io.LimitReader(r, args.Limit)
+	}
+	return Read(r)
 }
 
 func jsonfindinterface(ii interface{}, keys []interface{}) interface{} {

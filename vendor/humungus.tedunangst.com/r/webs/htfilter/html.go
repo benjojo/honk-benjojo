@@ -36,11 +36,12 @@ import (
 // The zero filter is useful by itself.
 // By default, images are replaced with text.
 type Filter struct {
-	Imager      func(node *html.Node) string
-	SpanClasses map[string]bool
-	BaseURL     *url.URL
-	WithLinks   bool
-	FilterText  func(io.Writer, string)
+	Imager       func(node *html.Node) string
+	SpanClasses  map[string]bool
+	BaseURL      *url.URL
+	WithLinks    bool
+	FilterText   func(io.Writer, string)
+	RetargetLink func(string) string
 }
 
 var permittedtags = map[string]bool{
@@ -57,12 +58,13 @@ var permittedtags = map[string]bool{
 	"sub": true, "sup": true, "del": true, "tt": true, "small": true,
 	"ol": true, "ul": true, "li": true, "dl": true, "dt": true, "dd": true,
 }
-var permittedattr = map[string]bool{"colspan": true, "rowspan": true, "text-align":true}
+var permittedattr = map[string]bool{"colspan": true, "rowspan": true, "text-align": true}
 var bannedtags = map[string]bool{"script": true, "style": true}
 
 // Returns the value for a node attribute.
 func GetAttr(node *html.Node, name string) string {
-	for _, a := range node.Attr {
+	for i := range node.Attr {
+		a := &node.Attr[i]
 		if a.Key == name {
 			return a.Val
 		}
@@ -71,7 +73,8 @@ func GetAttr(node *html.Node, name string) string {
 }
 
 func SetAttr(node *html.Node, name string, value string) {
-	for _, a := range node.Attr {
+	for i := range node.Attr {
+		a := &node.Attr[i]
 		if a.Key == name {
 			a.Val = value
 			return
@@ -97,6 +100,29 @@ func writetag(w writer, node *html.Node) {
 		if permittedattr[attr.Key] {
 			templates.Fprintf(w, ` %s="%s"`, attr.Key, attr.Val)
 		}
+		if attr.Key == "class" {
+			classes := strings.Split(attr.Val, " ")
+			printedclass := false
+			for _, class := range classes {
+				switch class {
+				case "text-right":
+				case "text-left":
+				case "text-center":
+				default:
+					continue
+				}
+				if !printedclass {
+					w.WriteString(` class="`)
+					printedclass = true
+				} else {
+					w.WriteString(" ")
+				}
+				w.WriteString(class)
+			}
+			if printedclass {
+				w.WriteString(`"`)
+			}
+		}
 		if attr.Key == "style" {
 			styles := strings.Split(attr.Val, ";")
 			printedstyle := false
@@ -110,7 +136,7 @@ func writetag(w writer, node *html.Node) {
 					continue
 				}
 				if !printedstyle {
-					w.WriteString(` style ="`)
+					w.WriteString(` style="`)
 					printedstyle = true
 				}
 				w.WriteString(style)
@@ -191,6 +217,9 @@ func (filt *Filter) render(w writer, node *html.Node) {
 					hrefurl = filt.BaseURL.ResolveReference(hrefurl)
 				}
 				href = hrefurl.String()
+			}
+			if filt.RetargetLink != nil {
+				href = filt.RetargetLink(href)
 			}
 			templates.Fprintf(w, `<a href="%s" rel=noreferrer>`, href)
 		case tag == "img":

@@ -154,6 +154,30 @@
 </dl>
 </section>
 <section class="Ss">
+<h2 class="Ss" id="gethonkers"><a class="permalink" href="#gethonkers">gethonkers</a></h2>
+<p class="Pp">Returns a list of current honkers in json format.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="savehonker"><a class="permalink" href="#savehonker">savehonker</a></h2>
+<p class="Pp">Save a new honker, or update an existing one. The following fields
+    are used.</p>
+<dl class="Bl-tag">
+  <dt><var class="Fa">honkerid</var></dt>
+  <dd>The numeric ID of an existing honker to update.</dd>
+  <dt><var class="Fa">name</var></dt>
+  <dd>The preferred short name.</dd>
+  <dt><var class="Fa">url</var></dt>
+  <dd>The ActivityPub actor url.</dd>
+  <dt><var class="Fa">combos</var></dt>
+  <dd>Space separated list of combos.</dd>
+  <dt><var class="Fa">notes</var></dt>
+  <dd>Some notes.</dd>
+</dl>
+<p class="Pp">The honker numeric ID will be returned for success. To delete,
+    unsub, or sub, include a form value with name and value equal. As in, a form
+    value named delete with the value delete, or unsub=unsub, etc.</p>
+</section>
+<section class="Ss">
 <h2 class="Ss" id="sendactivity"><a class="permalink" href="#sendactivity">sendactivity</a></h2>
 <p class="Pp">Send anything. No limits, no error checking.</p>
 <dl class="Bl-tag">
@@ -180,8 +204,8 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">May 31, 2022</td>
-    <td class="foot-os">OpenBSD 7.1</td>
+    <td class="foot-date">January 24, 2024</td>
+    <td class="foot-os">macOS 14.2</td>
   </tr>
 </table>
 </body>

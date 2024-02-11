@@ -1,25 +1,6 @@
-honk-benjojo
-===
-
-Remix of honk. has the following improvments 
-
-0) / is a file server, rather than honk, access by /honk
- (You can co-exist with your static site!), TLS is now supported
- directly via golang's autocert (aka letsencrypt)
-1) Avatar support
-2) Twitter-like styles, less purple
-3) Source code has functions I've tried to understand renamed
-4) MP4 support
-5) GIF support
-6) Twitter imports work again
-7) -display.days to show you how deep a timeline should go (I set to 90)
-8) Likes are syslogged, but still not displayed on the WebUI, or stored
-
----
-
 honk
 
--- features
+## features
 
 Take control of your honks and join the federation.
 An ActivityPub server with minimal setup and support costs.
@@ -36,16 +17,16 @@ The button to submit a new honk says "it's gonna be honked".
 The honk mission is to work well if it's what you want.
 This does not imply the goal is to be what you want.
 
--- build
+## build
 
 It should be sufficient to type make after unpacking a release.
-You'll need a go compiler version 1.16 or later. And libsqlite3.
+You'll need a go compiler version 1.18 or later. And libsqlite3.
 
 Even on a fast machine, building from source can take several seconds.
 
 Development sources: hg clone https://humungus.tedunangst.com/r/honk
 
--- setup
+## setup
 
 honk expects to be fronted by a TLS terminating reverse proxy.
 
@@ -53,23 +34,23 @@ First, create the database. This will ask four questions.
 ./honk init
 username: (the username you want)
 password: (the password you want)
-listenaddr: (tcp or unix: localhost:31337, /var/www/honk.sock, etc.)
+listenaddr: (tcp or unix: 127.0.0.1:31337, /var/www/honk.sock, etc.)
 servername: (public DNS name: honk.example.com)
 
 Then run honk.
 ./honk
 
--- upgrade
+## upgrade
 
 old-honk backup `date +backup-%F`
 ./honk upgrade
 ./honk
 
--- documentation
+## documentation
 
 There is a more complete incomplete manual. This is just the README.
 
--- guidelines
+## guidelines
 
 One honk per day, or call it an "eighth-tenth" honk.
 If your honk frequency changes, so will the number of honks.
@@ -86,6 +67,6 @@ It is considered rude to make noise in a place of business.
 The honk may be made on public property only when the person doing
 the honk has the permission of the owner of that property.
 
--- disclaimer
+## disclaimer
 
 Do not use honk to contact emergency services.

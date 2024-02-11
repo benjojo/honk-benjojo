@@ -80,9 +80,18 @@ int main() { return 0; }
   <dt>rules</dt>
   <dd>Exactly three dashes on a line, &#x201C;---&#x201D;, will become a
       horizontal rule.</dd>
+  <dt>spoilers</dt>
+  <dd>Hide blocks of text between triple colon delimted regions.
+    <div class="Bd Pp Li">
+    <pre>::: warning
+text that should be hidden behind a warning
+:::</pre>
+    </div>
+  </dd>
 </dl>
 <p class="Pp">If the first line of a honk begins with &#x201C;DZ:&#x201D;
-    (danger zone) it will be used a summary and the post marked sensitive.</p>
+    (danger zone) or any other combination of two letters and a colon, it will
+    be used a summary and the post marked sensitive.</p>
 <p class="Pp">Mentioning a specfic user such as (@user@example.social) will send
     a copy of the message to them. Several forms are supported.
     &#x2018;<code class="Li">@name</code>&#x2019; will work using the short name
@@ -95,10 +104,6 @@ int main() { return 0; }
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Extras"><a class="permalink" href="#Extras">Extras</a></h2>
-<p class="Pp">Threads from the tiny bird site may be included as quotes in a
-    post via the <var class="Ar">hoot</var> operator followed by the URL.</p>
-<div class="Bd Bd-indent"><code class="Li">hoot:
-  https://twitter.com/tedunangst/status/850379741492367360</code></div>
 <p class="Pp">Custom emoji may be included by colon wrapping the image name.
     (:hellsyeah:) A meme (sticker, reaction gif) may be included with the
     <var class="Ar">meme</var> operator followed by the file name.</p>
@@ -116,9 +121,11 @@ Vertical stripes may be selected by specfying &quot;vert&quot; for the first
 <p class="Pp">One may attach a file to a post. Images are automatically rescaled
     and reduced in size for federation. A description, or caption, is
     encouraged. Text files and PDFs are also supported as attachments. Other
-    formats are not supported.</p>
-<p class="Pp">One may also check in to a location. The available fields, all
-    optional, are <var class="Ar">name</var>, <var class="Ar">url</var>,
+    formats are not supported. Multiple files may be attached to the some post,
+    but be wary of depending on a particular presentation order.</p>
+<p class="Pp">One may also live dangerously by posting assassination
+    coordinates. The available fields, all optional, are
+    <var class="Ar">name</var>, <var class="Ar">url</var>,
     <var class="Ar">latitude</var>, and <var class="Ar">longitude</var>. By
     default, location data is rounded to approximately 1/100 decimal degree
     accuracy. Pressing the check in button a second time will refine this to
@@ -128,6 +135,8 @@ Vertical stripes may be selected by specfying &quot;vert&quot; for the first
     unless am or pm are specified. The duration is optional and may be specified
     as XdYhZm for X days, Y hours, and Z minutes (1d12h would be a 36 hour
     event).</p>
+<p class="Pp">Clicking the pretty circle face will open the emu peeker to add in
+    the selection of emus.</p>
 <p class="Pp">When everything is at last ready to go, press the &#x201C;it's
     gonna be honked&#x201D; button.</p>
 </section>
@@ -155,8 +164,8 @@ Vertical stripes may be selected by specfying &quot;vert&quot; for the first
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">May 31, 2022</td>
-    <td class="foot-os">OpenBSD 7.1</td>
+    <td class="foot-date">January 24, 2024</td>
+    <td class="foot-os">macOS 14.2</td>
   </tr>
 </table>
 </body>

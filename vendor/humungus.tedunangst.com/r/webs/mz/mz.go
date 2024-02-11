@@ -29,20 +29,22 @@ var re_italicer = regexp.MustCompile(`(^|\W)\*((?s:.*?))\*($|\W)`)
 var re_bigcoder = regexp.MustCompile("```(.*)\n?((?s:.*?))\n?```\n?")
 var re_coder = regexp.MustCompile("`([^`]*)`")
 var re_quoter = regexp.MustCompile(`(?m:^&gt; (.*)(\n- ?(.*))?\n?)`)
-var re_reciter = regexp.MustCompile(`(<cite><a href=".*?">)https://twitter.com/([^/]+)/.*?(</a></cite>)`)
 var re_link = regexp.MustCompile(`.?.?https?://[^\s"]+[\w/)!]`)
 var re_zerolink = regexp.MustCompile(`\[([^]]*)\]\(([^)]*\)?)\)`)
 var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
-var re_lister = regexp.MustCompile(`((^|\n)(\+|-).*)+\n?`)
-var re_tabler = regexp.MustCompile(`((^|\n)\|.*)+\n?`)
-var re_header = regexp.MustCompile(`(^|\n)(#+) (.*)\n?`)
+var re_lister = regexp.MustCompile(`((^|\n+)(\+|-).*)+\n?`)
+var re_tabler = regexp.MustCompile(`((^|\n+)\|.*)+\n?`)
+var re_header = regexp.MustCompile(`(^|\n+)(#+) (.*)\n?`)
 var re_hashes = regexp.MustCompile(`(?:^|[ \n>])#[\pL\pN]*[\pL][\pL\pN_-]*`)
 var re_mentions = regexp.MustCompile(`(^|[ \n])@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]\b`)
+var re_spoiler = regexp.MustCompile(":::(.*)\n?((?s:.*?))\n?:::\n?")
 
 var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
 
 type Marker struct {
 	AllowInlineHtml bool
+	AllowImages     bool
+	Short           bool
 	HashLinker      func(h string) string
 	HashTags        []string
 	AtLinker        func(h string) string
@@ -67,13 +69,18 @@ func (marker *Marker) Mark(s string) string {
 		lilcodes = append(lilcodes, code)
 		return "`x`"
 	})
-	s = re_imgfix.ReplaceAllStringFunc(s, func(img string) string {
-		images = append(images, img)
-		return "<img x>"
-	})
+	if marker.AllowImages {
+		s = re_imgfix.ReplaceAllStringFunc(s, func(img string) string {
+			images = append(images, img)
+			return "<img x>"
+		})
+	}
 
 	// fewer side effects than html.EscapeString
-	buf := make([]byte, 0, len(s))
+	buf := make([]byte, 0, len(s)+len(s)/10)
+	if !marker.Short {
+		buf = append(buf, []byte("\n\n")...)
+	}
 	for _, c := range []byte(s) {
 		switch c {
 		case '&':
@@ -114,20 +121,23 @@ func (marker *Marker) Mark(s string) string {
 		s = re_bolder.ReplaceAllString(s, "$1<b>$2</b>$3")
 		s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
 	}
-	s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><cite>$3</cite><p>")
-	s = strings.ReplaceAll(s, "<cite></cite>", "")
-	s = re_reciter.ReplaceAllString(s, "$1$2$3")
+	if re_quoter.MatchString(s) {
+		s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><cite>$3</cite><p>")
+		s = strings.ReplaceAll(s, "<cite></cite>", "")
+		s = strings.ReplaceAll(s, "</blockquote><p><blockquote>", "<br>")
+	}
 	s = strings.Replace(s, "\n---\n", "<hr><p>", -1)
-	s = strings.ReplaceAll(s, "</blockquote><p><blockquote>", "<br>")
-
 	s = re_lister.ReplaceAllStringFunc(s, func(m string) string {
 		m = strings.Trim(m, "\n")
 		items := strings.Split(m, "\n")
-		r := "<ul>"
+		r := "\n<ul>"
 		for _, item := range items {
+			if item == "" {
+				continue
+			}
 			r += "<li>" + strings.Trim(item[1:], " ")
 		}
-		r += "</ul><p>"
+		r += "</ul>\n"
 		return r
 	})
 	s = re_tabler.ReplaceAllStringFunc(s, func(m string) string {
@@ -146,13 +156,13 @@ func (marker *Marker) Mark(s string) string {
 				}
 				switch cell {
 				case ":---":
-					alignments[i] = ` style="text-align: left"`
+					alignments[i] = ` class="text-left"`
 					continue
 				case ":---:":
-					alignments[i] = ` style="text-align: center"`
+					alignments[i] = ` class="text-center"`
 					continue
 				case "---:":
-					alignments[i] = ` style="text-align: right"`
+					alignments[i] = ` class="text-right"`
 					continue
 				}
 				if !hastr {
@@ -172,14 +182,25 @@ func (marker *Marker) Mark(s string) string {
 		num := len(m[2])
 		return fmt.Sprintf("<h%d>%s</h%d><p>", num, m[3], num)
 	})
+	s = re_spoiler.ReplaceAllStringFunc(s, func(s string) string {
+		m := re_spoiler.FindStringSubmatch(s)
+		alert := strings.TrimSpace(m[1])
+		if alert == "" {
+			alert = "spoiler"
+		}
+		danger := m[2]
+		return fmt.Sprintf("<details><summary>%s</summary>%s</details>", alert, danger)
+	})
 
 	// restore images
-	s = strings.Replace(s, "&lt;img x&gt;", "<img x>", -1)
-	s = re_imgfix.ReplaceAllStringFunc(s, func(string) string {
-		img := images[0]
-		images = images[1:]
-		return img
-	})
+	if marker.AllowImages {
+		s = strings.Replace(s, "&lt;img x&gt;", "<img x>", -1)
+		s = re_imgfix.ReplaceAllStringFunc(s, func(string) string {
+			img := images[0]
+			images = images[1:]
+			return img
+		})
+	}
 
 	if marker.HashLinker != nil {
 		s = re_hashes.ReplaceAllStringFunc(s, func(o string) string {
@@ -235,11 +256,12 @@ func (marker *Marker) Mark(s string) string {
 	})
 
 	// some final fixups
-	s = strings.Replace(s, "<br><blockquote>", "<blockquote>", -1)
-	s = strings.Replace(s, "<br><cite></cite>", "", -1)
-	s = strings.Replace(s, "<br><pre>", "<pre>", -1)
-	s = strings.Replace(s, "<br><ul>", "<ul>", -1)
-	s = strings.Replace(s, "<br><table>", "<table>", -1)
+	if strings.Contains(s, "<br><") {
+		s = strings.Replace(s, "<br><blockquote>", "<blockquote>", -1)
+		s = strings.Replace(s, "<br><cite></cite>", "", -1)
+		s = strings.Replace(s, "<br><pre>", "<pre>", -1)
+		s = strings.Replace(s, "<br><ul>", "<ul>", -1)
+	}
 	s = strings.Replace(s, "<p><br>", "<p>", -1)
 	return s
 }

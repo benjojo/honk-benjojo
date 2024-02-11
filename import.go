@@ -16,6 +16,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -27,24 +28,36 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"humungus.tedunangst.com/r/webs/junk"
 )
 
 func importMain(username, flavor, source string) {
 	switch flavor {
 	case "mastodon":
 		importMastodon(username, source)
+	case "honk":
+		importHonk(username, source)
 	case "twitter":
 		importTwitter(username, source)
+	case "instagram":
+		importInstagram(username, source)
 	default:
 		elog.Fatal("unknown source flavor")
 	}
 }
 
-type TootObject struct {
+type ActivityObject struct {
+	AttributedTo string
 	Summary      string
 	Content      string
+	Source       struct {
+		MediaType string
+		Content   string
+	}
 	InReplyTo    string
 	Conversation string
+	Context      string
 	Published    time.Time
 	Tag          []struct {
 		Type string
@@ -58,10 +71,10 @@ type TootObject struct {
 	}
 }
 
-type PlainTootObject TootObject
+type PlainActivityObject ActivityObject
 
-func (obj *TootObject) UnmarshalJSON(b []byte) error {
-	p := (*PlainTootObject)(obj)
+func (obj *ActivityObject) UnmarshalJSON(b []byte) error {
+	p := (*PlainActivityObject)(obj)
 	json.Unmarshal(b, p)
 	return nil
 }
@@ -72,8 +85,9 @@ func importMastodon(username, source string) {
 		elog.Fatal(err)
 	}
 
-	if _, err := os.Stat(source + "/outbox.json"); err == nil {
-		importMastotoots(user, source)
+	outbox := source + "/outbox.json"
+	if _, err := os.Stat(outbox); err == nil {
+		importActivities(user, outbox, source)
 	} else {
 		ilog.Printf("skipping outbox.json!")
 	}
@@ -84,19 +98,33 @@ func importMastodon(username, source string) {
 	}
 }
 
-func importMastotoots(user *WhatAbout, source string) {
-	type Toot struct {
+func importHonk(username, source string) {
+	user, err := getUserBio(username)
+	if err != nil {
+		elog.Fatal(err)
+	}
+
+	outbox := source + "/outbox.json"
+	if _, err := os.Stat(outbox); err == nil {
+		importActivities(user, outbox, source)
+	} else {
+		ilog.Printf("skipping outbox.json!")
+	}
+}
+
+func importActivities(user *WhatAbout, filename, source string) {
+	type Activity struct {
 		Id     string
 		Type   string
-		To     []string
+		To     interface{}
 		Cc     []string
-		Object TootObject
+		Object ActivityObject
 	}
 	var outbox struct {
-		OrderedItems []Toot
+		OrderedItems []Activity
 	}
 	ilog.Println("Importing honks...")
-	fd, err := os.Open(source + "/outbox.json")
+	fd, err := os.Open(filename)
 	if err != nil {
 		elog.Fatal(err)
 	}
@@ -118,7 +146,11 @@ func importMastotoots(user *WhatAbout, source string) {
 	}
 
 	re_tootid := regexp.MustCompile("[^/]+$")
-	for _, item := range outbox.OrderedItems {
+	items := outbox.OrderedItems
+	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+		items[i], items[j] = items[j], items[i]
+	}
+	for _, item := range items {
 		toot := item
 		if toot.Type != "Create" {
 			continue
@@ -131,6 +163,27 @@ func importMastotoots(user *WhatAbout, source string) {
 		if havetoot(xid) {
 			continue
 		}
+
+		convoy := toot.Object.Context
+		if convoy == "" {
+			convoy = toot.Object.Conversation
+		}
+		var audience []string
+		to, ok := toot.To.(string)
+		if ok {
+			audience = append(audience, to)
+		} else {
+			for _, t := range toot.To.([]interface{}) {
+				audience = append(audience, t.(string))
+			}
+		}
+		content := toot.Object.Content
+		format := "html"
+		if toot.Object.Source.MediaType == "text/markdown" {
+			content = toot.Object.Source.Content
+			format = "markdown"
+		}
+		audience = append(audience, toot.Cc...)
 		honk := ActivityPubActivity{
 			UserID:   user.ID,
 			What:     "honk",
@@ -139,15 +192,12 @@ func importMastotoots(user *WhatAbout, source string) {
 			RID:      toot.Object.InReplyTo,
 			Date:     toot.Object.Published,
 			URL:      xid,
-			Audience: append(toot.To, toot.Cc...),
-			Noise:    toot.Object.Content,
-			Convoy:   toot.Object.Conversation,
+			Audience: audience,
+			Noise:    content,
+			Convoy:   convoy,
 			Whofore:  2,
-			Format:   "html",
+			Format:   format,
 			Precis:   toot.Object.Summary,
-		}
-		if honk.RID != "" {
-			honk.What = "tonk"
 		}
 		if !loudandproud(honk.Audience) {
 			honk.Whofore = 3
@@ -158,7 +208,7 @@ func importMastotoots(user *WhatAbout, source string) {
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
 				data, err := ioutil.ReadFile(fname)
 				if err != nil {
-					elog.Printf("error reading media: %s", fname)
+					elog.Printf("error reading media for %s: %s", honk.XID, fname)
 					continue
 				}
 				u := make18CharRandomString()
@@ -210,7 +260,7 @@ func importMastotooters(user *WhatAbout, source string) {
 		name := ""
 		flavor := "peep"
 		combos := ""
-		err := savehonker(user, url, name, flavor, combos, mj)
+		_, err := savehonker(user, url, name, flavor, combos, mj)
 		if err != nil {
 			elog.Printf("trouble with a honker: %s", err)
 		}
@@ -224,24 +274,6 @@ func importTwitter(username, source string) {
 	}
 
 	type Tweet struct {
-		// ID_str string
-		// Created_at              string
-		// Full_text               string
-		// In_reply_to_screen_name string
-		// In_reply_to_status_id   string
-		// Entities                struct {
-		// 	Hashtags []struct {
-		// 		Text string
-		// 	}
-		// 	Media []struct {
-		// 		Url       string
-		// 		Media_url string
-		// 	}
-		// 	Urls []struct {
-		// 		Url          string
-		// 		Expanded_url string
-		// 	}
-		// }
 		date   time.Time
 		convoy string
 		Tweet  struct {
@@ -357,7 +389,7 @@ func importTwitter(username, source string) {
 	}
 
 	var tweets []*Tweet
-	fd, err := os.Open(source + "/tweet.js")
+	fd, err := os.Open(source + "/tweets.js")
 	if err != nil {
 		elog.Fatal(err)
 	}
@@ -394,25 +426,18 @@ func importTwitter(username, source string) {
 			continue
 		}
 
-		if t.Tweet.FavoriteCount == "0" || t.Tweet.FavoriteCount == "" {
-			log.Printf("skipping, unworthy tweet")
-			continue
-		}
-
 		what := "honk"
 		noise := ""
 		if parent := tweetmap[t.Tweet.InReplyToStatusID]; parent != nil {
 			t.convoy = parent.convoy
-			what = "tonk"
 		} else {
 			t.convoy = "data:,acoustichonkytonk-" + t.Tweet.IdStr
 			if t.Tweet.InReplyToScreenName != "" {
 				noise = fmt.Sprintf("re: https://twitter.com/%s/status/%s\n\n",
 					t.Tweet.InReplyToScreenName, t.Tweet.InReplyToStatusID)
-				what = "tonk"
 			}
 		}
-		audience := []string{activitystreamsPublicString}
+		audience := []string{atContextString}
 		honk := ActivityPubActivity{
 			UserID:   user.ID,
 			Username: user.Name,
@@ -462,4 +487,172 @@ func importTwitter(username, source string) {
 		err := savehonk(&honk)
 		log.Printf("honk saved %v -> %v", xid, err)
 	}
+}
+
+func importInstagram(username, source string) {
+	user, err := getUserBio(username)
+	if err != nil {
+		elog.Fatal(err)
+	}
+
+	type Gram struct {
+		Media []struct {
+			URI      string
+			Creation int64 `json:"creation_timestamp"`
+			Title    string
+		}
+	}
+
+	var grams []*Gram
+	fd, err := os.Open(source + "/content/posts_1.json")
+	if err != nil {
+		elog.Fatal(err)
+	}
+	dec := json.NewDecoder(fd)
+	err = dec.Decode(&grams)
+	if err != nil {
+		elog.Fatalf("error parsing json: %s", err)
+	}
+	fd.Close()
+	log.Printf("importing %d grams", len(grams))
+	sort.Slice(grams, func(i, j int) bool {
+		return grams[i].Media[0].Creation < grams[j].Media[0].Creation
+	})
+	for _, g0 := range grams {
+		g := g0.Media[0]
+		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, make18CharRandomString())
+		what := "honk"
+		noise := g.Title
+		convoy := "data:,acoustichonkytonk-" + make18CharRandomString()
+		date := time.Unix(g.Creation, 0)
+		audience := []string{atContextString}
+		honk := ActivityPubActivity{
+			UserID:   user.ID,
+			Username: user.Name,
+			What:     what,
+			Honker:   user.URL,
+			XID:      xid,
+			Date:     date,
+			Format:   "markdown",
+			Audience: audience,
+			Convoy:   convoy,
+			Public:   true,
+			Whofore:  2,
+		}
+		{
+			u := make18CharRandomString()
+			fname := fmt.Sprintf("%s/%s", source, g.URI)
+			data, err := ioutil.ReadFile(fname)
+			if err != nil {
+				elog.Printf("error reading media: %s", fname)
+				continue
+			}
+			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
+
+			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
+			if err != nil {
+				elog.Printf("error saving media: %s", fname)
+				continue
+			}
+			donk := &Donk{
+				FileID: fileid,
+			}
+			honk.Donks = append(honk.Donks, donk)
+		}
+		honk.Noise = noise
+		err := savehonk(&honk)
+		log.Printf("honk saved %v -> %v", xid, err)
+	}
+}
+
+func export(username, file string) {
+	user, err := getUserBio(username)
+	if err != nil {
+		elog.Fatal(err)
+	}
+	fd, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	if err != nil {
+		elog.Fatal(err)
+	}
+	zd := zip.NewWriter(fd)
+	donks := make(map[string]bool)
+	{
+		w, err := zd.Create("outbox.json")
+		if err != nil {
+			elog.Fatal("error creating outbox.json", err)
+		}
+		var jonks []junk.Junk
+		rows, err := stmtUserHonks.Query(0, 3, user.Name, "0", 1234567)
+		honks := getsomehonks(rows, err)
+		for _, honk := range honks {
+			for _, donk := range honk.Donks {
+				donk.URL = "media/" + donk.XID
+				donks[donk.XID] = true
+			}
+			noise := honk.Noise
+			j, jo := jonkjonk(user, honk)
+			if honk.Format == "markdown" {
+				source := junk.New()
+				source["mediaType"] = "text/markdown"
+				source["content"] = noise
+				jo["source"] = source
+			}
+			jonks = append(jonks, j)
+		}
+		j := junk.New()
+		j["@context"] = itiswhatitis
+		j["id"] = user.URL + "/outbox"
+		j["attributedTo"] = user.URL
+		j["type"] = "OrderedCollection"
+		j["totalItems"] = len(jonks)
+		j["orderedItems"] = jonks
+		j.Write(w)
+	}
+	{
+		w, err := zd.Create("inbox.json")
+		if err != nil {
+			elog.Fatal("error creating inbox.json", err)
+		}
+		var jonks []junk.Junk
+		rows, err := stmtHonksForMe.Query(0, user.ID, "0", user.ID, 1234567)
+		honks := getsomehonks(rows, err)
+		for _, honk := range honks {
+			for _, donk := range honk.Donks {
+				donk.URL = "media/" + donk.XID
+				donks[donk.XID] = true
+			}
+			j, _ := jonkjonk(user, honk)
+			jonks = append(jonks, j)
+		}
+		j := junk.New()
+		j["@context"] = itiswhatitis
+		j["id"] = user.URL + "/inbox"
+		j["attributedTo"] = user.URL
+		j["type"] = "OrderedCollection"
+		j["totalItems"] = len(jonks)
+		j["orderedItems"] = jonks
+		j.Write(w)
+	}
+	zd.Create("media/")
+	for donk := range donks {
+		if donk == "" {
+			continue
+		}
+		var media string
+		var data []byte
+		w, err := zd.Create("media/" + donk)
+		if err != nil {
+			elog.Printf("error creating %s: %s", donk, err)
+			continue
+		}
+		row := stmtGetFileData.QueryRow(donk)
+		err = row.Scan(&media, &data)
+		if err != nil {
+			elog.Printf("error scanning file %s: %s", donk, err)
+			continue
+		}
+		w.Write(data)
+	}
+	zd.Close()
+	fd.Close()
 }

@@ -1,19 +1,18 @@
 <!doctype html>
 <html>
 <head>
-<title>honk</title>
+<title>{{ or .Title .ServerName }}</title>
 <link href="/style.css{{ .StyleParam }}" rel="stylesheet">
 {{ if .LocalStyleParam }}
 <link href="/local.css{{ .LocalStyleParam }}" rel="stylesheet">
 {{ end }}
-<style>
-{{ .UserStyle }}
-</style>
+{{ .APAltLink }}
+{{ .Honkology }}
 <link href="/icon.png" rel="icon">
 <meta name="theme-color" content="#305">
 <meta name="viewport" content="width=device-width">
 </head>
-<body>
+<body{{ if .UserStyle}} {{ .UserStyle }}{{ end }}>
 <header>
 {{ if .UserInfo }}
 <details id="topmenu">
@@ -22,7 +21,7 @@
 <li><a id="homelink" href="/honk">home</a>
 <li><a id="atmelink" href="/atme">@me<span id=mecount>{{ if .UserInfo.Options.MeCount }}({{ .UserInfo.Options.MeCount }}){{ end }}</span></a>
 <li><a id="firstlink" href="/first">first</a>
-<li style="list-style-type:none; margin-left:-1em">
+<li class="details">
 <details>
 <summary>combos</summary>
 <ul>
@@ -39,7 +38,7 @@
 <li><a href="/honkers">honkers</a>
 <li><a href="/hfcs">filters</a>
 <li><a href="/account">account</a>
-<li style="list-style-type:none; margin-left:-1em">
+<li class="details">
 <details>
 <summary>more stuff</summary>
 <ul>
@@ -53,13 +52,13 @@
 <li><a href="/help/honk.1.html">help</a>
 <li>
 <form action="/q" method="GET">
-<input type="text" name="q" autocomplete=off size=10 placeholder="search">
+<input type="text" name="q" autocomplete=off size=10 id="searchbox" placeholder="search">
 </form>
 </ul>
 </details>
 <div id="topspacer">
 <p>
-<p class="nophone" onclick="window.scrollTo(0,0)">top
+<p class="nophone">top
 </div>
 {{ else }}
 <div id="topmenu">

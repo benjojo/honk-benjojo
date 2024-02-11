@@ -1,5 +1,5 @@
 
-PROGS=autobonker gettoken saytheday sprayandpray wonkawonk youvegothonks
+PROGS=autobonker gettoken saytheday sprayandpray youvegothonks
 
 all: $(PROGS)
 
@@ -17,9 +17,6 @@ saytheday: saytheday.go
 
 sprayandpray: sprayandpray.go
 	go build sprayandpray.go
-
-wonkawonk: wonkawonk.go fetch.go
-	go build wonkawonk.go fetch.go
 
 youvegothonks: youvegothonks.go
 	go build youvegothonks.go

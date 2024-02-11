@@ -130,10 +130,27 @@ Replies higher in the tree are still received.
 Please no.
 .It Ic edit
 Change it up.
-Alas, Update activities do not federate reliably.
 .Ss Refresh
 Clicking the refresh button will load new honks, if any.
 New honks will be subtly highlighted.
+.El
+.Ss Hotkeys
+The following keyboard shortcuts may also be used to navigate.
+.Bl -tag -width short
+.It j
+Scroll to next honk.
+.It k
+Scroll to previous honk.
+.It r
+Refresh.
+.It s
+Scroll down to oldest newest.
+.It m
+Open menu.
+.It esc
+Close menu.
+.It /
+Search.
 .El
 .Ss Honking
 Refer to the
@@ -143,10 +160,18 @@ section of the manual for details of honk composition.
 Find old honks.
 It's basic substring match with a few extensions.
 The following keywords are supported:
-.Bl -tag -width honker
-.It site
+.Bl -tag -width honker:
+.It @me
+Honks mentioning the user.
+.It @self
+Honks by the user.
+.It before:
+Honks posted before YYYY-MM-DD.
+.It after:
+As above.
+.It site:
 Substring match on the post domain name.
-.It honker
+.It honker:
 Exact match, either AP actor or honker nickname.
 .It -
 Negate term.
@@ -170,6 +195,7 @@ The
 page lists recently seen honkers that are not otherwise tracked.
 It also allows the import of external objects via URL, either individual
 posts or actor URLs, in which case their recent outbox is imported.
+Probably easier to use the search box for this.
 .Ss Account
 It's all about you.
 An avatar may be selected from the

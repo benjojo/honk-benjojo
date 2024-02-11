@@ -1,4 +1,5 @@
 {{ template "header.html" . }}
+<script src="/misc.js{{ .MiscJSParam }}" defer></script>
 <main>
 <div class="info">
 <p>
@@ -10,14 +11,8 @@
 <p><label for=noise>noise:</label><br>
 <textarea name="noise" id="noise"></textarea>
 <p><button name="chonk" value="chonk">chonk</button>
-<label class=button id="donker">attach: <input onchange="updatedonker(this);" type="file" name="donk"><span></span></label>
+<label class=button id="donker">attach: <input type="file" name="donk"><span></span></label>
 </form>
-<script>
-function updatedonker(el) {
-	el = el.parentElement
-	el.children[1].textContent = el.children[0].value.slice(-20)
-}
-</script>
 </div>
 {{ $chonkcsrf := .ChonkCSRF }}
 {{ range .Chatter }}
@@ -59,7 +54,7 @@ chatter: {{ .Target }}
 <p><label for=noise>noise:</label><br>
 <textarea name="noise" id="noise"></textarea>
 <p><button name="chonk" value="chonk">chonk</button>
-<label class=button id="donker">attach: <input onchange="updatedonker(this);" type="file" name="donk"><span></span></label>
+<label class=button id="donker">attach: <input type="file" name="donk"><span></span></label>
 </form>
 </section>
 {{ end }}

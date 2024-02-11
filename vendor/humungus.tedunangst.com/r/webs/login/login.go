@@ -173,7 +173,7 @@ func loginredirect(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		Secure:   securecookies,
 		HttpOnly: true,
-		SameSite: samesitecookie,
+		SameSite: getsamesite(r),
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -186,6 +186,7 @@ var stmtUpdateExpiry, stmtDeleteOneAuth *sql.Stmt
 var csrfkey string
 var securecookies bool
 var samesitecookie http.SameSite
+var safariworks bool
 
 func getconfig(db *sql.DB, key string, value interface{}) error {
 	row := db.QueryRow("select value from config where key = ?", key)
@@ -201,6 +202,7 @@ type InitArgs struct {
 	Logger         *log.Logger
 	Insecure       bool
 	SameSiteStrict bool
+	SafariWorks    bool
 }
 
 // Init. Must be called with the database.
@@ -247,6 +249,7 @@ func Init(args InitArgs) {
 	if args.SameSiteStrict {
 		samesitecookie = http.SameSiteStrictMode
 	}
+	safariworks = args.SafariWorks
 	getconfig(db, "csrfkey", &csrfkey)
 }
 
@@ -280,6 +283,14 @@ func getauthcookie(r *http.Request) string {
 		return ""
 	}
 	return auth
+}
+
+func getsamesite(r *http.Request) http.SameSite {
+	var samesite http.SameSite
+	if safariworks || !strings.Contains(r.UserAgent(), "iPhone") {
+		samesite = samesitecookie
+	}
+	return samesite
 }
 
 func getformtoken(r *http.Request) string {
@@ -424,7 +435,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 			Value:    auth,
 			MaxAge:   maxage,
 			Secure:   securecookies,
-			SameSite: samesitecookie,
+			SameSite: getsamesite(r),
 			HttpOnly: true,
 		})
 	}
@@ -547,7 +558,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) error {
 		Value:    auth,
 		MaxAge:   maxage,
 		Secure:   securecookies,
-		SameSite: samesitecookie,
+		SameSite: getsamesite(r),
 		HttpOnly: true,
 	})
 

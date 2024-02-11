@@ -1,5 +1,4 @@
-
-create table honks (honkid integer primary key, userid integer, what text, honker text, xid text, rid text, dt text, url text, audience text, noise text, convoy text, whofore integer, format text, precis text, oonker text, flags integer);
+create table honks (honkid integer primary key, userid integer, what text, honker text, xid text, rid text, dt text, url text, audience text, noise text, convoy text, whofore integer, format text, precis text, oonker text, flags integer, plain text);
 create table chonks (chonkid integer primary key, userid integer, xid text, who txt, target text, dt text, noise text, format text);
 create table donks (honkid integer, chonkid integer, fileid integer);
 create table filemeta (fileid integer primary key, xid text, name text, description text, url text, media text, local integer);
@@ -16,6 +15,8 @@ create index idx_honksxid on honks(xid);
 create index idx_honksconvoy on honks(convoy);
 create index idx_honkshonker on honks(honker);
 create index idx_honksoonker on honks(oonker);
+create index idx_honksforme on honks(whofore) where whofore = 1;
+create index idx_honkswhotwo on honks(whofore) where whofore = 2;
 create index idx_donkshonk on donks(honkid);
 create index idx_donkschonk on donks(chonkid);
 create index idx_honkerxid on honkers(xid);

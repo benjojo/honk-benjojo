@@ -16,52 +16,36 @@
 package main
 
 import (
-	"net/http"
-	"strings"
-
-	"humungus.tedunangst.com/r/webs/junk"
+	"io"
+	"net"
+	"time"
 )
 
-func serveWordList(w http.ResponseWriter, r *http.Request) {
-	url := r.FormValue("w")
-	dlog.Printf("getting wordlist: %s", url)
-	wonkles := getxonker(url, "wonkles")
-	if wonkles == "" {
-		wonkles = saveWordList(url)
-		if wonkles == "" {
-			http.NotFound(w, r)
-			return
-		}
+func qotd() {
+	var qotdaddr string
+	getConfigValue("qotdaddr", &qotdaddr)
+	if qotdaddr == "" {
+		return
 	}
-	var words []string
-	for _, l := range strings.Split(wonkles, "\n") {
-		words = append(words, l)
-	}
-	if !develMode {
-		w.Header().Set("Cache-Control", "max-age=7776000")
-	}
-
-	j := junk.New()
-	j["wordlist"] = words
-	j.Write(w)
-}
-
-func saveWordList(url string) string {
-	w := getxonker(url, "wonkles")
-	if w != "" {
-		return w
-	}
-	ilog.Printf("fetching wonkles: %s", url)
-	res, err := fetchsome(url)
+	s, err := net.Listen("tcp", ":8017")
 	if err != nil {
-		ilog.Printf("error fetching wonkles: %s", err)
-		return ""
+		return
 	}
-	w = getxonker(url, "wonkles")
-	if w != "" {
-		return w
+	for {
+		c, err := s.Accept()
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		honks := getpublichonks()
+		for _, honk := range honks {
+			if !firstclass(honk) {
+				continue
+			}
+			io.WriteString(c, honk.Noise)
+			io.WriteString(c, "\n")
+			break
+		}
+		c.Close()
 	}
-	w = string(res)
-	savexonker(url, w, "wonkles", "")
-	return w
 }

@@ -51,10 +51,12 @@
 <div class="Bd Pp Bd-indent Li">
 <pre>proxy_set_header Host $http_host;</pre>
 </div>
+<p class="Pp">FastCGI can be used by prefixing the listen address with
+    &quot;fcgi:&quot;.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Build"><a class="permalink" href="#Build">Build</a></h2>
-<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler 1.13
+<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler 1.18
     and libsqlite. On <span class="Ux">OpenBSD</span> this is the go and sqlite3
     packages. Other platforms may require additional development libraries or
     headers to be installed. Run make. Please be patient. Even on fast machines,
@@ -142,13 +144,20 @@
     <var class="Ar">username</var> command.</p>
 <p class="Pp">Users may be deleted with the <code class="Ic">deluser</code>
     <var class="Ar">username</var> command.</p>
+<p class="Pp">Follow and unfollow requests can be sent via command line with
+    <code class="Ic">follow</code> <var class="Ar">username</var>
+    <var class="Ar">url</var> and <code class="Ic">unfollow</code>
+    <var class="Ar">username</var> <var class="Ar">url</var>.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Maintenance"><a class="permalink" href="#Maintenance">Maintenance</a></h2>
 <p class="Pp">The database may grow large over time. The
     <code class="Ic">cleanup</code> [<var class="Ar">days</var>] command exists
     to purge old external data, by default 30 days. This removes unreferenced,
-    unsaved posts and attachments. It does not remove any original content.</p>
+    unsaved posts and attachments. It does not remove any original content. This
+    will not immediately reduce the size of the database, but frees space for
+    future use. A vacuum may be performed manually if necessary, but will
+    require more time and additional disk space.</p>
 <p class="Pp">Backups may be performed by running <code class="Ic">backup
     dirname</code>. Backups only include the minimal necessary information, such
     as user posts and follower information, but not external posts.</p>
@@ -180,9 +189,13 @@
 <section class="Ss">
 <h2 class="Ss" id="Import"><a class="permalink" href="#Import">Import</a></h2>
 <p class="Pp">Data may be imported and converted from other services using the
-    <code class="Ic">import</code> command. Currently supports Mastodon and
-    Twitter exported data. Posts are imported and backdated to appear as old
-    honks. The Mastodon following list is imported, but must be refollowed.</p>
+    <code class="Ic">import</code> command. Currently supports Honk, Mastodon,
+    Twitter, and Instagram exported data. Posts are imported and backdated to
+    appear as old honks. The Mastodon following list is imported, but must be
+    refollowed.</p>
+<p class="Pp">To prepare a Honk data archive, extract the export.zip file.</p>
+<div class="Bd Bd-indent"><code class="Li">./honk import username honk
+  source-directory</code></div>
 <p class="Pp">To prepare a Mastodon data archive, extract the
     archive-longhash.tar.gz file.</p>
 <div class="Bd Bd-indent"><code class="Li">./honk import username mastodon
@@ -192,6 +205,18 @@
     tweet_media directory and unzip any zip files contained within.</p>
 <div class="Bd Bd-indent"><code class="Li">./honk import username twitter
   source-directory</code></div>
+<p class="Pp">To prepare an Instagram data archive, extract the igusername.zip
+    file.</p>
+<div class="Bd Bd-indent"><code class="Li">./honk import username instagram
+  source-directory</code></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Export"><a class="permalink" href="#Export">Export</a></h2>
+<p class="Pp">User data may be exported to a zip archive using the
+    <code class="Ic">export</code> command. This will export the user's outbox
+    and inbox in ActivityPub json format, along with associated media.</p>
+<div class="Bd Bd-indent"><code class="Li">./honk export username
+  zipname</code></div>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Advanced_Options"><a class="permalink" href="#Advanced_Options">Advanced
@@ -250,13 +275,13 @@ password: OxychromaticBlowfishSwatDynamite
 listen address: /var/www/honk.sock
 server name: honk.example.com
 honk-v98&gt; ./honk -datadir ../honkdata admin
-honk-v98&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
+honk-v98&gt; date; ./honk -log honk.log -datadir ../honkdata</pre>
 </div>
-<p class="Pp">The views directory includes a sample pleroma.css to change color
+<p class="Pp">The views directory includes a sample mastodon.css to change color
     scheme.</p>
 <div class="Bd Pp Bd-indent Li">
 <pre>honk-v98&gt; mkdir ../honkdata/views
-honk-v98&gt; cp views/pleroma.css ../honkdata/views/local.css</pre>
+honk-v98&gt; cp views/mastodon.css ../honkdata/views/local.css</pre>
 </div>
 <p class="Pp">Upgrade to the next version. Clean things up a bit.</p>
 <div class="Bd Pp Bd-indent Li">
@@ -265,7 +290,7 @@ datadir&gt; cd ../honk-v99
 honk-v99&gt; make
 honk-v99&gt; ./honk -datadir ../honkdata upgrade
 honk-v99&gt; ./honk -datadir ../honkdata cleanup
-honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
+honk-v99&gt; date; ./honk -log honk.log -datadir ../honkdata</pre>
 </div>
 </section>
 <section class="Sh">
@@ -287,8 +312,8 @@ honk-v99&gt; date; ./honk -datadir ../honkdata &gt;&gt; log 2&gt;&amp;1</pre>
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">May 31, 2022</td>
-    <td class="foot-os">OpenBSD 7.1</td>
+    <td class="foot-date">January 24, 2024</td>
+    <td class="foot-os">macOS 14.2</td>
   </tr>
 </table>
 </body>

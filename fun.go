@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"humungus.tedunangst.com/r/webs/cache"
+	"humungus.tedunangst.com/r/webs/gencache"
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/mz"
@@ -62,11 +62,10 @@ func loadLingo() {
 }
 
 func reverbolate(userid int64, honks []*ActivityPubActivity) {
-	var user *WhatAbout
-	somenumberedusers.Get(userid, &user)
+	user, _ := somenumberedusers.Get(userid)
 	for _, h := range honks {
 		h.What += "ed"
-		if h.What == "tonked" {
+		if h.What == "honked" && h.RID != "" {
 			h.What = "honked back"
 			h.Style += " subtle"
 		}
@@ -82,6 +81,7 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 			local = true
 		}
 		if local && h.What != "bonked" {
+			h.Noise = re_retag.ReplaceAllString(h.Noise, "")
 			h.Noise = re_memes.ReplaceAllString(h.Noise, "")
 		}
 		h.Username, h.Handle = handles(h.Honker)
@@ -97,8 +97,11 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 			}
 		}
 		if user != nil {
+			hset := []string{}
+			if h.Honker != user.URL {
+				hset = append(hset, "@"+h.Handle)
+			}
 			if user.Options.MentionAll {
-				hset := []string{"@" + h.Handle}
 				for _, a := range h.Audience {
 					if a == h.Honker || a == user.URL {
 						continue
@@ -123,10 +126,26 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 		h.Precis = demoji(h.Precis)
 		h.Noise = demoji(h.Noise)
 		h.Open = "open"
+		var misto string
 		for _, m := range h.Mentions {
-			if !m.IsPresent(h.Noise) {
-				h.Noise = "(" + m.Who + ")" + h.Noise
+			if m.Where != h.Honker && !m.IsPresent(h.Noise) {
+				misto += " " + m.Who
 			}
+		}
+		var mistag string
+		for _, o := range h.Onts {
+			if !OntIsPresent(o, h.Noise) {
+				mistag += " " + o
+			}
+		}
+		if len(misto) > 0 || len(mistag) > 0 {
+			if len(misto) > 0 {
+				misto = "(" + misto[1:] + ")<p>"
+			}
+			if len(mistag) > 0 {
+				mistag = "<p>(" + mistag[1:] + ")"
+			}
+			h.Noise = misto + h.Noise + mistag
 		}
 
 		zap := make(map[string]bool)
@@ -145,9 +164,8 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 					}
 				}
 				if local && h.What != "bonked" {
-					var emu Emu
-					emucache.Get(e, &emu)
-					if emu.ID != "" {
+					emu, _ := emucache.Get(e)
+					if emu != nil {
 						return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
 					}
 				}
@@ -157,6 +175,17 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 				data = htfilter.EscapeText(data)
 				data = re_emus.ReplaceAllStringFunc(data, emuxifier)
 				io.WriteString(w, data)
+			}
+			if user != nil {
+				htf.RetargetLink = func(href string) string {
+					h2 := strings.ReplaceAll(href, "/@", "/users/")
+					for _, m := range h.Mentions {
+						if h2 == m.Where || href == m.Where {
+							return "/h?xid=" + url.QueryEscape(m.Where)
+						}
+					}
+					return href
+				}
 			}
 			p, _ := htf.String(h.Precis)
 			n, _ := htf.String(h.Noise)
@@ -180,9 +209,6 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 
 		h.HTPrecis = template.HTML(h.Precis)
 		h.HTML = template.HTML(h.Noise)
-		if h.What == "wonked" {
-			h.HTML = "? wonk ?"
-		}
 		if redo := relingo[h.What]; redo != "" {
 			h.What = redo
 		}
@@ -220,7 +246,8 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 func translatechonk(ch *Chonk) {
 	noise := ch.Noise
 	if ch.Format == "markdown" {
-		noise = markitzero(noise)
+		var marker mz.Marker
+		noise = marker.Mark(noise)
 	}
 	var htf htfilter.Filter
 	htf.SpanClasses = allowedclasses
@@ -246,9 +273,8 @@ func filterchonk(ch *Chonk) {
 			}
 		}
 		if local {
-			var emu Emu
-			emucache.Get(e, &emu)
-			if emu.ID != "" {
+			emu, _ := emucache.Get(e)
+			if emu != nil {
 				return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
 			}
 		}
@@ -264,7 +290,9 @@ func filterchonk(ch *Chonk) {
 	}
 	ch.Donks = ch.Donks[:j]
 
-	noise = strings.TrimPrefix(noise, "<p>")
+	if strings.HasPrefix(noise, "<p>") {
+		noise = noise[3:]
+	}
 	ch.HTML = template.HTML(noise)
 	if short := shortname(ch.UserID, ch.Who); short != "" {
 		ch.Handle = short
@@ -294,12 +322,11 @@ func imaginate(honk *ActivityPubActivity) {
 	htf.String(honk.Noise)
 }
 
-func translate(honk *ActivityPubActivity) {
-	if honk.Format == "html" {
-		return
-	}
+var re_dangerous = regexp.MustCompile("^[a-zA-Z]{2}:")
+
+func precipitate(honk *ActivityPubActivity) {
 	noise := honk.Noise
-	if strings.HasPrefix(noise, "DZ:") {
+	if re_dangerous.MatchString(noise) {
 		idx := strings.Index(noise, "\n")
 		if idx == -1 {
 			honk.Precis = noise
@@ -308,16 +335,27 @@ func translate(honk *ActivityPubActivity) {
 			honk.Precis = noise[:idx]
 			noise = noise[idx+1:]
 		}
+		var marker mz.Marker
+		marker.Short = true
+		honk.Precis = marker.Mark(strings.TrimSpace(honk.Precis))
+		honk.Noise = noise
 	}
-	honk.Precis = markitzero(strings.TrimSpace(honk.Precis))
+}
+
+func translate(honk *ActivityPubActivity) {
+	if honk.Format == "html" {
+		return
+	}
+	noise := honk.Noise
 
 	var marker mz.Marker
 	marker.HashLinker = ontoreplacer
 	marker.AtLinker = attoreplacer
+	marker.AllowImages = true
 	noise = strings.TrimSpace(noise)
 	noise = marker.Mark(noise)
 	honk.Noise = noise
-	honk.Onts = stringArrayTrimUntilDupe(marker.HashTags)
+	honk.Onts = stringArrayTrimUntilDupe(append(honk.Onts, marker.HashTags...))
 	honk.Mentions = bunchofgrapes(marker.Mentions)
 }
 
@@ -393,7 +431,7 @@ type Emu struct {
 
 var re_emus = regexp.MustCompile(`:[[:alnum:]_-]+:`)
 
-var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
+var emucache = gencache.New(gencache.Options[string, *Emu]{Fill: func(ename string) (*Emu, bool) {
 	fname := ename[1 : len(ename)-1]
 	exts := []string{".png", ".gif"}
 	for _, ext := range exts {
@@ -402,19 +440,21 @@ var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
 			continue
 		}
 		url := fmt.Sprintf("https://%s/emu/%s%s", serverName, fname, ext)
-		return Emu{ID: url, Name: ename, Type: "image/" + ext[1:]}, true
+		if develMode {
+			url = fmt.Sprintf("/emu/%s%s", fname, ext)
+		}
+		return &Emu{ID: url, Name: ename, Type: "image/" + ext[1:]}, true
 	}
-	return Emu{Name: ename, ID: "", Type: "image/png"}, true
+	return nil, true
 }, Duration: 10 * time.Second})
 
-func herdofemus(noise string) []Emu {
+func herdofemus(noise string) []*Emu {
 	m := re_emus.FindAllString(noise, -1)
 	m = stringArrayTrimUntilDupe(m)
-	var emus []Emu
+	var emus []*Emu
 	for _, e := range m {
-		var emu Emu
-		emucache.Get(e, &emu)
-		if emu.ID == "" {
+		emu, _ := emucache.Get(e)
+		if emu == nil {
 			continue
 		}
 		emus = append(emus, emu)
@@ -425,6 +465,9 @@ func herdofemus(noise string) []Emu {
 var re_memes = regexp.MustCompile("meme: ?([^\n]+)")
 var re_avatar = regexp.MustCompile("avatar: ?([^\n]+)")
 var re_banner = regexp.MustCompile("banner: ?([^\n]+)")
+var re_convoy = regexp.MustCompile("convoy: ?([^\n]+)")
+var re_retag = regexp.MustCompile("tags: ?([^\n]+)")
+var re_convalidate = regexp.MustCompile("^(https?|tag|data):")
 
 func memetize(honk *ActivityPubActivity) {
 	repl := func(x string) string {
@@ -461,7 +504,25 @@ func memetize(honk *ActivityPubActivity) {
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]]+([ \n.]|$)")
+func recategorize(honk *ActivityPubActivity) {
+	repl := func(x string) string {
+		x = x[5:]
+		for _, t := range strings.Split(x, " ") {
+			if t == "" {
+				continue
+			}
+			if t[0] != '#' {
+				t = "#" + t
+			}
+			dlog.Printf("hashtag: %s", t)
+			honk.Onts = append(honk.Onts, t)
+		}
+		return ""
+	}
+	honk.Noise = re_retag.ReplaceAllStringFunc(honk.Noise, repl)
+}
+
+var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]_]+([ \n:;.,']|$)")
 
 func quickrename(s string, userid int64) string {
 	nonstop := true
@@ -476,7 +537,9 @@ func quickrename(s string, userid int64) string {
 			prefix += "@"
 			m = m[1:]
 			tail := ""
-			if last := m[len(m)-1]; last == ' ' || last == '\n' || last == '.' {
+			if last := m[len(m)-1]; last == ' ' || last == '\n' ||
+				last == ':' || last == ';' ||
+				last == '.' || last == ',' || last == '\'' {
 				tail = m[len(m)-1:]
 				m = m[:len(m)-1]
 			}
@@ -496,7 +559,7 @@ func quickrename(s string, userid int64) string {
 	return s
 }
 
-var shortnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+var shortnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -506,15 +569,14 @@ var shortnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]
 }, Invalidator: &honkerinvalidator})
 
 func shortname(userid int64, xid string) string {
-	var m map[string]string
-	ok := shortnames.Get(userid, &m)
+	m, ok := shortnames.Get(userid)
 	if ok {
 		return m[xid]
 	}
 	return ""
 }
 
-var fullnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+var fullnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -524,8 +586,7 @@ var fullnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]s
 }, Invalidator: &honkerinvalidator})
 
 func fullname(name string, userid int64) string {
-	var m map[string]string
-	ok := fullnames.Get(userid, &m)
+	m, ok := fullnames.Get(userid)
 	if ok {
 		return m[name]
 	}
@@ -543,7 +604,7 @@ func attoreplacer(m string) string {
 }
 
 func ontoreplacer(h string) string {
-	return fmt.Sprintf(`<a href="https://%s/o/%s">%s</a>`, serverName,
+	return fmt.Sprintf(`<a class="mention hashtag" href="https://%s/o/%s">%s</a>`, serverName,
 		strings.ToLower(h[1:]), h)
 }
 
@@ -558,7 +619,7 @@ func originate(u string) string {
 	return ""
 }
 
-var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool) {
+var allhandles = gencache.New(gencache.Options[string, string]{Fill: func(xid string) (string, bool) {
 	handle := getxonker(xid, "handle")
 	if handle == "" {
 		dlog.Printf("need to get a handle: %s", xid)
@@ -579,11 +640,10 @@ var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool)
 
 // handle, handle@host
 func handles(xid string) (string, string) {
-	if xid == "" || xid == activitystreamsPublicString || strings.HasSuffix(xid, "/followers") {
+	if xid == "" || xid == atContextString || strings.HasSuffix(xid, "/followers") {
 		return "", ""
 	}
-	var handle string
-	allhandles.Get(xid, &handle)
+	handle, _ := allhandles.Get(xid)
 	if handle == xid {
 		return xid, xid
 	}
@@ -600,7 +660,7 @@ func butnottooloud(aud []string) {
 
 func loudandproud(aud []string) bool {
 	for _, a := range aud {
-		if a == activitystreamsPublicString {
+		if a == atContextString {
 			return true
 		}
 	}
@@ -608,7 +668,7 @@ func loudandproud(aud []string) bool {
 }
 
 func firstclass(honk *ActivityPubActivity) bool {
-	return honk.Audience[0] == activitystreamsPublicString
+	return honk.Audience[0] == atContextString
 }
 
 func stringArrayTrimUntilDupe(a []string) []string {
@@ -625,9 +685,8 @@ func stringArrayTrimUntilDupe(a []string) []string {
 	return a[:j]
 }
 
-var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool) {
-	var user *WhatAbout
-	ok := somenumberedusers.Get(userid, &user)
+var ziggies = gencache.New(gencache.Options[int64, *KeyInfo]{Fill: func(userid int64) (*KeyInfo, bool) {
+	user, ok := somenumberedusers.Get(userid)
 	if !ok {
 		return nil, false
 	}
@@ -638,16 +697,15 @@ var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool
 }})
 
 func getPrivateKey(userid int64) *KeyInfo {
-	var ki *KeyInfo
-	ziggies.Get(userid, &ki)
+	ki, _ := ziggies.Get(userid)
 	return ki
 }
 
-var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.PublicKey, bool) {
+var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: func(keyname string) (httpsig.PublicKey, bool) {
 	data := getxonker(keyname, "pubkey")
 	if data == "" {
 		dlog.Printf("hitting the webs for missing pubkey: %s", keyname)
-		j, err := GetJunk(serverUID, keyname)
+		j, err := GetJunk(firstUserUID, keyname)
 		if err != nil {
 			ilog.Printf("error getting %s pubkey: %s", keyname, err)
 			when := time.Now().UTC().Format(dbtimeformat)
@@ -676,8 +734,7 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.Publ
 }, Limit: 512})
 
 func getPubKey(keyname string) (httpsig.PublicKey, error) {
-	var key httpsig.PublicKey
-	zaggies.Get(keyname, &key)
+	key, _ := zaggies.Get(keyname)
 	return key, nil
 }
 
@@ -688,16 +745,9 @@ func savingthrow(keyname string) {
 }
 
 func keymatch(keyname string, actor string) string {
-	hash := strings.IndexByte(keyname, '#')
-	if hash == -1 {
-		// bodge in support for GoToSocial, which uses /main-key instead
-		keyname = strings.TrimSuffix(keyname, "/main-key")
-
-		hash = len(keyname)
-	}
-	owner := keyname[0:hash]
-	if owner == actor {
-		return originate(actor)
+	origin := originate(actor)
+	if origin == originate(keyname) {
+		return origin
 	}
 	return ""
 }

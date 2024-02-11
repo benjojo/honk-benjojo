@@ -1,4 +1,5 @@
 {{ template "header.html" . }}
+<script src="/misc.js{{ .MiscJSParam }}" defer></script>
 <main>
 <div class="info">
 <p>
@@ -21,21 +22,13 @@
 </div>
 {{ $honkercsrf := .HonkerCSRF }}
 <div class="info">
-<script>
-function expandstuff() {
-	var els = document.querySelectorAll(".honk details")
-	for (var i = 0; i < els.length; i++) {
-		els[i].open = true
-	}
-}
-</script>
-<p><button onclick="expandstuff()">expand</button>
+<p><button class="expand">expand</button>
 </div>
 {{ range .Honkers }}
 <section class="honk">
 <header>
 <img alt="avatar" src="/a?a={{ .XID }}">
-<p style="font-size: 1.8em"><a href="/h/{{ .Name }}">{{ .Name }}<a>
+<p class="font18em"><a href="/h/{{ .Name }}">{{ .Name }}</a>
 </header>
 <p>
 <details>

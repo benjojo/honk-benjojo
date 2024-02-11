@@ -16,9 +16,37 @@
 package main
 
 import (
+	"runtime/debug"
 	"syscall"
 	"time"
 )
+
+func init() {
+	if softwareVersion != "develop" {
+		return
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	var vcs, rev, mod string
+	for _, bs := range bi.Settings {
+		if bs.Key == "vcs" {
+			vcs = "/" + bs.Value
+		}
+		if bs.Key == "vcs.revision" {
+			rev = bs.Value
+			if len(rev) > 12 {
+				rev = rev[:12]
+			}
+			rev = "-" + rev
+		}
+		if bs.Key == "vcs.modified" && bs.Value == "true" {
+			mod = "+"
+		}
+	}
+	softwareVersion += vcs + rev + mod
+}
 
 type Sensors struct {
 	Memory float64

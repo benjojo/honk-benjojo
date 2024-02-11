@@ -2,43 +2,27 @@
 <main>
 <div class="info" id="infobox">
 <div id="srvmsg">
+<div>
 {{ if .Name }}
-<p>{{ .Name }} <span style="margin-left:1em;"><a href="/u/{{ .Name }}/rss">rss</a></span>
+<p>{{ .Name }} <span class="left1em"><a href="/u/{{ .Name }}/rss">rss</a></span>
 <p>{{ .WhatAbout }}
 {{ end }}
-<p>{{ .ServerMessage }}
+{{ .ServerMessage }}
+</div>
 </div>
 {{ if .HonkCSRF }}
 {{ template "honkform.html" . }}
-<script>
-var csrftoken = {{ .HonkCSRF }}
-var honksforpage = { }
-var curpagestate = { name: "{{ .PageName }}", arg : "{{ .PageArg }}" }
-var tophid = { }
-tophid[curpagestate.name + ":" + curpagestate.arg] = "{{ .TopHID }}"
-var servermsgs = { }
-servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
-</script>
-<script src="/honkpage.js{{ .JSParam }}"></script>
+<script src="/honkpage.js{{ .JSParam }}" defer data-csrf="{{ .HonkCSRF }}" data-pagename="{{ .PageName }}" data-pagearg="{{ .PageArg }}" data-tophid="{{ .TopHID }}" data-srvmsg="{{ .ServerMessage }}"></script>
 {{ end }}
-<script>
-function playit(elem, word, wordlist, xid) {
-	import('/wonk.js').then(module => {
-		makeaguess = module.makeaguess
-		module.addguesscontrols(elem, word, wordlist, xid)
-	})
-}
-</script>
 {{ if .LocalJSParam }}
-<script src="/local.js{{ .LocalJSParam }}"></script>
+<script src="/local.js{{ .LocalJSParam }}" defer></script>
 {{ end }}
 </div>
 {{ if and .HonkCSRF (not .IsPreview) }}
 <div class="info" id="refreshbox">
-<p><button onclick="refreshhonks(this)">refresh</button><span></span>
-<button onclick="oldestnewest(this)">scroll down</button>
+<p><button id="honkrefresher" class="refresh">refresh</button><span></span>
+<button id="newerscroller" class="scrolldown">scroll down</button>
 </div>
-{{ if eq .ServerMessage "one honk maybe more" }} <script> hideelement("refreshbox")</script> {{ end }}
 {{ end }}
 <div id="honksonpage">
 <div>
@@ -47,8 +31,9 @@ function playit(elem, word, wordlist, xid) {
 {{ $MapLink := .MapLink }}
 {{ $Badonk := .User.Options.Reaction }}
 {{ $OmitImages := .User.Options.OmitImages }}
+{{ $UserURL := .User.URL }}
 {{ range .Honks }}
-{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages }}
+{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages "UserURL" $UserURL }}
 {{ end }}
 </div>
 </div>

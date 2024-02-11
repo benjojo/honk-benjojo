@@ -19,9 +19,14 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"humungus.tedunangst.com/r/webs/cache"
+	"humungus.tedunangst.com/r/webs/gencache"
+	"humungus.tedunangst.com/r/webs/login"
 )
 
 type Filter struct {
@@ -31,8 +36,10 @@ type Filter struct {
 	Date            time.Time
 	Actor           string `json:",omitempty"`
 	IncludeAudience bool   `json:",omitempty"`
+	OnlyUnknowns    bool   `json:",omitempty"`
 	Text            string `json:",omitempty"`
 	re_text         *regexp.Regexp
+	IsReply         bool   `json:",omitempty"`
 	IsAnnounce      bool   `json:",omitempty"`
 	AnnounceOf      string `json:",omitempty"`
 	Reject          bool   `json:",omitempty"`
@@ -66,12 +73,15 @@ func (ft filtType) String() string {
 
 type afiltermap map[filtType][]*Filter
 
-var filtInvalidator cache.Invalidator
-var filtcache *cache.Cache
+var filtInvalidator gencache.Invalidator[int64]
+var filtcache *gencache.Cache[int64, afiltermap]
 
 func init() {
 	// resolve init loop
-	filtcache = cache.New(cache.Options{Filler: filtcachefiller, Invalidator: &filtInvalidator})
+	filtcache = gencache.New(gencache.Options[int64, afiltermap]{
+		Fill:        filtcachefiller,
+		Invalidator: &filtInvalidator,
+	})
 }
 
 func filtcachefiller(userid int64) (afiltermap, bool) {
@@ -107,9 +117,9 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 				expflush = filt.Expiration
 			}
 		}
-		if t := filt.Text; t != "" {
-			wordfront := t[0] != '#'
-			wordtail := true
+		if t := filt.Text; t != "" && t != "." {
+			wordfront := unicode.IsLetter(rune(t[0]))
+			wordtail := unicode.IsLetter(rune(t[len(t)-1]))
 			t = "(?i:" + t + ")"
 			if wordfront {
 				t = "\\b" + t
@@ -124,8 +134,8 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 			}
 		}
 		if t := filt.Rewrite; t != "" {
-			wordfront := t[0] != '#'
-			wordtail := true
+			wordfront := unicode.IsLetter(rune(t[0]))
+			wordtail := unicode.IsLetter(rune(t[len(t)-1]))
 			t = "(?i:" + t + ")"
 			if wordfront {
 				t = "\\b" + t
@@ -179,8 +189,7 @@ func filtcacheclear(userid int64, dur time.Duration) {
 }
 
 func getfilters(userid int64, scope filtType) []*Filter {
-	var filtmap afiltermap
-	ok := filtcache.Get(userid, &filtmap)
+	filtmap, ok := filtcache.Get(userid)
 	if ok {
 		return filtmap[scope]
 	}
@@ -191,7 +200,7 @@ type arejectmap map[string][]*Filter
 
 var rejectAnyKey = "..."
 
-var rejectcache = cache.New(cache.Options{Filler: func(userid int64) (arejectmap, bool) {
+var rejectcache = gencache.New(gencache.Options[int64, arejectmap]{Fill: func(userid int64) (arejectmap, bool) {
 	m := make(arejectmap)
 	filts := getfilters(userid, filtReject)
 	for _, f := range filts {
@@ -213,8 +222,7 @@ var rejectcache = cache.New(cache.Options{Filler: func(userid int64) (arejectmap
 }, Invalidator: &filtInvalidator})
 
 func rejectfilters(userid int64, name string) []*Filter {
-	var m arejectmap
-	rejectcache.Get(userid, &m)
+	m, _ := rejectcache.Get(userid)
 	return m[name]
 }
 
@@ -224,6 +232,9 @@ func rejectorigin(userid int64, origin string, isannounce bool) bool {
 	}
 	filts := rejectfilters(userid, origin)
 	for _, f := range filts {
+		if f.OnlyUnknowns {
+			continue
+		}
 		if isannounce && f.IsAnnounce {
 			if f.AnnounceOf == origin {
 				return true
@@ -257,6 +268,13 @@ func rejectactor(userid int64, actor string) bool {
 			continue
 		}
 		if f.Actor == origin {
+			if f.OnlyUnknowns {
+				if unknownActor(userid, actor) {
+					ilog.Printf("rejecting unknown actor: %s", actor)
+					return true
+				}
+				continue
+			}
 			ilog.Printf("rejecting actor: %s", actor)
 			return true
 		}
@@ -264,9 +282,22 @@ func rejectactor(userid int64, actor string) bool {
 	return false
 }
 
+var knownknowns = gencache.New(gencache.Options[int64, map[string]bool]{Fill: func(userid int64) (map[string]bool, bool) {
+	m := make(map[string]bool)
+	honkers := gethonkers(userid)
+	for _, h := range honkers {
+		m[h.XID] = true
+	}
+	return m, true
+}, Invalidator: &honkerinvalidator})
+
+func unknownActor(userid int64, actor string) bool {
+	knowns, _ := knownknowns.Get(userid)
+	return !knowns[actor]
+}
+
 func stealthmode(userid int64, r *http.Request) bool {
-	agent := r.UserAgent()
-	agent = originate(agent)
+	agent := requestActor(r)
 	if agent != "" {
 		fake := rejectorigin(userid, agent, false)
 		if fake {
@@ -290,7 +321,7 @@ func matchfilterX(h *ActivityPubActivity, f *Filter) string {
 			match = true
 			rv = f.Actor
 		}
-		if !match && (f.Actor == originate(h.Honker) ||
+		if !match && !f.OnlyUnknowns && (f.Actor == originate(h.Honker) ||
 			f.Actor == originate(h.Oonker) ||
 			f.Actor == originate(h.XID)) {
 			match = true
@@ -306,15 +337,23 @@ func matchfilterX(h *ActivityPubActivity, f *Filter) string {
 			}
 		}
 	}
-	if match && f.IsAnnounce {
+	if match && f.IsReply {
 		match = false
-		if (f.AnnounceOf == "" && h.Oonker != "") || f.AnnounceOf == h.Oonker ||
-			f.AnnounceOf == originate(h.Oonker) {
+		if h.RID != "" {
 			match = true
-			rv += " announce"
+			rv += " reply"
 		}
 	}
-	if match && f.Text != "" {
+	if match && f.IsAnnounce {
+		match = false
+		if h.Oonker != "" {
+			if f.AnnounceOf == "" || f.AnnounceOf == h.Oonker || f.AnnounceOf == originate(h.Oonker) {
+				match = true
+				rv += " announce"
+			}
+		}
+	}
+	if match && f.Text != "" && f.Text != "." {
 		match = false
 		re := f.re_text
 		m := re.FindString(h.Precis)
@@ -334,6 +373,13 @@ func matchfilterX(h *ActivityPubActivity, f *Filter) string {
 			rv = m
 		}
 	}
+	if match && f.Text == "." {
+		match = false
+		if h.Precis != "" {
+			match = true
+			rv = h.Precis
+		}
+	}
 	if match {
 		return rv
 	}
@@ -341,8 +387,7 @@ func matchfilterX(h *ActivityPubActivity, f *Filter) string {
 }
 
 func rejectxonk(xonk *ActivityPubActivity) bool {
-	var m arejectmap
-	rejectcache.Get(xonk.UserID, &m)
+	m, _ := rejectcache.Get(xonk.UserID)
 	filts := m[rejectAnyKey]
 	filts = append(filts, m[xonk.Honker]...)
 	filts = append(filts, m[originate(xonk.Honker)]...)
@@ -397,6 +442,12 @@ func unsee(honks []*ActivityPubActivity, userid int64) {
 				if h.Precis == "" {
 					h.Precis = "really freaking long"
 				}
+				h.Open = ""
+			}
+		}
+	} else {
+		for _, h := range honks {
+			if h.Precis != "" {
 				h.Open = ""
 			}
 		}
@@ -462,4 +513,57 @@ outer:
 	}
 	honks = honks[0:j]
 	return honks
+}
+
+func savehfcs(w http.ResponseWriter, r *http.Request) {
+	userinfo := login.GetUserInfo(r)
+	itsok := r.FormValue("itsok")
+	if itsok == "iforgiveyou" {
+		hfcsid, _ := strconv.ParseInt(r.FormValue("hfcsid"), 10, 0)
+		_, err := stmtDeleteFilter.Exec(userinfo.UserID, hfcsid)
+		if err != nil {
+			elog.Printf("error deleting filter: %s", err)
+		}
+		filtInvalidator.Clear(userinfo.UserID)
+		http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
+		return
+	}
+
+	filt := new(Filter)
+	filt.Name = strings.TrimSpace(r.FormValue("name"))
+	filt.Date = time.Now().UTC()
+	filt.Actor = strings.TrimSpace(r.FormValue("actor"))
+	filt.IncludeAudience = r.FormValue("incaud") == "yes"
+	filt.OnlyUnknowns = r.FormValue("unknowns") == "yes"
+	filt.Text = strings.TrimSpace(r.FormValue("filttext"))
+	filt.IsReply = r.FormValue("isreply") == "yes"
+	filt.IsAnnounce = r.FormValue("isannounce") == "yes"
+	filt.AnnounceOf = strings.TrimSpace(r.FormValue("announceof"))
+	filt.Reject = r.FormValue("doreject") == "yes"
+	filt.SkipMedia = r.FormValue("doskipmedia") == "yes"
+	filt.Hide = r.FormValue("dohide") == "yes"
+	filt.Collapse = r.FormValue("docollapse") == "yes"
+	filt.Rewrite = strings.TrimSpace(r.FormValue("filtrewrite"))
+	filt.Replace = strings.TrimSpace(r.FormValue("filtreplace"))
+	if dur := parseDuration(r.FormValue("filtduration")); dur > 0 {
+		filt.Expiration = time.Now().UTC().Add(dur)
+	}
+	filt.Notes = strings.TrimSpace(r.FormValue("filtnotes"))
+
+	if filt.Actor == "" && filt.Text == "" && !filt.IsAnnounce {
+		ilog.Printf("blank filter")
+		http.Error(w, "can't save a blank filter", http.StatusInternalServerError)
+		return
+	}
+
+	j, err := encodeJson(filt)
+	if err == nil {
+		_, err = stmtSaveFilter.Exec(userinfo.UserID, j)
+	}
+	if err != nil {
+		elog.Printf("error saving filter: %s", err)
+	}
+
+	filtInvalidator.Clear(userinfo.UserID)
+	http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
 }

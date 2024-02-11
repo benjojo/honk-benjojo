@@ -17,13 +17,19 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
 	"os/exec"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 
-	"github.com/benjojo/honk-benjojo/image"
 	"humungus.tedunangst.com/r/webs/gate"
+	"humungus.tedunangst.com/r/webs/image"
 )
 
 type Shrinker struct {
@@ -55,7 +61,47 @@ func backendSockname() string {
 	return dataDir + "/backend.sock"
 }
 
-func shrinkit(data []byte) (*image.Image, error) {
+var bomFuck = []byte{0xef, 0xbb, 0xbf}
+
+func isSVG(data []byte) bool {
+	if bytes.HasPrefix(data, bomFuck) {
+		data = data[3:]
+	}
+	ct := http.DetectContentType(data)
+	if strings.HasPrefix(ct, "text/xml") || strings.HasPrefix(ct, "text/plain") {
+		// this seems suboptimal
+		prefixes := []string{
+			`<svg `,
+			`<!DOCTYPE svg PUBLIC`,
+			`<?xml version="1.0" encoding="UTF-8"?> <svg `,
+		}
+		for _, pre := range prefixes {
+			if bytes.HasPrefix(data, []byte(pre)) {
+				return true
+			}
+		}
+	}
+	return ct == "image/svg+xml"
+}
+
+func imageFromSVG(data []byte) (*image.Image, error) {
+	if bytes.HasPrefix(data, bomFuck) {
+		data = data[3:]
+	}
+	if len(data) > 100000 {
+		return nil, errors.New("my svg is too big")
+	}
+	svg := &image.Image{
+		Data:   data,
+		Format: "svg+xml",
+	}
+	return svg, nil
+}
+
+func callshrink(data []byte, params image.Params) (*image.Image, error) {
+	if isSVG(data) {
+		return imageFromSVG(data)
+	}
 	cl, err := rpc.Dial("unix", backendSockname())
 	if err != nil {
 		return nil, err
@@ -64,7 +110,7 @@ func shrinkit(data []byte) (*image.Image, error) {
 	var res ShrinkerResult
 	err = cl.Call("Shrinker.Shrink", &ShrinkerArgs{
 		Buf:    data,
-		Params: image.Params{LimitSize: 8000 * 8000, MaxWidth: 2048, MaxHeight: 2048},
+		Params: params,
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -72,7 +118,24 @@ func shrinkit(data []byte) (*image.Image, error) {
 	return res.Image, nil
 }
 
-var backendhooks []func()
+func bigshrink(data []byte) (*image.Image, error) {
+	params := image.Params{
+		LimitSize: 8000 * 8000,
+		MaxWidth:  2600,
+		MaxHeight: 2048,
+		MaxSize:   768 * 1024,
+	}
+	return callshrink(data, params)
+}
+
+func shrinkit(data []byte) (*image.Image, error) {
+	params := image.Params{
+		LimitSize: 4200 * 4200,
+		MaxWidth:  2048,
+		MaxHeight: 2048,
+	}
+	return callshrink(data, params)
+}
 
 func orphancheck() {
 	var b [1]byte
@@ -83,7 +146,9 @@ func orphancheck() {
 
 func backendServer() {
 	dlog.Printf("backend server running")
+	closedatabases()
 	go orphancheck()
+	signal.Ignore(syscall.SIGINT)
 	shrinker := new(Shrinker)
 	srv := rpc.NewServer()
 	err := srv.Register(shrinker)
@@ -105,9 +170,7 @@ func backendServer() {
 	if err != nil {
 		elog.Printf("error setting backend limits: %s", err)
 	}
-	for _, h := range backendhooks {
-		h()
-	}
+	securitizebackend()
 	srv.Accept(lis)
 }
 
@@ -124,9 +187,23 @@ func runBackendServer() {
 	if err != nil {
 		elog.Panicf("can't exec backend: %s", err)
 	}
+	workinprogress++
+	var mtx sync.Mutex
 	go func() {
-		proc.Wait()
-		elog.Printf("lost the backend: %s", err)
+		<-endoftheworld
+		mtx.Lock()
+		defer mtx.Unlock()
 		w.Close()
+		w = nil
+		readyalready <- true
+	}()
+	go func() {
+		err := proc.Wait()
+		mtx.Lock()
+		defer mtx.Unlock()
+		if w != nil {
+			elog.Printf("lost the backend: %s", err)
+			w.Close()
+		}
 	}()
 }

@@ -1,4 +1,4 @@
-<article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}">
+<article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}" data-hname="{{ .Honk.Handles }}" data-xid="{{ .Honk.XID }}" data-id="{{ .Honk.ID }}">
 {{ $bonkcsrf := .BonkCSRF }}
 {{ $IsPreview := .IsPreview }}
 {{ $maplink := .MapLink }}
@@ -11,7 +11,7 @@
 <a href="{{ .Honker }}" rel=noreferrer>
 {{ end }}
 <img alt="" src="/a?a={{ .Honker}}">
-{{ if $bonkcsrf }} </a> {{ end }}
+</a>
 {{ if .Oonker }}
 {{ if $bonkcsrf }}
 <a class="honkerlink" href="/h?xid={{ .Oonker }}" data-xid="{{ .Oonker }}">
@@ -19,7 +19,7 @@
 <a href="{{ .Oonker }}" rel=noreferrer>
 {{ end }}
 <img alt="" src="/a?a={{ .Oonker}}">
-{{ if $bonkcsrf }} </a> {{ end }}
+</a>
 {{ end }}
 <p>
 {{ if $bonkcsrf }}
@@ -30,7 +30,7 @@
 <span class="clip"><a href="{{ .URL }}" rel=noreferrer>{{ .What }}</a> {{ .Date.Local.Format "02 Jan 2006 15:04 -0700" }}</span>
 {{ if .Oonker }}
 <br>
-<span style="margin-left: 1em;" class="clip">
+<span class="left1em clip">
 {{ if $bonkcsrf }}
 original: <a class="honkerlink" href="/h?xid={{ .Oonker }}" data-xid="{{ .Oonker }}">{{ .Oondle }}</a>
 {{ else }}
@@ -40,19 +40,19 @@ original: <a href="{{ .Oonker }}" rel=noreferrer>{{ .Oondle }}</a>
 {{ else }}
 {{ if .RID }}
 <br>
-<span style="margin-left: 1em;" class="clip">
+<span class="left1em clip">
 in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 </span>
 {{ end }}
 {{ end }}
 <br>
 {{ if $bonkcsrf }}
-<span style="margin-left: 1em;" class="clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
+<span class="left1em clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
 {{ end }}
 </header>
 <p>
-<details class="noise" {{ .Open }} >
-<summary>{{ .HTPrecis }}<p></summary>
+<details class="noise" {{ with .Open }}{{.}}{{end}}>
+<summary class="noise">{{ .HTPrecis }}<p></summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}
 {{ with .Time }}
@@ -68,13 +68,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else if eq .Media "application/pdf" }}
 <p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
-{{ else if eq .Media "video/mp4" }}
-<p><video controls src="{{ .URL }}">{{ .Name }}</video>
 {{ else }}
 {{ if $omitimages }}
 <p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
-<p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+<p><img src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}">
 {{ end }}
 {{ end }}
 {{ else }}
@@ -91,15 +89,6 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 </details>
 {{ end }}
-{{ if eq .Honk.What "wonked" }}
-<p>
-{{ if and $bonkcsrf .Honk.IsWonked }}
-{{ .Honk.Guesses }}
-<p>{{ .Honk.Noise }}
-{{ else }}
-<button onclick="return playit(this, '{{ .Honk.Noise }}', '{{ .Honk.Wonkles }}', '{{ .Honk.XID }}')">it's play time!</button>
-{{ end }}
-{{ end }}
 {{ if and $bonkcsrf (not $IsPreview) }}
 <p>
 <details class="actions">
@@ -108,46 +97,45 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <p>
 {{ if .Honk.Public }}
 {{ if .Honk.IsBonked }}
-<button onclick="return unbonk(this, '{{ .Honk.XID }}');">unbonk</button>
+<button class="unbonk">unbonk</button>
 {{ else }}
-<button onclick="return bonk(this, '{{ .Honk.XID }}');">bonk</button>
+<button class="bonk">bonk</button>
 {{ end }}
 {{ else }}
 <button disabled>nope</button>
 {{ end }}
-<button onclick="return showhonkform(this, '{{ .Honk.XID }}', '{{ .Honk.Handles }}');"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
-<button onclick="return muteit(this, '{{ .Honk.Convoy }}');">mute</button>
-<button onclick="return showelement('evenmore{{ .Honk.ID }}')">even more</button>
+<button class="honkback"><a href="/newhonk?rid={{ .Honk.XID }}">honk back</a></button>
+<button class="mute">mute</button>
+<button class="evenmore">even more</button>
 </div>
-<div id="evenmore{{ .Honk.ID }}" style="display:none">
+<div id="evenmore{{ .Honk.ID }}" class="hide">
 <p>
-<button onclick="return zonkit(this, '{{ .Honk.XID }}');">zonk</button>
+<button class="zonk">zonk</button>
 {{ if .Honk.IsAcked }}
-<button onclick="return flogit(this, 'deack', '{{ .Honk.XID }}');">deack</button>
+<button class="flogit-deack">deack</button>
 {{ else }}
-<button onclick="return flogit(this, 'ack', '{{ .Honk.XID }}');">ack</button>
-{{ end }}
-{{ if .Honk.IsBSkyd }}
-<button onclick="return flogit(this, 'debsky', '{{ .Honk.XID }}');">unbluesky</button>
-{{ else }}
-<button onclick="return flogit(this, 'bsky', '{{ .Honk.XID }}');">bluesky</button>
+<button class="flogit-ack" >ack</button>
 {{ end }}
 {{ if .Honk.IsSaved }}
-<button onclick="return flogit(this, 'unsave', '{{ .Honk.XID }}');">unsave</button>
+<button class="flogit-unsave">unsave</button>
 {{ else }}
-<button onclick="return flogit(this, 'save', '{{ .Honk.XID }}');">save</button>
+<button class="flogit-save">save</button>
 {{ end }}
 {{ if .Honk.IsUntagged }}
 <button disabled>untagged</button>
 {{ else }}
-<button onclick="return flogit(this, 'untag', '{{ .Honk.XID }}');">untag me</button>
+<button class="flogit-untag">untag me</button>
 {{ end }}
+{{ if eq .Honk.Honker .UserURL }}
 <button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
+{{ else }}
+<button disabled>nope</button>
+{{ end }}
 {{ if not (eq .Badonk "none") }}
 {{ if .Honk.IsReacted }}
 <button disabled>badonked</button>
 {{ else }}
-<button onclick="return flogit(this, 'react', '{{ .Honk.XID }}');">{{ .Badonk }}</button>
+<button class="flogit-react" >{{ .Badonk }}</button>
 {{ end }}
 {{ end }}
 </div>

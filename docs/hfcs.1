@@ -44,13 +44,14 @@ Matches against
 property.
 .It Ar include audience
 Previous match is applied against
-.Fa to
-and
-.Fa cc
-fields as well.
+.It Ar only unknowns
+Previous (domain) match is applied only to unknown actors.
 .It Ar text
 Regular expression match against the post
 .Fa content .
+The special value of "." will match any post with a summary only.
+.It Ar is reply
+A reply to another post.
 .It Ar is announce
 Is announced (shared).
 .It Ar announce of
@@ -94,6 +95,9 @@ that can be matched against and will appear if the post is collapsed.
 .Pp
 An optional expiration may be specified as a duration.
 XdYhZm for X days, Y hours, and Z minutes.
+.Sh EXAMPLES
+A rudimentary spam filter may be constructed with where set to mastodon.social,
+checking the only unknowns option, with an action of reject.
 .Sh SEE ALSO
 .Xr honk 1
 .Sh CAVEATS
