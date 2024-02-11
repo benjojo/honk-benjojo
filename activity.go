@@ -793,7 +793,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *ActivityPubActiv
 		xonk.UserID = user.ID
 		xonk.Honker, _ = item.GetString("actor")
 		if xonk.Honker == "" {
-			xonk.Honker, _ = item.GetString("attributedTo")
+			xonk.Honker = extractattrto(item)
 		}
 		if originate(xonk.Honker) != origin {
 			ilog.Printf("out of bounds honker %s from %s", xonk.Honker, origin)
