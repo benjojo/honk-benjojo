@@ -1659,6 +1659,10 @@ func junkuser(user *WhatAbout) junk.Junk {
 	j["outbox"] = user.URL + "/outbox"
 	j["name"] = user.Display
 	j["preferredUsername"] = user.Name
+	j["manuallyApprovesFollowers"] = false // Have to set this or some clients assume you are private
+	j["discoverable"] = true
+	j["indexable"] = true
+	j["memorial"] = false // Only alive users please
 	j["summary"] = user.HTAbout
 	var tags []junk.Junk
 	for _, o := range user.Onts {
