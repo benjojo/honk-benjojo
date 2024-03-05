@@ -3066,16 +3066,37 @@ func redirect(w http.ResponseWriter, req *http.Request) {
 var webRoot = flag.String("www.root", "/var/www/benjojo.co.uk", "Where you want to serve your actual website from (that isnt honk)")
 var tlsRoot = flag.String("tls.names", "benjojo.co.uk,www.benjojo.co.uk", "What to lets encrypt for")
 var tlsEmail = flag.String("tls.email", "www@benjojo.co.uk", "What email to tell let's encrypt")
+var tlsCertPath = flag.String("tls.cert", "", "The file path where a TLS certificate can be found. If enabled with tls.key, Lets Encrypt will be disabled.")
+var tlsKeyPath = flag.String("tls.key", "", "The file path where a TLS key can be found. If enabled with tls.key, Lets Encrypt will be disabled.")
 
 func serveStaticSiteInstead(w http.ResponseWriter, r *http.Request) {
 	http.FileServer(http.FS(os.DirFS(*webRoot))).ServeHTTP(w, r)
 }
 
 func setupSSLConfig(httpsSrv *http.Server, httpMux *http.ServeMux) (handler http.Handler) {
+	var minimumTlsVersion uint16 = tls.VersionTLS12
+	// If a static TLS certificate and key path were specified, use them
+	if *tlsCertPath != "" && *tlsKeyPath != "" {
+		certData, err := os.ReadFile(*tlsCertPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		keyData, err := os.ReadFile(*tlsKeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cert, err := tls.X509KeyPair(certData, keyData)
+		if err != nil {
+			log.Fatal(err)
+		}
+		httpsSrv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: minimumTlsVersion}
+		return nil
+	}
+	// Otherwise, if a TLS certificate and key path were not specified, default onto using ACME
 	getcertFunction, httpHandler := getNormalACMEConfig(httpMux)
 
 	//Only enable cert failover logic where a cert is provided.
-	httpsSrv.TLSConfig = &tls.Config{GetCertificate: getcertFunction, MinVersion: tls.VersionTLS12}
+	httpsSrv.TLSConfig = &tls.Config{GetCertificate: getcertFunction, MinVersion: minimumTlsVersion}
 	return httpHandler
 }
 
