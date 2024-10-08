@@ -2376,7 +2376,18 @@ var oldfingers = gencache.New(gencache.Options[string, []byte]{Fill: func(orig s
 	l["rel"] = "self"
 	l["type"] = `application/activity+json`
 	l["href"] = user.URL
-	j["links"] = []junk.Junk{l}
+
+	stupidAvatarThingForStreetPass := junk.New()
+	stupidAvatarThingForStreetPass["rel"] = "http://webfinger.net/rel/avatar"
+	stupidAvatarThingForStreetPass["type"] = `image/jpeg`
+	stupidAvatarThingForStreetPass["href"] = fmt.Sprintf("https://benjojo.co.uk/a?a=%s", url.QueryEscape(user.URL))
+
+	stupidProfileThingForStreetPass := junk.New()
+	stupidProfileThingForStreetPass["rel"] = "http://webfinger.net/rel/profile-page"
+	stupidProfileThingForStreetPass["type"] = `text/html`
+	stupidProfileThingForStreetPass["href"] = user.URL
+
+	j["links"] = []junk.Junk{l, stupidAvatarThingForStreetPass, stupidProfileThingForStreetPass}
 	return j.ToBytes(), true
 }})
 
