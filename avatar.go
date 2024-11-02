@@ -108,7 +108,7 @@ func avatarURL(user *WhatAbout) string {
 	if ava := user.Options.Avatar; ava != "" {
 		return ava
 	}
-	return fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
+	return serverURL("/a?a=%s", url.QueryEscape(user.URL))
 }
 
 func showflag(writer http.ResponseWriter, req *http.Request) {
@@ -176,7 +176,7 @@ func fixupflags(h *ActivityPubActivity) []Emu {
 		count++
 		var e Emu
 		e.Name = fmt.Sprintf(":flag%d:", count)
-		e.ID = fmt.Sprintf("https://%s/flag/%s", serverName, m[5:])
+		e.ID = serverURL("/flag/%s", m[5:])
 		emus = append(emus, e)
 		return e.Name
 	})
@@ -186,7 +186,7 @@ func fixupflags(h *ActivityPubActivity) []Emu {
 func renderflags(h *ActivityPubActivity) {
 	h.Noise = re_flags.ReplaceAllStringFunc(h.Noise, func(m string) string {
 		code := m[5:]
-		src := fmt.Sprintf("https://%s/flag/%s", serverName, code)
+		src := serverURL("/flag/%s", code)
 		return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, "flag", src)
 	})
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Ted Unangst <tedu@tedunangst.com>
+// Copyright (c) 2023 Ted Unangst <tedu@tedunangst.com>
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above

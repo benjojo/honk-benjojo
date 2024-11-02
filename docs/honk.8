@@ -43,7 +43,7 @@ FastCGI can be used by prefixing the listen address with "fcgi:".
 .Ss Build
 Building
 .Nm
-requires a go compiler 1.18 and libsqlite.
+requires a go compiler 1.20+ and libsqlite 3.34.0+.
 On
 .Ox
 this is the go and sqlite3 packages.
@@ -62,11 +62,15 @@ The root data directory, where the database and other user data are stored.
 This directory contains all user data that persists across upgrades.
 Requires write access.
 Defaults to ".".
+Also set by
+.Ev HONK_DATADIR .
 .It Fl viewdir Ar dir
 The root view directory, where html and other templates are stored.
 The contents of this directory are generally replaced with each release.
 Read only.
 Defaults to ".".
+Also set by
+.Ev HONK_VIEWDIR .
 .El
 .Pp
 The following options control log output.
@@ -149,6 +153,23 @@ Follow and unfollow requests can be sent via command line with
 .Ic follow Ar username Ar url
 and
 .Ic unfollow Ar username Ar url .
+.Ss Storage
+By default,
+.Nm
+will store attachments in a file system directory structure,
+.Pa attachments .
+Previous versions stored files in a database,
+.Pa blob.db .
+Related commands:
+.Bl -tag -width extractblobs
+.It Ic storefiles
+Switch to storing attachments in the file system.
+.It Ic storeblobs
+Switch to storing attachments in the blob.db.
+.It Ic extractblobs
+Copy blobs from the blob.db into the file system.
+Running cleanup first will reduce the time and space required.
+.El
 .Ss Maintenance
 The database may grow large over time.
 The
@@ -238,6 +259,24 @@ Custom URL seperators (not "u" and "h") may be specified by adding
 "usersep" and "honksep" options to the config table.
 e.g. example.com/users/username/honk/somehonk instead of
 example.com/u/username/h/somehonk.
+.Bl -tag -width collectforwards
+.It fasttimeout
+Short timeout for fetching activities.
+(Default: 5)
+.It slowtimeout
+Long timeout for posting actvities.
+(Default: 30)
+.It honkwindow
+How many days to display in a timeline.
+(Default: 7)
+.It collectforwards
+Fetch reply actvities forwarded from other servers.
+(Default: true)
+.It usersep
+(Default: u)
+.It honksep
+(Default: h)
+.El
 .Sh FILES
 .Nm
 files are split between the data directory and the view directory.
@@ -247,8 +286,10 @@ The data directory contains:
 .Bl -tag -width views/local.css
 .It Pa honk.db
 The main database.
-.It Pa blob.db
+.It Pa attachments
 Media and attachment storage.
+.It Pa blob.db
+Old location for media and attachment storage.
 .It Pa emus
 Custom emoji.
 .It Pa memes

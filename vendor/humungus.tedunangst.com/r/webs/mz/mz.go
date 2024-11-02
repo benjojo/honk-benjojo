@@ -32,11 +32,12 @@ var re_quoter = regexp.MustCompile(`(?m:^&gt; (.*)(\n- ?(.*))?\n?)`)
 var re_link = regexp.MustCompile(`.?.?https?://[^\s"]+[\w/)!]`)
 var re_zerolink = regexp.MustCompile(`\[([^]]*)\]\(([^)]*\)?)\)`)
 var re_imgfix = regexp.MustCompile(`<img ([^>]*)>`)
-var re_lister = regexp.MustCompile(`((^|\n+)(\+|-).*)+\n?`)
+var re_lister = regexp.MustCompile(`((^|\n+)(\+|-) .*)+\n?`)
 var re_tabler = regexp.MustCompile(`((^|\n+)\|.*)+\n?`)
 var re_header = regexp.MustCompile(`(^|\n+)(#+) (.*)\n?`)
-var re_hashes = regexp.MustCompile(`(?:^|[ \n>])#[\pL\pN]*[\pL][\pL\pN_-]*`)
+var re_hashes = regexp.MustCompile(`(?:^|[ \n>])#[\pL\p{So}\pN]*[\pL\p{So}][\pL\p{So}\pN_-]*`)
 var re_mentions = regexp.MustCompile(`(^|[ \n])@[[:alnum:]._-]+@[[:alnum:].-]*[[:alnum:]]\b`)
+var re_urltions = regexp.MustCompile(`@https://\S+`)
 var re_spoiler = regexp.MustCompile(":::(.*)\n?((?s:.*?))\n?:::\n?")
 
 var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
@@ -122,9 +123,9 @@ func (marker *Marker) Mark(s string) string {
 		s = re_italicer.ReplaceAllString(s, "$1<i>$2</i>$3")
 	}
 	if re_quoter.MatchString(s) {
-		s = re_quoter.ReplaceAllString(s, "<blockquote>$1</blockquote><cite>$3</cite><p>")
+		s = re_quoter.ReplaceAllString(s, "<blockquote>$1\n</blockquote><cite>$3</cite>\n\n")
 		s = strings.ReplaceAll(s, "<cite></cite>", "")
-		s = strings.ReplaceAll(s, "</blockquote><p><blockquote>", "<br>")
+		s = strings.ReplaceAll(s, "</blockquote>\n\n<blockquote>", "")
 	}
 	s = strings.Replace(s, "\n---\n", "<hr><p>", -1)
 	s = re_lister.ReplaceAllStringFunc(s, func(m string) string {
@@ -233,6 +234,20 @@ func (marker *Marker) Mark(s string) string {
 			marker.Mentions = append(marker.Mentions, m)
 			return prefix + r + tail
 		})
+		s = re_urltions.ReplaceAllStringFunc(s, func(m string) string {
+			prefix := ""
+			tail := ""
+			if last := m[len(m)-1]; last == ' ' || last == '\n' || last == '.' {
+				tail = m[len(m)-1:]
+				m = m[:len(m)-1]
+			}
+			r := marker.AtLinker(m)
+			if r == "" {
+				return prefix + m + tail
+			}
+			marker.Mentions = append(marker.Mentions, m)
+			return prefix + r + tail
+		})
 	}
 
 	s = strings.Replace(s, "\n\n", "<p>", -1)
@@ -258,6 +273,7 @@ func (marker *Marker) Mark(s string) string {
 	// some final fixups
 	if strings.Contains(s, "<br><") {
 		s = strings.Replace(s, "<br><blockquote>", "<blockquote>", -1)
+		s = strings.Replace(s, "<br></blockquote>", "</blockquote>", -1)
 		s = strings.Replace(s, "<br><cite></cite>", "", -1)
 		s = strings.Replace(s, "<br><pre>", "<pre>", -1)
 		s = strings.Replace(s, "<br><ul>", "<ul>", -1)
@@ -266,14 +282,18 @@ func (marker *Marker) Mark(s string) string {
 	return s
 }
 
-func linkreplacer(url string) string {
+func linkreplacer(orig string) string {
+	url := orig
 	if url[0:2] == "](" {
-		return url
+		return orig
 	}
 	prefix := ""
 	for !strings.HasPrefix(url, "http") {
 		prefix += url[0:1]
 		url = url[1:]
+	}
+	if strings.HasSuffix(prefix, "@") {
+		return orig
 	}
 	addparen := false
 	adddot := false

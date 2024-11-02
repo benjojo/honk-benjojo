@@ -16,20 +16,24 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
+	"io/fs"
 	golog "log"
 	"log/syslog"
 	notrand "math/rand"
 	"os"
-	"strconv"
+	"runtime/pprof"
+	"sort"
+	"strings"
 	"time"
 
 	"humungus.tedunangst.com/r/webs/log"
 )
 
-var softwareVersion = "1.2.1"
+var softwareVersion = "1.4.1"
 
 func init() {
 	notrand.Seed(time.Now().Unix())
@@ -44,8 +48,15 @@ var iconName = "icon.png"
 var serverMsg template.HTML
 var aboutMsg template.HTML
 var loginMsg template.HTML
+var collectForwards = true
+
+func serverURL(u string, args ...interface{}) string {
+	return fmt.Sprintf("https://"+serverName+u, args...)
+}
 
 func ElaborateUnitTests() {
+	user, _ := getUserBio("test")
+	syndicate(user, "https://mastodon.social/tags/mastoadmin.rss")
 }
 
 func unplugserver(hostname string) {
@@ -72,10 +83,48 @@ func errx(msg string, args ...interface{}) {
 	os.Exit(1)
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "", "write memory profile to this file")
+var memprofilefd *os.File
+
+func usage() {
+	flag.PrintDefaults()
+	out := flag.CommandLine.Output()
+	fmt.Fprintf(out, "\n  available honk commands:\n")
+	var msgs []string
+	for n, c := range commands {
+		msgs = append(msgs, fmt.Sprintf("    %s: %s\n", n, c.help))
+	}
+	sort.Strings(msgs)
+	fmt.Fprintf(out, "%s", strings.Join(msgs, ""))
+}
+
 func main() {
-	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
-	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
+	commands["help"] = cmd{
+		help: "you're looking at it",
+		callback: func(args []string) {
+			usage()
+		},
+	}
+	flag.StringVar(&dataDir, "datadir", getenv("HONK_DATADIR", dataDir), "data directory")
+	flag.StringVar(&viewDir, "viewdir", getenv("HONK_VIEWDIR", viewDir), "view directory")
+	flag.Usage = usage
+
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			errx("can't open cpu profile: %s", err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			errx("can't open mem profile: %s", err)
+		}
+		memprofilefd = f
+	}
 
 	log.Init(log.Options{Progname: "honk", Facility: syslog.LOG_UUCP})
 	elog = log.E
@@ -85,6 +134,10 @@ func main() {
 	if os.Geteuid() == 0 {
 		elog.Fatalf("do not run honk as root")
 	}
+	err := os.Mkdir(dataDir+"/attachments", 0700)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		errx("can't create attachments directory: %s", err)
+	}
 
 	args := flag.Args()
 	cmd := "run"
@@ -93,12 +146,11 @@ func main() {
 	}
 	switch cmd {
 	case "init":
-		initdb()
+		commands["init"].callback(args)
 	case "upgrade":
-		upgradedb()
+		commands["upgrade"].callback(args)
 	case "version":
-		fmt.Println(softwareVersion)
-		os.Exit(0)
+		commands["version"].callback(args)
 	}
 	db := opendatabase()
 	dbversion := 0
@@ -106,6 +158,7 @@ func main() {
 	if dbversion != myVersion {
 		elog.Fatal("incorrect database version. run upgrade.")
 	}
+	getConfigValue("usefilestore", &storeTheFilesInTheFileSystem)
 	getConfigValue("servermsg", &serverMsg)
 	getConfigValue("aboutmsg", &aboutMsg)
 	getConfigValue("loginmsg", &loginMsg)
@@ -114,7 +167,7 @@ func main() {
 	if masqName == "" {
 		masqName = serverName
 	}
-	serverPrefix = fmt.Sprintf("https://%s/", serverName)
+	serverPrefix = serverURL("/")
 	getConfigValue("usersep", &userSep)
 	getConfigValue("honksep", &honkSep)
 	getConfigValue("devel", &develMode)
@@ -125,135 +178,17 @@ func main() {
 	getConfigValue("slowtimeout", &slowTimeout)
 	getConfigValue("honkwindow", &honkwindow)
 	honkwindow *= 24 * time.Hour
+	getConfigValue("collectforwards", &collectForwards)
 
 	prepareStatements(db)
 
-	switch cmd {
-	case "admin":
-		adminscreen()
-	case "import":
-		if len(args) != 4 {
-			errx("import username honk|mastodon|twitter srcdir")
-		}
-		importMain(args[1], args[2], args[3])
-	case "export":
-		if len(args) != 3 {
-			errx("export username destdir")
-		}
-		export(args[1], args[2])
-	case "devel":
-		if len(args) != 2 {
-			errx("need an argument: devel (on|off)")
-		}
-		switch args[1] {
-		case "on":
-			setConfigValue("devel", 1)
-		case "off":
-			setConfigValue("devel", 0)
-		default:
-			errx("argument must be on or off")
-		}
-	case "setconfig":
-		if len(args) != 3 {
-			errx("need an argument: setconfig key val")
-		}
-		var val interface{}
-		var err error
-		if val, err = strconv.Atoi(args[2]); err != nil {
-			val = args[2]
-		}
-		setConfigValue(args[1], val)
-	case "adduser":
-		adduser()
-	case "deluser":
-		if len(args) < 2 {
-			errx("usage: honk deluser username")
-		}
-		deluser(args[1])
-	case "chpass":
-		if len(args) < 2 {
-			errx("usage: honk chpass username")
-		}
-		chpass(args[1])
-	case "follow":
-		if len(args) < 3 {
-			errx("usage: honk follow username url")
-		}
-		user, err := getUserBio(args[1])
-		if err != nil {
-			errx("user %s not found", args[1])
-		}
-		var meta HonkerMeta
-		mj, _ := encodeJson(&meta)
-		honkerid, err := savehonker(user, args[2], "", "presub", "", mj)
-		if err != nil {
-			errx("had some trouble with that: %s", err)
-		}
-		followyou(user, honkerid, true)
-	case "unfollow":
-		if len(args) < 3 {
-			errx("usage: honk unfollow username url")
-		}
-		user, err := getUserBio(args[1])
-		if err != nil {
-			errx("user not found")
-		}
-		row := db.QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", args[2], user.ID)
-		var honkerid int64
-		err = row.Scan(&honkerid)
-		if err != nil {
-			errx("sorry couldn't find them")
-		}
-		unfollowyou(user, honkerid, true)
-	case "sendmsg":
-		if len(args) < 4 {
-			errx("usage: honk send username filename rcpt")
-		}
-		user, err := getUserBio(args[1])
-		if err != nil {
-			errx("user %s not found", args[1])
-		}
-		data, err := os.ReadFile(args[2])
-		if err != nil {
-			errx("can't read file: %s", err)
-		}
-		deliverate(user.ID, args[3], data)
-	case "cleanup":
-		arg := "30"
-		if len(args) > 1 {
-			arg = args[1]
-		}
-		cleanupdb(arg)
-	case "unplug":
-		if len(args) < 2 {
-			errx("usage: honk unplug servername")
-		}
-		name := args[1]
-		unplugserver(name)
-	case "backup":
-		if len(args) < 2 {
-			errx("usage: honk backup dirname")
-		}
-		name := args[1]
-		backupDatabase(name)
-	case "ping":
-		if len(args) < 3 {
-			errx("usage: honk ping (from username) (to username or url)")
-		}
-		name := args[1]
-		targ := args[2]
-		user, err := getUserBio(name)
-		if err != nil {
-			errx("unknown user %s", name)
-		}
-		ping(user, targ)
-	case "run":
-		serve()
-	case "backend":
-		backendServer()
-	case "test":
-		ElaborateUnitTests()
-	default:
-		errx("unknown command")
+	c, ok := commands[cmd]
+	if !ok {
+		errx("don't know about %q", cmd)
 	}
+	if c.nargs > 0 && len(args) != c.nargs {
+		errx("incorrect arg count: %s", c.help2)
+	}
+
+	c.callback(args)
 }

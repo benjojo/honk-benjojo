@@ -18,6 +18,8 @@
 <input tabindex=1 type="checkbox" id="inlineqts" name="inlineqts" value="inlineqts" {{ if .User.Options.InlineQuotes }}checked{{ end }}><span></span>
 <p><label class="button" for="maps">apple map links:</label>
 <input tabindex=1 type="checkbox" id="maps" name="maps" value="apple" {{ if eq "apple" .User.Options.MapLink }}checked{{ end }}><span></span>
+<p><label class="button" for="enabletotp">make logins hard:</label>
+<input tabindex=1 type="checkbox" id="enabletotp" name="enabletotp" value="enabletotp" {{ if .User.Options.TOTP }}checked{{ end }}><span></span>
 <p><label class="button" for="reaction">reaction:</label>
 <select tabindex=1 name="reaction">
 <option {{ and (eq .User.Options.Reaction "none") "selected" }}>none</option>
@@ -43,4 +45,10 @@
 <p><button>change</button>
 </form>
 </div>
+{{ if .User.Options.TOTP }}
+<hr>
+<div>
+	<p>TOTP: {{ .User.Options.TOTP }}
+</div>
+{{ end }}
 </main>

@@ -9,11 +9,10 @@ Remix of honk. has the following improvments
 1) Avatar support
 2) Twitter-like styles, less purple
 3) Source code has functions I've tried to understand renamed
-4) MP4 support
-5) GIF support
-6) Twitter imports work again
-7) -display.days to show you how deep a timeline should go (I set to 90)
 8) Likes are syslogged, but still not displayed on the WebUI, or stored
+9) Metrics endpoint
+10) Streetpass compatibility
+11) Support for the node info API calls
 
 ---
 
@@ -36,10 +35,14 @@ The button to submit a new honk says "it's gonna be honked".
 The honk mission is to work well if it's what you want.
 This does not imply the goal is to be what you want.
 
+Besides microblogging, honk might also server as the basis for a custom
+ActivityPub server, a sort of integrated federation framework.
+But you may need to get your hands dirty.
+
 ## build
 
 It should be sufficient to type make after unpacking a release.
-You'll need a go compiler version 1.18 or later. And libsqlite3.
+You'll need a go compiler version 1.20 or later. And libsqlite3 3.34.0+.
 
 Even on a fast machine, building from source can take several seconds.
 
@@ -50,11 +53,12 @@ Development sources: hg clone https://humungus.tedunangst.com/r/honk
 honk expects to be fronted by a TLS terminating reverse proxy.
 
 First, create the database. This will ask four questions.
+
 ./honk init
-username: (the username you want)
-password: (the password you want)
-listenaddr: (tcp or unix: 127.0.0.1:31337, /var/www/honk.sock, etc.)
-servername: (public DNS name: honk.example.com)
+listen address: (tcp or unix: 127.0.0.1:31337, /var/www/honk.sock, etc.)
+   server name: (public DNS name: honk.example.com)
+      username: (the username you want)
+      password: (the password you want)
 
 Then run honk.
 ./honk

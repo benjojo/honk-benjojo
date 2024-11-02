@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"database/sql"
 	_ "embed"
 	"encoding/json"
@@ -52,15 +51,17 @@ func userfromrow(row *sql.Row) (*WhatAbout, error) {
 		return nil, err
 	}
 	if user.ID > 0 {
-		user.URL = fmt.Sprintf("https://%s/%s/%s", serverName, userSep, user.Name)
+		user.URL = serverURL("/%s/%s", userSep, user.Name)
 		err = decodeJson(options, &user.Options)
 		if err != nil {
 			elog.Printf("error processing user options: %s", err)
 		}
 		user.ChatPubKey.key, _ = b64tokey(user.Options.ChatPubKey)
-		user.ChatSecKey.key, _ = b64tokey(user.Options.ChatSecKey)
+		if user.Options.ChatSecKey != "" {
+			user.ChatSecKey.key, _ = b64tokey(user.Options.ChatSecKey)
+		}
 	} else {
-		user.URL = fmt.Sprintf("https://%s/%s", serverName, user.Name)
+		user.URL = serverURL("/%s", user.Name)
 	}
 	if user.Options.Reaction == "" {
 		user.Options.Reaction = "none"
@@ -83,7 +84,7 @@ var somenamedusers = gencache.New(gencache.Options[string, *WhatAbout]{Fill: fun
 	return user, true
 }})
 
-var somenumberedusers = gencache.New(gencache.Options[int64, *WhatAbout]{Fill: func(userid int64) (*WhatAbout, bool) {
+var somenumberedusers = gencache.New(gencache.Options[UserID, *WhatAbout]{Fill: func(userid UserID) (*WhatAbout, bool) {
 	row := stmtUserByNumber.QueryRow(userid)
 	user, err := userfromrow(row)
 	if err != nil {
@@ -102,6 +103,15 @@ func getserveruser() *WhatAbout {
 	return user
 }
 
+func gethonker(userid UserID, xid string) (int64, error) {
+	row := opendatabase().
+		QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", xid, userid)
+	var honkerid int64
+
+	err := row.Scan(&honkerid)
+	return honkerid, err
+}
+
 func getUserBio(name string) (*WhatAbout, error) {
 	user, ok := somenamedusers.Get(name)
 	if !ok {
@@ -110,9 +120,9 @@ func getUserBio(name string) (*WhatAbout, error) {
 	return user, nil
 }
 
-var honkerinvalidator gencache.Invalidator[int64]
+var honkerinvalidator gencache.Invalidator[UserID]
 
-func gethonkers(userid int64) []*Honker {
+func gethonkers(userid UserID) []*Honker {
 	rows, err := stmtHonkers.Query(userid)
 	if err != nil {
 		elog.Printf("error querying honkers: %s", err)
@@ -137,12 +147,12 @@ func gethonkers(userid int64) []*Honker {
 	return honkers
 }
 
-func getdubs(userid int64) []*Honker {
+func getdubs(userid UserID) []*Honker {
 	rows, err := stmtDubbers.Query(userid)
 	return dubsfromrows(rows, err)
 }
 
-func getnameddubs(userid int64, name string) []*Honker {
+func getnameddubs(userid UserID, name string) []*Honker {
 	rows, err := stmtNamedDubbers.Query(userid, name)
 	return dubsfromrows(rows, err)
 }
@@ -178,12 +188,15 @@ func allusers() []login.UserInfo {
 	return users
 }
 
-func getActivityPubActivity(userid int64, xid string) *ActivityPubActivity {
-	row := stmtOneXonk.QueryRow(userid, xid)
+func getActivityPubActivity(userid UserID, xid string) *ActivityPubActivity {
+	if xid == "" {
+		return nil
+	}
+	row := stmtOneXonk.QueryRow(userid, xid, xid)
 	return scanhonk(row)
 }
 
-func getbonk(userid int64, xid string) *ActivityPubActivity {
+func getbonk(userid UserID, xid string) *ActivityPubActivity {
 	row := stmtOneBonk.QueryRow(userid, xid)
 	return scanhonk(row)
 }
@@ -193,7 +206,7 @@ func getpublichonks() []*ActivityPubActivity {
 	rows, err := stmtPublicHonks.Query(dt, 100)
 	return getsomehonks(rows, err)
 }
-func geteventhonks(userid int64) []*ActivityPubActivity {
+func geteventhonks(userid UserID) []*ActivityPubActivity {
 	rows, err := stmtEventHonks.Query(userid, 25)
 	honks := getsomehonks(rows, err)
 	sort.Slice(honks, func(i, j int) bool {
@@ -235,58 +248,64 @@ func gethonksbyuser(name string, includeprivate bool, wanted int64) []*ActivityP
 	rows, err := stmtUserHonks.Query(wanted, whofore, name, dt, limit)
 	return getsomehonks(rows, err)
 }
-func gethonksforuser(userid int64, wanted int64) []*ActivityPubActivity {
+func gethonksforuser(userid UserID, wanted int64) []*ActivityPubActivity {
 	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUser.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
-func gethonksforuserfirstclass(userid int64, wanted int64) []*ActivityPubActivity {
+func gethonksforuserfirstclass(userid UserID, wanted int64) []*ActivityPubActivity {
 	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUserFirstClass.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
 
-func gethonksforme(userid int64, wanted int64) []*ActivityPubActivity {
+func gethonksforme(userid UserID, wanted int64) []*ActivityPubActivity {
 	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid, 250)
 	return getsomehonks(rows, err)
 }
-func gethonksfromlongago(userid int64, wanted int64) []*ActivityPubActivity {
+func gethonksfromlongago(userid UserID, wanted int64) []*ActivityPubActivity {
+	var params []interface{}
+	var wheres []string
+	params = append(params, wanted)
+	params = append(params, userid)
 	now := time.Now()
-	var honks []*ActivityPubActivity
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 5; i++ {
 		dt := time.Date(now.Year()-i, now.Month(), now.Day(), now.Hour(), now.Minute(),
 			now.Second(), 0, now.Location())
 		dt1 := dt.Add(-36 * time.Hour).UTC().Format(dbtimeformat)
 		dt2 := dt.Add(12 * time.Hour).UTC().Format(dbtimeformat)
-		rows, err := stmtHonksFromLongAgo.Query(wanted, userid, dt1, dt2, userid)
-		honks = append(honks, getsomehonks(rows, err)...)
+		wheres = append(wheres, "(dt > ? and dt < ?)")
+		params = append(params, dt1, dt2)
 	}
-	return honks
+	params = append(params, userid)
+	sql := strings.ReplaceAll(sqlHonksFromLongAgo, "WHERECLAUSE", strings.Join(wheres, " or "))
+	db := opendatabase()
+	rows, err := db.Query(sql, params...)
+	return getsomehonks(rows, err)
 }
-func getsavedhonks(userid int64, wanted int64) []*ActivityPubActivity {
+func getsavedhonks(userid UserID, wanted int64) []*ActivityPubActivity {
 	rows, err := stmtHonksISaved.Query(wanted, userid)
 	return getsomehonks(rows, err)
 }
-func gethonksbyhonker(userid int64, honker string, wanted int64) []*ActivityPubActivity {
+func gethonksbyhonker(userid UserID, honker string, wanted int64) []*ActivityPubActivity {
 	rows, err := stmtHonksByHonker.Query(wanted, userid, honker, userid)
 	return getsomehonks(rows, err)
 }
-func gethonksbyxonker(userid int64, xonker string, wanted int64) []*ActivityPubActivity {
+func gethonksbyxonker(userid UserID, xonker string, wanted int64) []*ActivityPubActivity {
 	rows, err := stmtHonksByXonker.Query(wanted, userid, xonker, xonker, userid)
 	return getsomehonks(rows, err)
 }
-func gethonksbycombo(userid int64, combo string, wanted int64) []*ActivityPubActivity {
+func gethonksbycombo(userid UserID, combo string, wanted int64) []*ActivityPubActivity {
 	combo = "% " + combo + " %"
 	rows, err := stmtHonksByCombo.Query(wanted, userid, userid, combo, userid, wanted, userid, combo, userid)
 	return getsomehonks(rows, err)
 }
-func gethonksbyconvoy(userid int64, convoy string, wanted int64) []*ActivityPubActivity {
-	rows, err := stmtHonksByConvoy.Query(wanted, userid, userid, convoy)
-	honks := getsomehonks(rows, err)
-	return honks
+func gethonksbyconvoy(userid UserID, convoy string, wanted int64) []*ActivityPubActivity {
+	rows, err := stmtHonksByConvoy.Query(convoy, wanted, userid, 1000)
+	return getsomehonks(rows, err)
 }
-func gethonksbysearch(userid int64, q string, wanted int64) []*ActivityPubActivity {
+func gethonksbysearch(userid UserID, q string, wanted int64) []*ActivityPubActivity {
 	var queries []string
 	var params []interface{}
 	queries = append(queries, "honks.honkid > ?")
@@ -294,7 +313,7 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*ActivityPubActivi
 	queries = append(queries, "honks.userid = ?")
 	params = append(params, userid)
 
-	terms := strings.Fields(q)
+	terms := strings.Split(q, " ")
 	for _, t := range terms {
 		if strings.HasPrefix(t, "alt:") {
 			return gethonksbyaltsearch(userid, t[4:], wanted) // hehe bye!
@@ -364,7 +383,7 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*ActivityPubActivi
 	return honks
 }
 
-func gethonksbyaltsearch(userid int64, q string, wanted int64) []*ActivityPubActivity {
+func gethonksbyaltsearch(userid UserID, q string, wanted int64) []*ActivityPubActivity {
 	query := `select honks.honkid, honks.userid, username, what, honker, oonker, honks.xid, honks.rid, honks.dt, honks.url, honks.audience, honks.noise, honks.precis, honks.format, honks.convoy, whofore, flags
 		from honks, filemeta, donks
 		join users on honks.userid = users.userid
@@ -395,7 +414,7 @@ func getsomehonks(rows *sql.Rows, err error) []*ActivityPubActivity {
 		return nil
 	}
 	defer rows.Close()
-	var honks []*ActivityPubActivity
+	honks := make([]*ActivityPubActivity, 0, 64)
 	for rows.Next() {
 		h := scanhonk(rows)
 		if h != nil {
@@ -430,15 +449,15 @@ func scanhonk(row RowLike) *ActivityPubActivity {
 
 func donksforhonks(honks []*ActivityPubActivity) {
 	db := opendatabase()
-	var ids []string
-	hmap := make(map[int64]*ActivityPubActivity)
-	for _, h := range honks {
-		ids = append(ids, fmt.Sprintf("%d", h.ID))
+	ids := make([]string, len(honks))
+	hmap := make(map[int64]*ActivityPubActivity, len(honks))
+	for i, h := range honks {
+		ids[i] = fmt.Sprintf("%d", h.ID)
 		hmap[h.ID] = h
 	}
 	idset := strings.Join(ids, ",")
 	// grab donks
-	q := fmt.Sprintf("select honkid, donks.fileid, xid, name, description, url, media, local from donks join filemeta on donks.fileid = filemeta.fileid where honkid in (%s)", idset)
+	q := fmt.Sprintf("select honkid, donks.fileid, xid, name, description, url, media, local, meta from donks join filemeta on donks.fileid = filemeta.fileid where honkid in (%s)", idset)
 	rows, err := db.Query(q)
 	if err != nil {
 		elog.Printf("error querying donks: %s", err)
@@ -447,12 +466,14 @@ func donksforhonks(honks []*ActivityPubActivity) {
 	defer rows.Close()
 	for rows.Next() {
 		var hid int64
+		var j string
 		d := new(Donk)
-		err = rows.Scan(&hid, &d.FileID, &d.XID, &d.Name, &d.Desc, &d.URL, &d.Media, &d.Local)
+		err = rows.Scan(&hid, &d.FileID, &d.XID, &d.Name, &d.Desc, &d.URL, &d.Media, &d.Local, &j)
 		if err != nil {
 			elog.Printf("error scanning donk: %s", err)
 			continue
 		}
+		decodeJson(j, &d.Meta)
 		d.External = !strings.HasPrefix(d.URL, serverPrefix)
 		h := hmap[hid]
 		h.Donks = append(h.Donks, d)
@@ -526,6 +547,14 @@ func donksforhonks(honks []*ActivityPubActivity) {
 				elog.Printf("error parsing badonks: %s", err)
 				continue
 			}
+		case "seealso":
+			h.SeeAlso = j
+		case "onties":
+			h.Onties = j
+		case "link":
+			h.Link = j
+		case "legalname":
+			h.LegalName = j
 		case "oldrev":
 		default:
 			elog.Printf("unknown meta genus: %s", genus)
@@ -536,10 +565,10 @@ func donksforhonks(honks []*ActivityPubActivity) {
 
 func donksforchonks(chonks []*Chonk) {
 	db := opendatabase()
-	var ids []string
-	chmap := make(map[int64]*Chonk)
-	for _, ch := range chonks {
-		ids = append(ids, fmt.Sprintf("%d", ch.ID))
+	ids := make([]string, len(chonks))
+	chmap := make(map[int64]*Chonk, len(chonks))
+	for i, ch := range chonks {
+		ids[i] = fmt.Sprintf("%d", ch.ID)
 		chmap[ch.ID] = ch
 	}
 	idset := strings.Join(ids, ",")
@@ -564,85 +593,6 @@ func donksforchonks(chonks []*Chonk) {
 	}
 }
 
-func savefile(name string, desc string, url string, media string, local bool, data []byte) (int64, error) {
-	fileid, _, err := savefileandxid(name, desc, url, media, local, data)
-	return fileid, err
-}
-
-func hashfiledata(data []byte) string {
-	h := sha512.New512_256()
-	h.Write(data)
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func savefileandxid(name string, desc string, url string, media string, local bool, data []byte) (int64, string, error) {
-	var xid string
-	if local {
-		hash := hashfiledata(data)
-		row := stmtCheckFileData.QueryRow(hash)
-		err := row.Scan(&xid)
-		if err == sql.ErrNoRows {
-			xid = make18CharRandomString()
-			switch media {
-			case "image/png":
-				xid += ".png"
-			case "image/jpeg":
-				xid += ".jpg"
-			case "image/svg+xml":
-				xid += ".svg"
-			case "application/pdf":
-				xid += ".pdf"
-			case "text/plain":
-				xid += ".txt"
-			}
-			_, err = stmtSaveFileData.Exec(xid, media, hash, data)
-			if err != nil {
-				return 0, "", err
-			}
-		} else if err != nil {
-			elog.Printf("error checking file hash: %s", err)
-			return 0, "", err
-		}
-		if url == "" {
-			url = fmt.Sprintf("https://%s/d/%s", serverName, xid)
-		}
-	}
-
-	res, err := stmtSaveFile.Exec(xid, name, desc, url, media, local)
-	if err != nil {
-		return 0, "", err
-	}
-	fileid, _ := res.LastInsertId()
-	return fileid, xid, nil
-}
-
-func finddonkid(fileid int64, url string) *Donk {
-	donk := new(Donk)
-	row := stmtFindFileId.QueryRow(fileid, url)
-	err := row.Scan(&donk.XID, &donk.Local, &donk.Desc)
-	if err == nil {
-		donk.FileID = fileid
-		return donk
-	}
-	if err != sql.ErrNoRows {
-		elog.Printf("error finding file: %s", err)
-	}
-	return nil
-}
-
-func finddonk(url string) *Donk {
-	donk := new(Donk)
-	row := stmtFindFile.QueryRow(url)
-	err := row.Scan(&donk.FileID, &donk.XID)
-	if err == nil {
-		return donk
-	}
-	if err != sql.ErrNoRows {
-		elog.Printf("error finding file: %s", err)
-	}
-	return nil
-}
-
 func savechonk(ch *Chonk) error {
 	dt := ch.Date.UTC().Format(dbtimeformat)
 	db := opendatabase()
@@ -651,6 +601,7 @@ func savechonk(ch *Chonk) error {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	defer tx.Rollback()
 
 	res, err := tx.Stmt(stmtSaveChonk).Exec(ch.UserID, ch.XID, ch.Who, ch.Target, dt, ch.Noise, ch.Format)
 	if err == nil {
@@ -664,13 +615,11 @@ func savechonk(ch *Chonk) error {
 		}
 		chatplusone(tx, ch.UserID)
 		err = tx.Commit()
-	} else {
-		tx.Rollback()
 	}
 	return err
 }
 
-func chatplusone(tx *sql.Tx, userid int64) {
+func chatplusone(tx *sql.Tx, userid UserID) {
 	user, ok := somenumberedusers.Get(userid)
 	if !ok {
 		return
@@ -688,7 +637,7 @@ func chatplusone(tx *sql.Tx, userid int64) {
 	somenumberedusers.Clear(user.ID)
 }
 
-func chatnewnone(userid int64) {
+func chatnewnone(userid UserID) {
 	user, ok := somenumberedusers.Get(userid)
 	if !ok || user.Options.ChatCount == 0 {
 		return
@@ -707,7 +656,7 @@ func chatnewnone(userid int64) {
 	somenumberedusers.Clear(user.ID)
 }
 
-func meplusone(tx *sql.Tx, userid int64) {
+func meplusone(tx *sql.Tx, userid UserID) {
 	user, ok := somenumberedusers.Get(userid)
 	if !ok {
 		return
@@ -725,7 +674,7 @@ func meplusone(tx *sql.Tx, userid int64) {
 	somenumberedusers.Clear(user.ID)
 }
 
-func menewnone(userid int64) {
+func menewnone(userid UserID) {
 	user, ok := somenumberedusers.Get(userid)
 	if !ok || user.Options.MeCount == 0 {
 		return
@@ -744,9 +693,9 @@ func menewnone(userid int64) {
 	somenumberedusers.Clear(user.ID)
 }
 
-func loadchatter(userid int64) []*Chatter {
+func loadchatter(userid UserID, wanted int64) []*Chatter {
 	duedt := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
-	rows, err := stmtLoadChonks.Query(userid, duedt)
+	rows, err := stmtLoadChonks.Query(userid, duedt, wanted)
 	if err != nil {
 		elog.Printf("error loading chonks: %s", err)
 		return nil
@@ -766,25 +715,8 @@ func loadchatter(userid int64) []*Chatter {
 		chonks[ch.Target] = append(chonks[ch.Target], ch)
 		allchonks = append(allchonks, ch)
 	}
-	donksforchonks(allchonks)
 	rows.Close()
-	rows, err = stmtGetChatters.Query(userid)
-	if err != nil {
-		elog.Printf("error getting chatters: %s", err)
-		return nil
-	}
-	for rows.Next() {
-		var target string
-		err = rows.Scan(&target)
-		if err != nil {
-			elog.Printf("error scanning chatter: %s", target)
-			continue
-		}
-		if _, ok := chonks[target]; !ok {
-			chonks[target] = []*Chonk{}
-
-		}
-	}
+	donksforchonks(allchonks)
 	var chatter []*Chatter
 	for target, chonks := range chonks {
 		chatter = append(chatter, &Chatter{
@@ -802,7 +734,6 @@ func loadchatter(userid int64) []*Chatter {
 		}
 		return a.Chonks[len(a.Chonks)-1].Date.After(b.Chonks[len(b.Chonks)-1].Date)
 	})
-
 	return chatter
 }
 
@@ -850,6 +781,7 @@ func savehonk(h *ActivityPubActivity) error {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	defer tx.Rollback()
 	plain := h.Plain()
 
 	res, err := tx.Stmt(stmtSaveHonk).Exec(h.UserID, h.What, h.Honker, h.XID, h.RID, dt, h.URL,
@@ -860,13 +792,11 @@ func savehonk(h *ActivityPubActivity) error {
 		err = saveextras(tx, h)
 	}
 	if err == nil {
-		if h.Whofore == 1 {
+		if h.Whofore == WhoAtme {
 			dlog.Printf("another one for me: %s", h.XID)
 			meplusone(tx, h.UserID)
 		}
 		err = tx.Commit()
-	} else {
-		tx.Rollback()
 	}
 	if err != nil {
 		elog.Printf("error saving honk: %s", err)
@@ -886,6 +816,7 @@ func updatehonk(h *ActivityPubActivity) error {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	defer tx.Rollback()
 	plain := h.Plain()
 
 	err = deleteextras(tx, h.ID, false)
@@ -907,8 +838,6 @@ func updatehonk(h *ActivityPubActivity) error {
 	}
 	if err == nil {
 		err = tx.Commit()
-	} else {
-		tx.Rollback()
 	}
 	if err != nil {
 		elog.Printf("error updating honk %d: %s", h.ID, err)
@@ -916,13 +845,14 @@ func updatehonk(h *ActivityPubActivity) error {
 	return err
 }
 
-func deleteHonk(honkid int64) error {
+func deletehonk(honkid int64) error {
 	db := opendatabase()
 	tx, err := db.Begin()
 	if err != nil {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	defer tx.Rollback()
 
 	err = deleteextras(tx, honkid, true)
 	if err == nil {
@@ -930,8 +860,6 @@ func deleteHonk(honkid int64) error {
 	}
 	if err == nil {
 		err = tx.Commit()
-	} else {
-		tx.Rollback()
 	}
 	if err != nil {
 		elog.Printf("error deleting honk %d: %s", honkid, err)
@@ -984,14 +912,42 @@ func saveextras(tx *sql.Tx, h *ActivityPubActivity) error {
 			return err
 		}
 	}
+	if onties := h.Onties; onties != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "onties", onties)
+		if err != nil {
+			elog.Printf("error saving onties: %s", err)
+			return err
+		}
+	}
+	if legalname := h.LegalName; legalname != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "legalname", legalname)
+		if err != nil {
+			elog.Printf("error saving legalname: %s", err)
+			return err
+		}
+	}
+	if seealso := h.SeeAlso; seealso != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "seealso", seealso)
+		if err != nil {
+			elog.Printf("error saving seealso: %s", err)
+			return err
+		}
+	}
+	if link := h.Link; link != "" {
+		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "link", link)
+		if err != nil {
+			elog.Printf("error saving link: %s", err)
+			return err
+		}
+	}
 	return nil
 }
 
-var reactionLock sync.Mutex
+var baxonker sync.Mutex
 
 func addreaction(user *WhatAbout, xid string, who, react string) {
-	reactionLock.Lock()
-	defer reactionLock.Unlock()
+	baxonker.Lock()
+	defer baxonker.Unlock()
 	h := getActivityPubActivity(user.ID, xid)
 	if h == nil {
 		return
@@ -999,7 +955,10 @@ func addreaction(user *WhatAbout, xid string, who, react string) {
 	h.Badonks = append(h.Badonks, Badonk{Who: who, What: react})
 	j, _ := encodeJson(h.Badonks)
 	db := opendatabase()
-	tx, _ := db.Begin()
+	tx, err := db.Begin()
+	if err != nil {
+		return
+	}
 	_, _ = tx.Stmt(stmtDeleteOneMeta).Exec(h.ID, "badonks")
 	_, _ = tx.Stmt(stmtSaveMeta).Exec(h.ID, "badonks", j)
 	tx.Commit()
@@ -1047,11 +1006,15 @@ func getxonker(what, flav string) string {
 	return res
 }
 
-func savexonker(what, value, flav, when string) {
-	stmtSaveXonker.Exec(what, value, flav, when)
+func savexonker(what, value, flav string) {
+	when := time.Now().UTC().Format(dbtimeformat)
+	_, err := stmtSaveXonker.Exec(what, value, flav, when)
+	if err != nil {
+		elog.Printf("error saving xonker: %s", err)
+	}
 }
 
-func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, error) {
+func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, string, error) {
 	var owner string
 	if url[0] == '#' {
 		flavor = "peep"
@@ -1059,11 +1022,18 @@ func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, e
 			name = url[1:]
 		}
 		owner = url
+	} else if strings.HasSuffix(url, ".rss") {
+		flavor = "peep"
+		if name == "" {
+			name = url[strings.LastIndexByte(url, '/')+1:]
+		}
+		owner = url
+
 	} else {
-		info, err := investigate(url)
+		info, _, err := investigate(url)
 		if err != nil {
 			ilog.Printf("failed to investigate honker: %s", err)
-			return 0, err
+			return 0, "", err
 		}
 		url = info.XID
 		if name == "" {
@@ -1082,16 +1052,19 @@ func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, e
 		} else {
 			err = fmt.Errorf("it seems you are already subscribed to them")
 		}
-		return 0, err
+		return 0, "", err
 	}
 
 	res, err := stmtSaveHonker.Exec(user.ID, name, url, flavor, combos, owner, mj)
 	if err != nil {
 		elog.Print(err)
-		return 0, err
+		return 0, "", err
 	}
 	honkerid, _ := res.LastInsertId()
-	return honkerid, nil
+	if strings.HasSuffix(url, ".rss") {
+		go syndicate(user, url)
+	}
+	return honkerid, flavor, nil
 }
 
 func cleanupdb(arg string) {
@@ -1120,57 +1093,18 @@ func cleanupdb(arg string) {
 		sqlMustQuery(db, "delete from zonkers where userid = ? and wherefore = 'zonvoy' and zonkerid < (select zonkerid from zonkers where userid = ? and wherefore = 'zonvoy' order by zonkerid desc limit 1 offset 200)", u.UserID, u.UserID)
 	}
 
-	filexids := make(map[string]bool)
-	g_blobdb = openblobdb()
-	rows, err := g_blobdb.Query("select xid from filedata")
-	if err != nil {
-		elog.Fatal(err)
-	}
-	for rows.Next() {
-		var xid string
-		err = rows.Scan(&xid)
-		if err != nil {
-			elog.Fatal(err)
-		}
-		filexids[xid] = true
-	}
-	rows.Close()
-	rows, err = db.Query("select xid from filemeta")
-	for rows.Next() {
-		var xid string
-		err = rows.Scan(&xid)
-		if err != nil {
-			elog.Fatal(err)
-		}
-		delete(filexids, xid)
-	}
-	rows.Close()
-	tx, err := g_blobdb.Begin()
-	if err != nil {
-		elog.Fatal(err)
-	}
-	for xid := range filexids {
-		_, err = tx.Exec("delete from filedata where xid = ?", xid)
-		if err != nil {
-			elog.Fatal(err)
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		elog.Fatal(err)
-	}
-	closedatabases()
+	cleanupfiles()
 }
 
 var stmtHonkers, stmtDubbers, stmtNamedDubbers, stmtSaveHonker, stmtUpdateFlavor, stmtUpdateHonker *sql.Stmt
 var stmtDeleteHonker *sql.Stmt
 var stmtAnyXonk, stmtOneXonk, stmtPublicHonks, stmtUserHonks, stmtHonksByCombo, stmtHonksByConvoy *sql.Stmt
 var stmtHonksByOntology, stmtHonksForUser, stmtHonksForMe, stmtSaveDub, stmtHonksByXonker *sql.Stmt
-var stmtHonksFromLongAgo *sql.Stmt
+var sqlHonksFromLongAgo string
 var stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
 var stmtEventHonks, stmtOneBonk, stmtFindZonk, stmtFindXonk, stmtSaveDonk *sql.Stmt
-var stmtFindFile, stmtFindFileId, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
-var stmtCheckFileData *sql.Stmt
+var stmtGetFileInfo, stmtFindFile, stmtFindFileId, stmtSaveFile *sql.Stmt
+var stmtGetFileMedia, stmtSaveFileHash, stmtCheckFileHash *sql.Stmt
 var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker *sql.Stmt
 var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonker *sql.Stmt
 var stmtGetZonkers, stmtRecentHonkers, stmtGetXonker, stmtSaveXonker, stmtDeleteXonker, stmtDeleteOldXonkers *sql.Stmt
@@ -1182,6 +1116,7 @@ var stmtGetTracks *sql.Stmt
 var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
 var stmtGetTopDubbed *sql.Stmt
 var stmtDeliquentCheck, stmtDeliquentUpdate *sql.Stmt
+var stmtGetBlobData, stmtSaveBlobData *sql.Stmt
 
 func sqlMustPrepare(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
@@ -1220,7 +1155,7 @@ func prepareStatements(db *sql.DB) {
 	limit := " order by honks.honkid desc limit 250"
 	smalllimit := " order by honks.honkid desc limit ?"
 	butnotthose := " and convoy not in (select name from zonkers where userid = ? and wherefore = 'zonvoy' order by zonkerid desc limit 100)"
-	stmtOneXonk = sqlMustPrepare(db, selecthonks+"where honks.userid = ? and xid = ?")
+	stmtOneXonk = sqlMustPrepare(db, selecthonks+"where honks.userid = ? and (xid = ? or url = ?)")
 	stmtAnyXonk = sqlMustPrepare(db, selecthonks+"where xid = ? and what <> 'bonk' order by honks.honkid asc")
 	stmtOneBonk = sqlMustPrepare(db, selecthonks+"where honks.userid = ? and xid = ? and what = 'bonk' and whofore = 2")
 	stmtPublicHonks = sqlMustPrepare(db, selecthonks+"where whofore = 2 and dt > ?"+smalllimit)
@@ -1230,12 +1165,20 @@ func prepareStatements(db *sql.DB) {
 	stmtHonksForUser = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
 	stmtHonksForUserFirstClass = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (rid = '' or what = 'bonk')"+myhonkers+butnotthose+limit)
 	stmtHonksForMe = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and whofore = 1"+butnotthose+smalllimit)
-	stmtHonksFromLongAgo = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and dt < ? and whofore = 2"+butnotthose+limit)
+	sqlHonksFromLongAgo = selecthonks + "where honks.honkid > ? and honks.userid = ? and (WHERECLAUSE) and (whofore = 2 or flags & 4)" + butnotthose + limit
 	stmtHonksISaved = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and flags & 4 order by honks.honkid desc")
 	stmtHonksByHonker = sqlMustPrepare(db, selecthonks+"join honkers on (honkers.xid = honks.honker or honkers.xid = honks.oonker) where honks.honkid > ? and honks.userid = ? and honkers.name = ?"+butnotthose+limit)
 	stmtHonksByXonker = sqlMustPrepare(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and (honker = ? or oonker = ?)"+butnotthose+limit)
 	stmtHonksByCombo = sqlMustPrepare(db, selecthonks+" where honks.honkid > ? and honks.userid = ? and honks.honker in (select xid from honkers where honkers.userid = ? and honkers.combos like ?) "+butnotthose+" union "+selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and honks.userid = ? and onts.ontology in (select xid from honkers where combos like ?)"+butnotthose+limit)
-	stmtHonksByConvoy = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and (honks.userid = ? or (? = -1 and whofore = 2)) and convoy = ?"+limit)
+	stmtHonksByConvoy = sqlMustPrepare(db, `with recursive getthread(x, c) as (
+		values('', ?)
+		union
+		select xid, convoy from honks, getthread where honks.convoy = getthread.c
+		union
+		select xid, convoy from honks, getthread where honks.rid <> '' and honks.rid = getthread.x
+		union
+		select rid, convoy from honks, getthread where honks.xid = getthread.x and rid <> ''
+	) `+selecthonks+"where honks.honkid > ? and honks.userid = ? and xid in (select x from getthread)"+smalllimit)
 	stmtHonksByOntology = sqlMustPrepare(db, selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and onts.ontology = ? and (honks.userid = ? or (? = -1 and honks.whofore = 2))"+limit)
 
 	stmtSaveMeta = sqlMustPrepare(db, "insert into honkmeta (honkid, genus, json) values (?, ?, ?)")
@@ -1249,12 +1192,12 @@ func prepareStatements(db *sql.DB) {
 	stmtDeleteOnts = sqlMustPrepare(db, "delete from onts where honkid = ?")
 	stmtSaveDonk = sqlMustPrepare(db, "insert into donks (honkid, chonkid, fileid) values (?, ?, ?)")
 	stmtDeleteDonks = sqlMustPrepare(db, "delete from donks where honkid = ?")
-	stmtSaveFile = sqlMustPrepare(db, "insert into filemeta (xid, name, description, url, media, local) values (?, ?, ?, ?, ?, ?)")
-	g_blobdb = openblobdb()
-	stmtSaveFileData = sqlMustPrepare(g_blobdb, "insert into filedata (xid, media, hash, content) values (?, ?, ?, ?)")
-	stmtCheckFileData = sqlMustPrepare(g_blobdb, "select xid from filedata where hash = ?")
-	stmtGetFileData = sqlMustPrepare(g_blobdb, "select media, content from filedata where xid = ?")
+	stmtSaveFile = sqlMustPrepare(db, "insert into filemeta (xid, name, description, url, media, local, meta) values (?, ?, ?, ?, ?, ?, ?)")
+	stmtSaveFileHash = sqlMustPrepare(db, "insert into filehashes (xid, hash, media) values (?, ?, ?)")
+	stmtCheckFileHash = sqlMustPrepare(db, "select xid from filehashes where hash = ?")
+	stmtGetFileMedia = sqlMustPrepare(db, "select media from filehashes where xid = ?")
 	stmtFindXonk = sqlMustPrepare(db, "select honkid from honks where userid = ? and xid = ?")
+	stmtGetFileInfo = sqlMustPrepare(db, "select url from filemeta where xid = ?")
 	stmtFindFile = sqlMustPrepare(db, "select fileid, xid from filemeta where url = ? and local = 1")
 	stmtFindFileId = sqlMustPrepare(db, "select xid, local, description from filemeta where fileid = ? and url = ? and local = 1")
 	stmtUserByName = sqlMustPrepare(db, "select userid, username, displayname, about, pubkey, seckey, options from users where username = ? and userid > 0")
@@ -1271,7 +1214,7 @@ func prepareStatements(db *sql.DB) {
 	stmtGetXonker = sqlMustPrepare(db, "select info from xonkers where name = ? and flavor = ?")
 	stmtSaveXonker = sqlMustPrepare(db, "insert into xonkers (name, info, flavor, dt) values (?, ?, ?, ?)")
 	stmtDeleteXonker = sqlMustPrepare(db, "delete from xonkers where name = ? and flavor = ? and dt < ?")
-	stmtDeleteOldXonkers = sqlMustPrepare(db, "delete from xonkers where flavor = ? and dt < ?")
+	stmtDeleteOldXonkers = sqlMustPrepare(db, "delete from xonkers where dt < ? and flavor <> 'handle'")
 	stmtRecentHonkers = sqlMustPrepare(db, "select distinct(honker) from honks where userid = ? and honker not in (select xid from honkers where userid = ? and flavor = 'sub') order by honkid desc limit 100")
 	stmtUpdateFlags = sqlMustPrepare(db, "update honks set flags = flags | ? where honkid = ?")
 	stmtClearFlags = sqlMustPrepare(db, "update honks set flags = flags & ~ ? where honkid = ?")
@@ -1281,9 +1224,16 @@ func prepareStatements(db *sql.DB) {
 	stmtDeleteFilter = sqlMustPrepare(db, "delete from hfcs where userid = ? and hfcsid = ?")
 	stmtGetTracks = sqlMustPrepare(db, "select fetches from tracks where xid = ?")
 	stmtSaveChonk = sqlMustPrepare(db, "insert into chonks (userid, xid, who, target, dt, noise, format) values (?, ?, ?, ?, ?, ?, ?)")
-	stmtLoadChonks = sqlMustPrepare(db, "select chonkid, userid, xid, who, target, dt, noise, format from chonks where userid = ? and dt > ? order by chonkid asc")
+	stmtLoadChonks = sqlMustPrepare(db, "select chonkid, userid, xid, who, target, dt, noise, format from chonks where userid = ? and dt > ? and chonkid > ? order by chonkid asc")
 	stmtGetChatters = sqlMustPrepare(db, "select distinct(target) from chonks where userid = ?")
 	stmtGetTopDubbed = sqlMustPrepare(db, `SELECT COUNT(*) as c,userid FROM honkers WHERE flavor = "dub" GROUP BY userid`)
 	stmtDeliquentCheck = sqlMustPrepare(db, "select dooverid, msg from doovers where userid = ? and rcpt = ?")
 	stmtDeliquentUpdate = sqlMustPrepare(db, "update doovers set msg = ? where dooverid = ?")
+	g_blobdb = openblobdb()
+	if g_blobdb != nil {
+		stmtSaveBlobData = sqlMustPrepare(g_blobdb, "insert into filedata (xid, content) values (?, ?)")
+		stmtGetBlobData = sqlMustPrepare(g_blobdb, "select content from filedata where xid = ?")
+	} else if !storeTheFilesInTheFileSystem {
+		elog.Fatal("the blob.db has disappeared")
+	}
 }

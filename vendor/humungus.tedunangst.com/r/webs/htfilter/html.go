@@ -55,7 +55,7 @@ var permittedtags = map[string]bool{
 	"samp": true, "mark": true, "ins": true, "dfn": true, "cite": true,
 	"abbr": true, "address": true, "details": true, "summary": true,
 	"strong": true, "em": true, "b": true, "i": true, "s": true, "u": true,
-	"sub": true, "sup": true, "del": true, "tt": true, "small": true,
+	"sub": true, "sup": true, "del": true, "tt": true, "small": true, "big": true,
 	"ol": true, "ul": true, "li": true, "dl": true, "dt": true, "dd": true,
 }
 var permittedattr = map[string]bool{"colspan": true, "rowspan": true, "text-align": true}

@@ -23,6 +23,7 @@ import (
 	"crypto/sha512"
 	"crypto/subtle"
 	"database/sql"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -55,7 +56,7 @@ var logger *log.Logger
 // Check for auth cookie. Allows failure.
 func Checker(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userinfo, ok := checkauthcookie(r)
+		userinfo, ok := CheckCookie(r)
 		if ok {
 			ctx := context.WithValue(r.Context(), thekey, userinfo)
 			r = r.WithContext(ctx)
@@ -80,7 +81,7 @@ func Required(handler http.Handler) http.Handler {
 // Check that the form value "token" is valid auth token
 func TokenRequired(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userinfo, ok := checkformtoken(r)
+		userinfo, ok := CheckToken(r)
 		if ok {
 			ctx := context.WithValue(r.Context(), thekey, userinfo)
 			r = r.WithContext(ctx)
@@ -119,7 +120,7 @@ func calculateCSRF(salt, action, auth string) string {
 
 // Get a CSRF token for given action.
 func GetCSRF(action string, r *http.Request) string {
-	_, ok := checkauthcookie(r)
+	_, ok := CheckCookie(r)
 	if !ok {
 		return ""
 	}
@@ -187,6 +188,8 @@ var csrfkey string
 var securecookies bool
 var samesitecookie http.SameSite
 var safariworks bool
+var secondFactor func(string, *http.Request) bool
+var successUrl = "/"
 
 func getconfig(db *sql.DB, key string, value interface{}) error {
 	row := db.QueryRow("select value from config where key = ?", key)
@@ -203,6 +206,8 @@ type InitArgs struct {
 	Insecure       bool
 	SameSiteStrict bool
 	SafariWorks    bool
+	SecondFactor   func(username string, r *http.Request) bool
+	SuccessUrl     string
 }
 
 // Init. Must be called with the database.
@@ -250,6 +255,10 @@ func Init(args InitArgs) {
 		samesitecookie = http.SameSiteStrictMode
 	}
 	safariworks = args.SafariWorks
+	secondFactor = args.SecondFactor
+	if args.SuccessUrl != "" {
+		successUrl = args.SuccessUrl
+	}
 	getconfig(db, "csrfkey", &csrfkey)
 }
 
@@ -298,7 +307,7 @@ func getformtoken(r *http.Request) string {
 	if token == "" {
 		token = r.Header.Get("Authorization")
 	}
-	if strings.HasPrefix(token, "Bearer ") {
+	if strings.HasPrefix(strings.ToLower(token), "bearer ") {
 		token = token[7:]
 	}
 	if token == "" {
@@ -336,7 +345,7 @@ var validcookies = cache.New(cache.Options{Filler: func(cookie string) (*UserInf
 	return &userinfo, true
 }, Duration: 5 * time.Minute})
 
-func checkauthcookie(r *http.Request) (*UserInfo, bool) {
+func CheckCookie(r *http.Request) (*UserInfo, bool) {
 	cookie := getauthcookie(r)
 	if cookie == "" {
 		return nil, false
@@ -346,7 +355,7 @@ func checkauthcookie(r *http.Request) (*UserInfo, bool) {
 	return userinfo, ok
 }
 
-func checkformtoken(r *http.Request) (*UserInfo, bool) {
+func CheckToken(r *http.Request) (*UserInfo, bool) {
 	token := getformtoken(r)
 	if token == "" {
 		return nil, false
@@ -372,9 +381,7 @@ func loaduser(username string) (int64, []byte, bool) {
 	return userid, hash, true
 }
 
-var userregex = regexp.MustCompile("^[[:alnum:]]+$")
-var userlen = 32
-var passlen = 128
+const passlen = 128
 
 func hexsum(h hash.Hash) string {
 	return fmt.Sprintf("%x", h.Sum(nil))[0:authlen]
@@ -382,15 +389,14 @@ func hexsum(h hash.Hash) string {
 
 // Default handler for /dologin
 // Requires username and password form values.
-// Redirects to / on success and /login on failure.
+// Redirects to SuccessUrl on success and /login on failure.
 func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	gettoken := r.FormValue("gettoken") == "1"
 
-	if len(username) == 0 || len(username) > userlen ||
-		!userregex.MatchString(username) || len(password) == 0 ||
-		len(password) > passlen {
+	if len(username) == 0 || len(username) > passlen ||
+		len(password) == 0 || len(password) > passlen {
 		logger.Printf("login: invalid password attempt")
 		if gettoken {
 			http.Error(w, "incorrect", http.StatusForbidden)
@@ -415,8 +421,13 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := bcrypt.CompareHashAndPassword(hash, []byte(password))
+	if secondFactor != nil {
+		if !secondFactor(username, r) {
+			err = errors.New("failed second factor")
+		}
+	}
 	if err != nil {
-		logger.Printf("login: incorrect password")
+		logger.Printf("login failed: %s", err)
 		if gettoken {
 			http.Error(w, "incorrect", http.StatusForbidden)
 		} else {
@@ -454,7 +465,7 @@ func LoginFunc(w http.ResponseWriter, r *http.Request) {
 	if gettoken {
 		w.Write([]byte(auth))
 	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, successUrl, http.StatusSeeOther)
 	}
 }
 
@@ -475,7 +486,7 @@ func deleteoneauth(auth string) error {
 
 // Handler for /dologout route.
 func LogoutFunc(w http.ResponseWriter, r *http.Request) {
-	userinfo, ok := checkauthcookie(r)
+	userinfo, ok := CheckCookie(r)
 	if ok && CheckCSRF("logout", r) {
 		err := deleteauth(userinfo.UserID)
 		if err != nil {
@@ -491,7 +502,7 @@ func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 		})
 	}
-	_, ok = checkformtoken(r)
+	_, ok = CheckToken(r)
 	if ok {
 		auth := getformtoken(r)
 		deleteoneauth(auth)
@@ -504,7 +515,7 @@ func LogoutFunc(w http.ResponseWriter, r *http.Request) {
 // Requires oldpass and newpass form values.
 // Requires logout csrf token.
 func ChangePassword(w http.ResponseWriter, r *http.Request) error {
-	userinfo, ok := checkauthcookie(r)
+	userinfo, ok := CheckCookie(r)
 	if !ok || !CheckCSRF("logout", r) {
 		return fmt.Errorf("unauthorized")
 	}

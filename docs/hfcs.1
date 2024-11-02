@@ -96,8 +96,13 @@ that can be matched against and will appear if the post is collapsed.
 An optional expiration may be specified as a duration.
 XdYhZm for X days, Y hours, and Z minutes.
 .Sh EXAMPLES
-A rudimentary spam filter may be constructed with where set to mastodon.social,
-checking the only unknowns option, with an action of reject.
+A rudimentary spam filter to reject randos shilling their discord.
+It will expire after two days.
+.Lk filter.png screenshot of filter
+.Pp
+Following a group my result in the timeline being flooded with replies.
+These may also be rejected.
+.Lk filtermemes.png screenshot of filter
 .Sh SEE ALSO
 .Xr honk 1
 .Sh CAVEATS

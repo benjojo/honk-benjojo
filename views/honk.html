@@ -1,4 +1,4 @@
-<article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}" data-hname="{{ .Honk.Handles }}" data-xid="{{ .Honk.XID }}" data-id="{{ .Honk.ID }}">
+<article id="{{ .Honk.ShortXID }}" class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}" data-hname="{{ .Honk.Handles }}" data-xid="{{ .Honk.XID }}" data-id="{{ .Honk.ID }}">
 {{ $bonkcsrf := .BonkCSRF }}
 {{ $IsPreview := .IsPreview }}
 {{ $maplink := .MapLink }}
@@ -47,7 +47,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 <br>
 {{ if $bonkcsrf }}
-<span class="left1em clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
+<span class="left1em clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}#{{ .ShortXID }}">{{ .Convoy }}</a></span>
 {{ end }}
 </header>
 <p>
@@ -55,36 +55,39 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <summary class="noise">{{ .HTPrecis }}<p></summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}
+{{ if .Link }}
+<p><a href="{{ .Link }}">{{ or .LegalName .Link }}</a>
+{{ end }}
 {{ with .Time }}
 <p>Time: {{ .StartTime.Local.Format "03:04PM MST Mon Jan 02"}}
-{{ if .Duration }}<br>Duration: {{ .Duration }}{{ end }}
+{{ if .Duration }}<br>Duration: {{ .Duration }}{{ end }}</p>
 {{ end }}
 {{ with .Place }}
-<p>Location: {{ with .Url }}<a href="{{ . }}" rel=noreferrer>{{ end }}{{ .Name }}{{ if .Url }}</a>{{ end }}{{ if or .Latitude .Longitude }} <a href="{{ if eq $maplink "apple" }}https://maps.apple.com/?q={{ or .Name "here" }}&z=16&ll={{ .Latitude }},{{ .Longitude }}{{ else }}https://www.openstreetmap.org/?mlat={{ .Latitude }}&mlon={{ .Longitude}}#map=16/{{ .Latitude }}/{{ .Longitude }}{{ end }}" rel=noreferrer>{{ .Latitude }} {{ .Longitude }}</a>{{ end }}
+<p>Location: {{ with .Url }}<a href="{{ . }}" rel=noreferrer>{{ end }}{{ .Name }}{{ if .Url }}</a>{{ end }}{{ if or .Latitude .Longitude }} <a href="{{ if eq $maplink "apple" }}https://maps.apple.com/?q={{ or .Name "here" }}&z=16&ll={{ .Latitude }},{{ .Longitude }}{{ else }}https://www.openstreetmap.org/?mlat={{ .Latitude }}&mlon={{ .Longitude}}#map=16/{{ .Latitude }}/{{ .Longitude }}{{ end }}" rel=noreferrer>{{ .Latitude }} {{ .Longitude }}</a></p>{{ end }}
 {{ end }}
 {{ range .Donks }}
 {{ if .Local }}
 {{ if eq .Media "text/plain" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{ .Meta.Length }})</p>
 {{ else if eq .Media "application/pdf" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{ .Meta.Length }})</p>
 {{ else if eq .Media "video/mp4" }}
-<p><video controls src="{{ .URL }}">{{ .Name }}</video>
+<p><video controls src="/d/{{ .XID }}">{{ .Name }}</video></p>
 {{ else }}
 {{ if $omitimages }}
-<p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+<p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{.Meta.Width}}x{{.Meta.Height}} {{ .Meta.Length }})</p>
 {{ else }}
-<p><img src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}">
+<img class="donk donklink" src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}" width="{{.Meta.Width}}" height="{{.Meta.Height}}">
 {{ end }}
 {{ end }}
 {{ else }}
 {{ if .External }}
-<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
+<p><a href="{{ .URL }}" rel=noreferrer>External Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}</p>
 {{ else }}
 {{ if eq .Media "video/mp4" }}
-<p><video controls src="{{ .URL }}">{{ .Name }}</video>
+<p><video controls src="{{ .URL }}">{{ .Name }}</video></p>
 {{ else }}
-<p><img src="{{ .URL }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+<p><img src="{{ .URL }}" title="{{ .Desc }}" alt="{{ .Desc }}"></p>
 {{ end }}
 {{ end }}
 {{ end }}

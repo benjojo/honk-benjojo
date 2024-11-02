@@ -136,9 +136,9 @@ type SQLiteDriver struct {
 
 // SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
-	db          *C.sqlite3
-	loc         *time.Location
-	txlock      string
+	db     *C.sqlite3
+	loc    *time.Location
+	txlock string
 }
 
 // SQLiteTx implemen sql.Tx.
@@ -170,7 +170,6 @@ type SQLiteRows struct {
 	cls      bool
 	done     chan chan struct{}
 }
-
 
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
@@ -320,25 +319,28 @@ func errorString(err Error) string {
 
 // Open database and return a new connection.
 // You can specify a DSN string using a URI as the filename.
-//   test.db
-//   file:test.db?cache=shared&mode=memory
-//   :memory:
-//   file::memory:
+//
+//	test.db
+//	file:test.db?cache=shared&mode=memory
+//	:memory:
+//	file::memory:
+//
 // go-sqlite3 adds the following query parameters to those used by SQLite:
-//   _loc=XXX
-//     Specify location of time format. It's possible to specify "auto".
-//   _busy_timeout=XXX
-//     Specify value for sqlite3_busy_timeout.
-//   _txlock=XXX
-//     Specify locking behavior for transactions.  XXX can be "immediate",
-//     "deferred", "exclusive".
+//
+//	_loc=XXX
+//	  Specify location of time format. It's possible to specify "auto".
+//	_busy_timeout=XXX
+//	  Specify value for sqlite3_busy_timeout.
+//	_txlock=XXX
+//	  Specify locking behavior for transactions.  XXX can be "immediate",
+//	  "deferred", "exclusive".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
 	var loc *time.Location
-	txlock := "BEGIN"
+	txlock := "BEGIN IMMEDIATE"
 	busyTimeout := 5000
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -609,7 +611,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		done := make(chan chan struct{})
 		back := make(chan struct{})
 		defer func() {
-			done<-back
+			done <- back
 			close(done)
 			select {
 			case <-back:
@@ -637,7 +639,7 @@ func (rc *SQLiteRows) Close() error {
 	}
 	if rc.done != nil {
 		back := make(chan struct{})
-		rc.done<-back
+		rc.done <- back
 		close(rc.done)
 		select {
 		case <-back:
@@ -725,21 +727,21 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				continue
 			}
 			n := C.sqlite3_column_bytes(rc.s.s, C.int(i))
-			dest[i] = C.GoBytes(p, n)
+			dest[i] = unsafe.Slice((*byte)(p), n)
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
-			var err error
-			var timeVal time.Time
-
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
+			p := C.sqlite3_column_text(rc.s.s, C.int(i))
+			s := C.GoStringN((*C.char)(unsafe.Pointer(p)), C.int(n))
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
+				var err error
 				var t time.Time
 				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {
+					var timeVal time.Time
 					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
 						t = timeVal
 						break
@@ -754,10 +756,64 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				}
 				dest[i] = t
 			default:
-				dest[i] = []byte(s)
+				dest[i] = s
 			}
 
 		}
 	}
 	return nil
+}
+
+// Ping implement Pinger.
+func (c *SQLiteConn) Ping(ctx context.Context) error {
+	if c.db == nil {
+		return errors.New("Connection was closed")
+	}
+	return nil
+}
+
+// QueryContext implement QueryerContext.
+func (c *SQLiteConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, nv := range args {
+		list[i] = namedValue(nv)
+	}
+	return c.query(ctx, query, list)
+}
+
+// ExecContext implement ExecerContext.
+func (c *SQLiteConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	list := make([]namedValue, len(args))
+	for i, nv := range args {
+		list[i] = namedValue(nv)
+	}
+	return c.exec(ctx, query, list)
+}
+
+// PrepareContext implement ConnPrepareContext.
+func (c *SQLiteConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	return c.prepare(ctx, query)
+}
+
+// BeginTx implement ConnBeginTx.
+func (c *SQLiteConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	return c.begin(ctx)
+}
+
+// QueryContext implement QueryerContext.
+func (s *SQLiteStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, nv := range args {
+		list[i] = namedValue(nv)
+	}
+	return s.query(ctx, list)
+}
+
+// ExecContext implement ExecerContext.
+func (s *SQLiteStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	list := make([]namedValue, len(args))
+	for i, nv := range args {
+		list[i] = namedValue(nv)
+	}
+	return s.exec(ctx, list)
 }

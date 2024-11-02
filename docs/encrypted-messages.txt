@@ -27,6 +27,15 @@ Receiving and decrypting:
 
 The public key is duplicated in the actor and the message.
 
+Implementation
+
+By default, the private keys are stored on the server, so this isn't end to
+end. This make it easier to deploy, as it's transparent to the user.
+
+By running the extractchatkey command, the key is removed from the database
+and printed to terminal, where it can be added to end devices. After this, the
+web interface is no longer able to read encrypted chats.
+
 Notes
 
 This doesn't support shared group keys. Messages need to be encrypted per recipient.

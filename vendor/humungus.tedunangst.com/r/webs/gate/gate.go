@@ -97,7 +97,7 @@ func (l *Limiter) Outstanding() int {
 	return l.numout
 }
 
-// Return current outstanding count
+// Return current waiting count
 func (l *Limiter) Waiting() int {
 	l.lock.Lock()
 	defer l.lock.Unlock()

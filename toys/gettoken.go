@@ -28,12 +28,15 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	if !(strings.HasPrefix(server, "https://") || strings.HasPrefix(server, "http://")) {
+		server = "https://" + server
+	}
 
 	form := make(url.Values)
 	form.Add("username", username)
 	form.Add("password", password)
 	form.Add("gettoken", "1")
-	loginurl := fmt.Sprintf("https://%s/dologin", server)
+	loginurl := fmt.Sprintf("%s/dologin", server)
 	req, err := http.NewRequest("POST", loginurl, strings.NewReader(form.Encode()))
 	if err != nil {
 		log.Fatal(err)

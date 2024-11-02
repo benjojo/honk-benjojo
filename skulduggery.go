@@ -32,7 +32,7 @@ func demoji(s string) string {
 		if c == '\n' {
 			continue
 		}
-		if runewidth.RuneWidth(c) == 0 {
+		if c > 127 && runewidth.RuneWidth(c) == 0 {
 			zw = true
 			break
 		}
@@ -41,7 +41,7 @@ func demoji(s string) string {
 		x := make([]byte, 0, len(s))
 		zw = false
 		for _, c := range s {
-			if runewidth.RuneWidth(c) == 0 {
+			if c > 127 && runewidth.RuneWidth(c) == 0 {
 				if zw {
 					continue
 				}

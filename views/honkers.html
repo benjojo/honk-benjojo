@@ -23,8 +23,15 @@
 {{ $honkercsrf := .HonkerCSRF }}
 <div class="info">
 <p><button class="expand">expand</button>
+<p>{{ range .Letters }}<a href="#{{.}}">{{.}}</a> {{ end }}
 </div>
+{{ $firstrune := .FirstRune }}
+{{ $letter := 0 }}
 {{ range .Honkers }}
+{{ if not (eq $letter (call $firstrune .Name)) }}
+{{ $letter = (call $firstrune .Name) }}
+<a name="{{ printf "%c" $letter}}"></a>
+{{ end }}
 <section class="honk">
 <header>
 <img alt="avatar" src="/a?a={{ .XID }}">

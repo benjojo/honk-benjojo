@@ -73,18 +73,18 @@ func (ft filtType) String() string {
 
 type afiltermap map[filtType][]*Filter
 
-var filtInvalidator gencache.Invalidator[int64]
-var filtcache *gencache.Cache[int64, afiltermap]
+var filtInvalidator gencache.Invalidator[UserID]
+var filtcache *gencache.Cache[UserID, afiltermap]
 
 func init() {
 	// resolve init loop
-	filtcache = gencache.New(gencache.Options[int64, afiltermap]{
+	filtcache = gencache.New(gencache.Options[UserID, afiltermap]{
 		Fill:        filtcachefiller,
 		Invalidator: &filtInvalidator,
 	})
 }
 
-func filtcachefiller(userid int64) (afiltermap, bool) {
+func filtcachefiller(userid UserID) (afiltermap, bool) {
 	rows, err := stmtGetFilters.Query(userid)
 	if err != nil {
 		elog.Printf("error querying filters: %s", err)
@@ -114,6 +114,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 				continue
 			}
 			if expflush.IsZero() || filt.Expiration.Before(expflush) {
+				dlog.Printf("filter expired: %s", filt.Name)
 				expflush = filt.Expiration
 			}
 		}
@@ -183,12 +184,13 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 	return filtmap, true
 }
 
-func filtcacheclear(userid int64, dur time.Duration) {
+func filtcacheclear(userid UserID, dur time.Duration) {
+	dlog.Printf("clearing filters in %s", dur.String())
 	time.Sleep(dur + time.Second)
 	filtInvalidator.Clear(userid)
 }
 
-func getfilters(userid int64, scope filtType) []*Filter {
+func getfilters(userid UserID, scope filtType) []*Filter {
 	filtmap, ok := filtcache.Get(userid)
 	if ok {
 		return filtmap[scope]
@@ -200,7 +202,7 @@ type arejectmap map[string][]*Filter
 
 var rejectAnyKey = "..."
 
-var rejectcache = gencache.New(gencache.Options[int64, arejectmap]{Fill: func(userid int64) (arejectmap, bool) {
+var rejectcache = gencache.New(gencache.Options[UserID, arejectmap]{Fill: func(userid UserID) (arejectmap, bool) {
 	m := make(arejectmap)
 	filts := getfilters(userid, filtReject)
 	for _, f := range filts {
@@ -221,12 +223,12 @@ var rejectcache = gencache.New(gencache.Options[int64, arejectmap]{Fill: func(us
 	return m, true
 }, Invalidator: &filtInvalidator})
 
-func rejectfilters(userid int64, name string) []*Filter {
+func rejectfilters(userid UserID, name string) []*Filter {
 	m, _ := rejectcache.Get(userid)
 	return m[name]
 }
 
-func rejectorigin(userid int64, origin string, isannounce bool) bool {
+func rejectorigin(userid UserID, origin string, isannounce bool) bool {
 	if o := originate(origin); o != "" {
 		origin = o
 	}
@@ -247,16 +249,17 @@ func rejectorigin(userid int64, origin string, isannounce bool) bool {
 	return false
 }
 
-func rejectactor(userid int64, actor string) bool {
+func rejectactor(userid UserID, actor string) bool {
 	filts := rejectfilters(userid, actor)
 	for _, f := range filts {
-		if f.IsAnnounce {
+		if f.IsAnnounce || f.IsReply {
 			continue
 		}
-		if f.Actor == actor {
-			ilog.Printf("rejecting actor: %s", actor)
-			return true
+		if f.Text != "" {
+			continue
 		}
+		ilog.Printf("rejecting actor: %s", actor)
+		return true
 	}
 	origin := originate(actor)
 	if origin == "" {
@@ -282,7 +285,7 @@ func rejectactor(userid int64, actor string) bool {
 	return false
 }
 
-var knownknowns = gencache.New(gencache.Options[int64, map[string]bool]{Fill: func(userid int64) (map[string]bool, bool) {
+var knownknowns = gencache.New(gencache.Options[UserID, map[string]bool]{Fill: func(userid UserID) (map[string]bool, bool) {
 	m := make(map[string]bool)
 	honkers := gethonkers(userid)
 	for _, h := range honkers {
@@ -291,12 +294,12 @@ var knownknowns = gencache.New(gencache.Options[int64, map[string]bool]{Fill: fu
 	return m, true
 }, Invalidator: &honkerinvalidator})
 
-func unknownActor(userid int64, actor string) bool {
+func unknownActor(userid UserID, actor string) bool {
 	knowns, _ := knownknowns.Get(userid)
 	return !knowns[actor]
 }
 
-func stealthmode(userid int64, r *http.Request) bool {
+func stealthmode(userid UserID, r *http.Request) bool {
 	agent := requestActor(r)
 	if agent != "" {
 		fake := rejectorigin(userid, agent, false)
@@ -416,7 +419,7 @@ func skipMedia(xonk *ActivityPubActivity) bool {
 	return false
 }
 
-func unsee(honks []*ActivityPubActivity, userid int64) {
+func unsee(honks []*ActivityPubActivity, userid UserID) {
 	if userid != -1 {
 		colfilts := getfilters(userid, filtCollapse)
 		rwfilts := getfilters(userid, filtRewrite)
@@ -454,7 +457,7 @@ func unsee(honks []*ActivityPubActivity, userid int64) {
 	}
 }
 
-var untagged = cache.New(cache.Options{Filler: func(userid int64) (map[string]bool, bool) {
+var untagged = cache.New(cache.Options{Filler: func(userid UserID) (map[string]bool, bool) {
 	rows, err := stmtUntagged.Query(userid)
 	if err != nil {
 		elog.Printf("error query untagged: %s", err)
@@ -480,7 +483,7 @@ var untagged = cache.New(cache.Options{Filler: func(userid int64) (map[string]bo
 	return bad, true
 }})
 
-func osmosis(honks []*ActivityPubActivity, userid int64, withfilt bool) []*ActivityPubActivity {
+func osmosis(honks []*ActivityPubActivity, userid UserID, withfilt bool) []*ActivityPubActivity {
 	var badparents map[string]bool
 	untagged.GetAndLock(userid, &badparents)
 	j := 0
@@ -516,15 +519,15 @@ outer:
 }
 
 func savehfcs(w http.ResponseWriter, r *http.Request) {
-	userinfo := login.GetUserInfo(r)
+	userid := UserID(login.GetUserInfo(r).UserID)
 	itsok := r.FormValue("itsok")
 	if itsok == "iforgiveyou" {
 		hfcsid, _ := strconv.ParseInt(r.FormValue("hfcsid"), 10, 0)
-		_, err := stmtDeleteFilter.Exec(userinfo.UserID, hfcsid)
+		_, err := stmtDeleteFilter.Exec(userid, hfcsid)
 		if err != nil {
 			elog.Printf("error deleting filter: %s", err)
 		}
-		filtInvalidator.Clear(userinfo.UserID)
+		filtInvalidator.Clear(userid)
 		http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
 		return
 	}
@@ -558,12 +561,12 @@ func savehfcs(w http.ResponseWriter, r *http.Request) {
 
 	j, err := encodeJson(filt)
 	if err == nil {
-		_, err = stmtSaveFilter.Exec(userinfo.UserID, j)
+		_, err = stmtSaveFilter.Exec(userid, j)
 	}
 	if err != nil {
 		elog.Printf("error saving filter: %s", err)
 	}
 
-	filtInvalidator.Clear(userinfo.UserID)
+	filtInvalidator.Clear(userid)
 	http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
 }

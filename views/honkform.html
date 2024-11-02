@@ -45,6 +45,17 @@
 <div id="emupicker">
 </div>
 </details>
+<details>
+<summary>advanced</summary>
+<p><label for=seealso>cc:</label><br>
+<input type="text" name="seealso" value="{{ .SeeAlso }}">
+<p><label for=legalname>name:</label><br>
+<input type="text" name="legalname" value="{{ .LegalName }}">
+<p><label for=link>link:</label><br>
+<input type="text" name="link" value="{{ .Link }}">
+<p><label for=onties>tags:</label><br>
+<input type="text" name="onties" value="{{ .Onties }}">
+</details>
 <p>
 <textarea name="noise" id="honknoise">{{ .Noise }}</textarea>
 <p class="buttonarray">

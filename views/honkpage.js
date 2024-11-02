@@ -19,14 +19,15 @@ function post(url, data) {
 	x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded")
 	x.send(data)
 }
-function get(url, whendone, whentimedout) {
+function get(url, whendone, errfunction) {
 	var x = new XMLHttpRequest()
 	x.open("GET", url)
 	x.timeout = 15 * 1000
 	x.responseType = "json"
 	x.onload = function() { whendone(x) }
-	if (whentimedout) {
-		x.ontimeout = function(e) { whentimedout(x, e) }
+	if (errfunction) {
+		x.ontimeout = function(e) { errfunction(" timed out") }
+		x.onerror = function(e) { errfunction(" error") }
 	}
 	x.send()
 }
@@ -180,10 +181,10 @@ function refreshhonks(btn) {
 		} else {
 			refreshupdate(" status: " + xhr.status)
 		}
-	}, function(xhr, e) {
+	}, function(err) {
 		btn.innerHTML = "refresh"
 		btn.disabled = false
-		refreshupdate(" timed out")
+		refreshupdate(err)
 	})
 }
 function statechanger(evt) {
@@ -193,7 +194,7 @@ function statechanger(evt) {
 	}
 	switchtopage(data.name, data.arg)
 }
-function switchtopage(name, arg) {
+function switchtopage(name, arg, anchor) {
 	var stash = curpagestate.name + ":" + curpagestate.arg
 	var honksonpage = document.getElementById("honksonpage")
 	var holder = honksonpage.children[0]
@@ -219,6 +220,10 @@ function switchtopage(name, arg) {
 		if (msg) {
 			srvel.prepend(msg)
 		}
+		if (anchor) {
+			let el = document.getElementById(anchor)
+			el.scrollIntoView()
+		}
 	} else {
 		// or create one and fill it
 		honksonpage.prepend(document.createElement("div"))
@@ -226,11 +231,15 @@ function switchtopage(name, arg) {
 		get("/hydra?" + encode(args), function(xhr) {
 			if (xhr.status == 200) {
 				fillinhonks(xhr, false)
+				if (anchor) {
+					let el = document.getElementById(anchor)
+					el.scrollIntoView()
+				}
 			} else {
 				refreshupdate(" status: " + xhr.status)
 			}
-		}, function(xhr, e) {
-			refreshupdate(" timed out")
+		}, function(err) {
+			refreshupdate(err)
 		})
 	}
 	refreshupdate("")
@@ -245,11 +254,14 @@ function pageswitcher(name, arg) {
 		if (name == curpagestate.name && arg == curpagestate.arg) {
 			return false
 		}
-		switchtopage(name, arg)
-		var url = evt.srcElement.href
-		if (!url) {
+		let url = evt.srcElement.href
+		if (!url)
 			url = evt.srcElement.parentElement.href
-		}
+		let anchor
+		let arr = url.split("#")
+		if (arr.length == 2)
+			anchor = arr[1]
+		switchtopage(name, arg, anchor)
 		history.pushState(newpagestate(name, arg), "some title", url)
 		window.scrollTo(0, 0)
 		return false
@@ -272,6 +284,16 @@ function relinklinks() {
 		var xid = el.getAttribute("data-xid")
 		el.onclick = pageswitcher("honker", xid)
 		el.classList.remove("honkerlink")
+	}
+	els = document.getElementsByClassName("donklink")
+	while (els.length) {
+		let el = els[0]
+		el.onclick = function() {
+			el.classList.remove("donk")
+			el.onclick = null
+			return false
+		}
+		el.classList.remove("donklink")
 	}
 
 	els = document.querySelectorAll("#honksonpage article button")
@@ -342,6 +364,7 @@ function relinklinks() {
 function showhonkform(elem, rid, hname) {
 	var form = lehonkform
 	form.style = "display: block"
+	form.reset()
 	if (elem) {
 		form.remove()
 		elem.parentElement.parentElement.parentElement.insertAdjacentElement('beforebegin', form)
@@ -350,6 +373,8 @@ function showhonkform(elem, rid, hname) {
 		elem = document.getElementById("honkformhost")
 		elem.insertAdjacentElement('afterend', form)
 	}
+	var donker = document.getElementById("donker")
+	donker.children[1].textContent = ""
 	var ridinput = document.getElementById("ridinput")
 	var honknoise = document.getElementById("honknoise")
 	if (rid) {
@@ -363,10 +388,35 @@ function showhonkform(elem, rid, hname) {
 		ridinput.value = ""
 		honknoise.value = ""
 	}
+	honknoise.ondrop = donkdrop
 	var updateinput = document.getElementById("updatexidinput")
 	updateinput.value = ""
+	var savedfile = document.getElementById("saveddonkxid")
+	savedfile.value = ""
 	honknoise.focus()
 	return false
+}
+function donkdrop(evt) {
+	evt.preventDefault()
+	let donks = document.querySelector("#donker input")
+	Array.from(evt.dataTransfer.items).forEach((item) => {
+        if (item.kind == "file") {
+			let olddonks = donks.files
+			let donkarama = new DataTransfer();
+			for (donk of olddonks)
+				donkarama.items.add(donk)
+            let file = item.getAsFile()
+			donkarama.items.add(file)
+			donks.files = donkarama.files;
+            let t = evt.target
+            let start = t.selectionStart
+            let s = t.value.substr(0, start)
+            let e = t.value.substr(start)
+            t.value = s + `<img src=${donks.files.length}>` + e
+            t.selectionStart = start
+            t.selectionEnd = start
+        }
+    })
 }
 function cancelhonking() {
 	hideelement(lehonkform)
@@ -444,48 +494,6 @@ function scrollprevioushonk() {
 	}
 }
 
-function hotkey(e) {
-	if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
-		return
-	if (e.ctrlKey || e.altKey)
-		return
-
-	switch (e.code) {
-	case "KeyR":
-		refreshhonks(document.getElementById("honkrefresher"));
-		break;
-	case "KeyS":
-		oldestnewest(document.getElementById("newerscroller"));
-		break;
-	case "KeyJ":
-		scrollnexthonk();
-		break;
-	case "KeyK":
-		scrollprevioushonk();
-		break;
-	case "KeyM":
-		var menu = document.getElementById("topmenu")
-		if (!menu.open) {
-			menu.open = true
-			menu.querySelector("a").focus()
-		} else {
-			menu.open = false
-		}
-		break
-	case "Escape":
-		var menu = document.getElementById("topmenu")
-		menu.open = false
-		break
-	case "Slash":
-		document.getElementById("topmenu").open = true
-		document.getElementById("searchbox").focus()
-		e.preventDefault()
-		break
-	}
-}
-
-document.addEventListener("keydown", hotkey)
-
 function addemu(elem) {
 	const data = elem.alt
 	const box = document.getElementById("honknoise");
@@ -530,13 +538,6 @@ function loademus() {
 	el.onclick = pageswitcher("saved", "")
 	el = document.getElementById("longagolink")
 	el.onclick = pageswitcher("longago", "")
-
-	var totop = document.querySelector(".nophone")
-	if (totop) {
-		totop.onclick = function() {
-			window.scrollTo(0,0)
-		}
-	}
 
 	var refreshbox = document.getElementById("refreshbox")
 	if (refreshbox) {

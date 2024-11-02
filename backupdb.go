@@ -1,3 +1,18 @@
+//
+// Copyright (c) 2020 Ted Unangst <tedu@tedunangst.com>
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 package main
 
 import (
@@ -30,7 +45,12 @@ func backupDatabase(dirname string) {
 		elog.Fatalf("can't create directory: %s", dirname)
 	}
 	now := time.Now().Unix()
-	backupdbname := fmt.Sprintf("%s/honk-%d.db", dirname, now)
+	dirname = fmt.Sprintf("%s/honk-%d", dirname, now)
+	err = os.Mkdir(dirname, 0700)
+	if err != nil {
+		elog.Fatalf("can't create directory: %s", dirname)
+	}
+	backupdbname := fmt.Sprintf("%s/honk.db", dirname)
 	backup, err := sql.Open("sqlite3", backupdbname)
 	if err != nil {
 		elog.Fatalf("can't open backup database")
@@ -139,18 +159,28 @@ func backupDatabase(dirname string) {
 	}
 	filexids := make(map[string]bool)
 	for f := range fileids {
-		rows = queryDB(orig, "select fileid, xid, name, description, url, media, local from filemeta where fileid = ?", f)
+		rows = queryDB(orig, "select fileid, xid, name, description, url, media, local, meta from filemeta where fileid = ?", f)
 		for rows.Next() {
 			var fileid int64
-			var xid, name, description, url, media string
+			var xid, name, description, url, media, meta string
 			var local int64
-			scanDBRow(rows, &fileid, &xid, &name, &description, &url, &media, &local)
-			filexids[xid] = true
-			sqlMustQuery(tx, "insert into filemeta (fileid, xid, name, description, url, media, local) values (?, ?, ?, ?, ?, ?, ?)", fileid, xid, name, description, url, media, local)
+			scanDBRow(rows, &fileid, &xid, &name, &description, &url, &media, &local, &meta)
+			if xid != "" {
+				filexids[xid] = true
+			}
+			sqlMustQuery(tx, "insert into filemeta (fileid, xid, name, description, url, media, local, meta) values (?, ?, ?, ?, ?, ?, ?, ?)", fileid, xid, name, description, url, media, local, meta)
 		}
 		rows.Close()
 	}
-
+	for xid := range filexids {
+		rows = queryDB(orig, "select media, hash from filehashes where xid = ?", xid)
+		for rows.Next() {
+			var media, hash string
+			scanDBRow(rows, &media, &hash)
+			sqlMustQuery(tx, "insert into filehashes (xid, media, hash) values (?, ?, ?)", xid, media, hash)
+		}
+		rows.Close()
+	}
 	rows = queryDB(orig, "select key, value from config")
 	for rows.Next() {
 		var key string
@@ -163,36 +193,65 @@ func backupDatabase(dirname string) {
 	if err != nil {
 		elog.Fatalf("can't commit backp: %s", err)
 	}
+	tx = nil
 	backup.Close()
 
-	backupblobname := fmt.Sprintf("%s/blob-%d.db", dirname, now)
-	blob, err := sql.Open("sqlite3", backupblobname)
-	if err != nil {
-		elog.Fatalf("can't open backup blob database")
-	}
-	_, err = blob.Exec("PRAGMA journal_mode=WAL")
-	sqlMustQuery(blob, "create table filedata (xid text, media text, hash text, content blob)")
-	sqlMustQuery(blob, "create index idx_filexid on filedata(xid)")
-	sqlMustQuery(blob, "create index idx_filehash on filedata(hash)")
-	tx, err = blob.Begin()
-	if err != nil {
-		elog.Fatalf("can't start transaction: %s", err)
-	}
-	origblob := openblobdb()
-	for x := range filexids {
-		rows = queryDB(origblob, "select xid, media, hash, content from filedata where xid = ?", x)
-		for rows.Next() {
-			var xid, media, hash string
-			var content sql.RawBytes
-			scanDBRow(rows, &xid, &media, &hash, &content)
-			sqlMustQuery(tx, "insert into filedata (xid, media, hash, content) values (?, ?, ?, ?)", xid, media, hash, content)
+	var blob *sql.DB
+	var filesavepath string
+	if storeTheFilesInTheFileSystem {
+		filesavepath = fmt.Sprintf("%s/attachments", dirname)
+		os.Mkdir(filesavepath, 0700)
+		filesavepath += "/"
+	} else {
+		backupblobname := fmt.Sprintf("%s/blob.db", dirname)
+		blob, err = sql.Open("sqlite3", backupblobname)
+		if err != nil {
+			elog.Fatalf("can't open backup blob database")
 		}
-		rows.Close()
+		_, err = blob.Exec("PRAGMA journal_mode=WAL")
+		sqlMustQuery(blob, "create table filedata (xid text, content blob)")
+		sqlMustQuery(blob, "create index idx_filexid on filedata(xid)")
+		tx, err = blob.Begin()
+		if err != nil {
+			elog.Fatalf("can't start transaction: %s", err)
+		}
+		stmtSaveBlobData, err = tx.Prepare("insert into filedata (xid, content) values (?, ?)")
+		checkErr(err)
+	}
+	for xid := range filexids {
+		if storeTheFilesInTheFileSystem {
+			oldname := filepath(xid)
+			newname := filesavepath + oldname[14:]
+			os.Mkdir(newname[:strings.LastIndexByte(newname, '/')], 0700)
+			err = os.Link(oldname, newname)
+			if err == nil {
+				continue
+			}
+		}
+		data, closer, err := loaddata(xid)
+		if err != nil {
+			elog.Printf("lost a file: %s", xid)
+			continue
+		}
+		if storeTheFilesInTheFileSystem {
+			oldname := filepath(xid)
+			newname := filesavepath + oldname[14:]
+			err = os.WriteFile(newname, data, 0700)
+		} else {
+			_, err = stmtSaveBlobData.Exec(xid, data)
+		}
+		if err != nil {
+			elog.Printf("failed to save file %s: %s", xid, err)
+		}
+		closer()
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		elog.Fatalf("can't commit blobs: %s", err)
+	if blob != nil {
+		err = tx.Commit()
+		if err != nil {
+			elog.Fatalf("can't commit blobs: %s", err)
+		}
+		blob.Close()
 	}
-	blob.Close()
+	fmt.Printf("backup saved to %s\n", dirname)
 }

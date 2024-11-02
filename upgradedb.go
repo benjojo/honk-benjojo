@@ -23,7 +23,7 @@ import (
 	"humungus.tedunangst.com/r/webs/htfilter"
 )
 
-var myVersion = 48 // chat keys
+var myVersion = 53 // index filehashes.xid
 
 type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -74,34 +74,24 @@ func upgradedb() {
 	switch dbversion {
 	case 41:
 		tx, err := db.Begin()
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		rows, err := tx.Query("select honkid, noise from honks where format = 'markdown' and precis <> ''")
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		m := make(map[int64]string)
 		var dummy ActivityPubActivity
 		for rows.Next() {
 			err = rows.Scan(&dummy.ID, &dummy.Noise)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 			precipitate(&dummy)
 			m[dummy.ID] = dummy.Noise
 		}
 		rows.Close()
 		for id, noise := range m {
 			_, err = tx.Exec("update honks set noise = ? where honkid = ?", noise, id)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 		}
 		err = tx.Commit()
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		sqlMustQuery(db, "update config set value = 42 where key = 'dbversion'")
 		fallthrough
 	case 42:
@@ -132,35 +122,25 @@ func upgradedb() {
 			return plain
 		}
 		tx, err = db.Begin()
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		plainmap := make(map[int64][]string)
 		rows, err := tx.Query("select honkid, noise, precis, format from honks")
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		for rows.Next() {
 			var honkid int64
 			var noise, precis, format string
 			err = rows.Scan(&honkid, &noise, &precis, &format)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 			plainmap[honkid] = makeplain(noise, precis, format)
 		}
 		rows.Close()
 		rows, err = tx.Query("select honkid, name, description from donks join filemeta on donks.fileid = filemeta.fileid")
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		for rows.Next() {
 			var honkid int64
 			var name, desc string
 			err = rows.Scan(&honkid, &name, &desc)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 			plainmap[honkid] = append(plainmap[honkid], name)
 			plainmap[honkid] = append(plainmap[honkid], desc)
 		}
@@ -170,9 +150,7 @@ func upgradedb() {
 		}
 		setV(45)
 		err = tx.Commit()
-		if err != nil {
-			elog.Fatal(err)
-		}
+		checkErr(err)
 		tx = nil
 		fallthrough
 	case 45:
@@ -190,13 +168,9 @@ func upgradedb() {
 			var user WhatAbout
 			var jopt string
 			err = rows.Scan(&user.ID, &jopt)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 			err = decodeJson(jopt, &user.Options)
-			if err != nil {
-				elog.Fatal(err)
-			}
+			checkErr(err)
 			users = append(users, &user)
 		}
 		rows.Close()
@@ -210,6 +184,49 @@ func upgradedb() {
 		setV(48)
 		fallthrough
 	case 48:
+		try("create index idx_honksurl on honks(url)")
+		setV(49)
+		fallthrough
+	case 49:
+		try("create index idx_honksrid on honks(rid) where rid <> ''")
+		setV(50)
+		fallthrough
+	case 50:
+		try("alter table filemeta add column meta text")
+		try("update filemeta set meta = '{}'")
+		setV(51)
+		fallthrough
+	case 51:
+		hashes := make(map[string]string)
+		blobdb := openblobdb()
+		rows, err := blobdb.Query("select xid, hash, media from filedata")
+		checkErr(err)
+		for rows.Next() {
+			var xid, hash, media string
+			err = rows.Scan(&xid, &hash, &media)
+			checkErr(err)
+			hashes[xid] = hash + " " + media
+		}
+		rows.Close()
+		tx, err = db.Begin()
+		checkErr(err)
+		try("create table filehashes (xid text, hash text, media text)")
+		try("create index idx_filehashes on filehashes(hash)")
+		for xid, data := range hashes {
+			parts := strings.Split(data, " ")
+			try("insert into filehashes (xid, hash, media) values (?, ?, ?)", xid, parts[0], parts[1])
+		}
+		setV(52)
+		err = tx.Commit()
+		checkErr(err)
+		tx = nil
+		fallthrough
+	case 52:
+		try("create index idx_filehashesxid on filehashes(xid)")
+		setV(53)
+		fallthrough
+	case 53:
+		setcsrfkey()
 		try("analyze")
 		closedatabases()
 

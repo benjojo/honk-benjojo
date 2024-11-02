@@ -24,8 +24,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -33,6 +36,7 @@ import (
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/mz"
+	"humungus.tedunangst.com/r/webs/synlight"
 	"humungus.tedunangst.com/r/webs/templates"
 )
 
@@ -61,9 +65,11 @@ func loadLingo() {
 	}
 }
 
-func reverbolate(userid int64, honks []*ActivityPubActivity) {
+func reverbolate(userid UserID, honks []*ActivityPubActivity) {
+	var handlers sync.WaitGroup
 	user, _ := somenumberedusers.Get(userid)
-	for _, h := range honks {
+	for i := range honks {
+		h := honks[i]
 		h.What += "ed"
 		if h.What == "honked" && h.RID != "" {
 			h.What = "honked back"
@@ -72,78 +78,79 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 		if !h.Public {
 			h.Style += " limited"
 		}
-		if h.Whofore == 1 {
+		if h.Whofore == WhoAtme {
 			h.Style += " atme"
 		}
 		translate(h)
 		local := false
-		if h.Whofore == 2 || h.Whofore == 3 {
+		if h.Whofore == WhoPublic || h.Whofore == WhoPrivate {
 			local = true
 		}
 		if local && h.What != "bonked" {
-			h.Noise = re_retag.ReplaceAllString(h.Noise, "")
 			h.Noise = re_memes.ReplaceAllString(h.Noise, "")
 		}
-		h.Username, h.Handle = handles(h.Honker)
-		if !local {
-			short := shortname(userid, h.Honker)
-			if short != "" {
-				h.Username = short
-			} else {
-				h.Username = h.Handle
-				if len(h.Username) > 20 {
-					h.Username = h.Username[:20] + ".."
+		handlers.Add(1)
+		go func() {
+			defer handlers.Done()
+			h.Username, h.Handle = handles(h.Honker)
+			if !local {
+				short := shortname(userid, h.Honker)
+				if short != "" {
+					h.Username = short
+				} else {
+					h.Username = h.Handle
+					if len(h.Username) > 20 {
+						h.Username = h.Username[:20] + ".."
+					}
 				}
 			}
-		}
-		if user != nil {
-			hset := []string{}
-			if h.Honker != user.URL {
-				hset = append(hset, "@"+h.Handle)
-			}
-			if user.Options.MentionAll {
-				for _, a := range h.Audience {
-					if a == h.Honker || a == user.URL {
-						continue
-					}
-					_, hand := handles(a)
-					if hand != "" {
-						hand = "@" + hand
-						hset = append(hset, hand)
+			if user != nil {
+				hset := []string{}
+				if h.Honker != user.URL {
+					hset = append(hset, "@"+h.Handle)
+				}
+				if user.Options.MentionAll {
+					for _, a := range h.Audience {
+						if a == h.Honker || a == user.URL {
+							continue
+						}
+						_, hand := handles(a)
+						if hand != "" {
+							hand = "@" + hand
+							hset = append(hset, hand)
+						}
 					}
 				}
 				h.Handles = strings.Join(hset, " ")
-			} else if h.Honker != user.URL {
-				h.Handles = "@" + h.Handle
 			}
-		}
-		if h.URL == "" {
-			h.URL = h.XID
-		}
-		if h.Oonker != "" {
-			_, h.Oondle = handles(h.Oonker)
-		}
+			if h.URL == "" {
+				h.URL = h.XID
+			}
+			if h.Oonker != "" {
+				_, h.Oondle = handles(h.Oonker)
+			}
+		}()
 		h.Precis = demoji(h.Precis)
 		h.Noise = demoji(h.Noise)
 		h.Open = "open"
 		var misto string
 		for _, m := range h.Mentions {
-			if m.Where != h.Honker && !m.IsPresent(h.Noise) {
-				misto += " " + m.Who
+			if m.Where != h.Honker && m.Where != h.Oonker && !m.IsPresent(h.Noise) {
+				misto += string(templates.Sprintf(" <a href=\"%sh?xid=%s\">%s</a>", serverPrefix, url.QueryEscape(m.Where), m.Who))
 			}
 		}
 		var mistag string
 		for _, o := range h.Onts {
 			if !OntIsPresent(o, h.Noise) {
-				mistag += " " + o
+				mistag += string(templates.Sprintf(" <a href=\"%so/%s\">%s</a>", serverPrefix, o[1:], o))
 			}
 		}
 		if len(misto) > 0 || len(mistag) > 0 {
 			if len(misto) > 0 {
-				misto = "(" + misto[1:] + ")<p>"
+				misto = fmt.Sprintf("(%s)<p>", misto[1:])
 			}
 			if len(mistag) > 0 {
-				mistag = "<p>(" + mistag[1:] + ")"
+				mistag = fmt.Sprintf("<p>(%s)", mistag[1:])
 			}
 			h.Noise = misto + h.Noise + mistag
 		}
@@ -151,7 +158,7 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 		zap := make(map[string]bool)
 		{
 			var htf htfilter.Filter
-			htf.Imager = replaceimgsand(zap, false)
+			htf.Imager = replaceimgsand(zap, false, h)
 			htf.SpanClasses = allowedclasses
 			htf.BaseURL, _ = url.Parse(h.XID)
 			emuxifier := func(e string) string {
@@ -201,6 +208,7 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 		}
 		h.Donks = h.Donks[:j]
 	}
+	handlers.Wait()
 
 	unsee(honks, userid)
 
@@ -215,7 +223,7 @@ func reverbolate(userid int64, honks []*ActivityPubActivity) {
 	}
 }
 
-func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) string {
+func replaceimgsand(zap map[string]bool, absolute bool, honk *ActivityPubActivity) func(node *html.Node) string {
 	return func(node *html.Node) string {
 		src := htfilter.GetAttr(node, "src")
 		alt := htfilter.GetAttr(node, "alt")
@@ -223,22 +231,21 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 		if htfilter.HasClass(node, "Emoji") && alt != "" {
 			return alt
 		}
-		d := finddonk(src)
+		base := path.Base(src)
+		didx, _ := strconv.Atoi(base)
+		var d *Donk
+		if strings.HasPrefix(src, serverPrefix) && didx > 0 && didx <= len(honk.Donks) {
+			d = honk.Donks[didx-1]
+		} else {
+			d = finddonk(src)
+		}
 		if d != nil {
 			zap[d.XID] = true
 			base := ""
 			if absolute {
-				base = "https://" + serverName
+				base = serverURL("")
 			}
-
-			if strings.HasPrefix(d.Media, "video") {
-				return string(templates.Sprintf(
-					`<video loop="true" autoplay="true" muted="true" style="max-width: 100%%;height: auto;"><source src="%s" type="video/mp4"></video>`,
-					d.URL))
-			} else {
-				return string(templates.Sprintf(`<img alt="%s" title="%s" src="%s/d/%s">`, alt, alt, base, d.XID))
-			}
-
+			return string(templates.Sprintf(`<img alt="%s" title="%s" src="%s/d/%s">`, alt, alt, base, d.XID))
 		}
 		return string(templates.Sprintf(`&lt;img alt="%s" src="<a href="%s">%s</a>"&gt;`, alt, src, src))
 	}
@@ -307,6 +314,12 @@ func inlineimgsfor(honk *ActivityPubActivity) func(node *html.Node) string {
 	return func(node *html.Node) string {
 		src := htfilter.GetAttr(node, "src")
 		alt := htfilter.GetAttr(node, "alt")
+		base := path.Base(src)
+		didx, _ := strconv.Atoi(base)
+		if strings.HasPrefix(src, serverPrefix) && didx > 0 && didx <= len(honk.Donks) {
+			dlog.Printf("skipping inline image %s", src)
+			return ""
+		}
 		d := savedonk(src, "image", alt, "image", true)
 		if d != nil {
 			honk.Donks = append(honk.Donks, d)
@@ -356,16 +369,25 @@ func translate(honk *ActivityPubActivity) {
 	noise = strings.TrimSpace(noise)
 	noise = marker.Mark(noise)
 	honk.Noise = noise
-	honk.Onts = stringArrayTrimUntilDupe(append(honk.Onts, marker.HashTags...))
+	honk.Onts = append(honk.Onts, marker.HashTags...)
 	honk.Mentions = bunchofgrapes(marker.Mentions)
+	for _, t := range stringArrayTrimUntilDupe(strings.Split(strings.ToLower(honk.Onties), " ")) {
+		if t[0] != '#' {
+			t = "#" + t
+		}
+		honk.Onts = append(honk.Onts, t)
+	}
+	honk.Onts = stringArrayTrimUntilDupe(honk.Onts)
+	honk.Mentions = append(honk.Mentions, bunchofgrapes(stringArrayTrimUntilDupe(strings.Split(honk.SeeAlso, " ")))...)
 }
 
 func redoimages(honk *ActivityPubActivity) {
 	zap := make(map[string]bool)
 	{
 		var htf htfilter.Filter
-		htf.Imager = replaceimgsand(zap, true)
+		htf.Imager = replaceimgsand(zap, true, honk)
 		htf.SpanClasses = allowedclasses
+		htf.BaseURL, _ = url.Parse(honk.XID)
 		p, _ := htf.String(honk.Precis)
 		n, _ := htf.String(honk.Noise)
 		honk.Precis = string(p)
@@ -381,10 +403,10 @@ func redoimages(honk *ActivityPubActivity) {
 	honk.Donks = honk.Donks[:j]
 
 	honk.Noise = re_memes.ReplaceAllString(honk.Noise, "")
-	// honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
+	honk.Noise = strings.Replace(honk.Noise, "<a href=", "<a class=\"mention u-url\" href=", -1)
 }
 
-func randomString(b []byte) string {
+func byteArrayToFriendlyString(b []byte) string {
 	letters := "BCDFGHJKLMNPQRSTVWXYZbcdfghjklmnpqrstvwxyz1234567891234567891234"
 	for i, c := range b {
 		b[i] = letters[c&63]
@@ -396,13 +418,23 @@ func randomString(b []byte) string {
 func shortxid(xid string) string {
 	h := sha512.New512_256()
 	io.WriteString(h, xid)
-	return randomString(h.Sum(nil)[:20])
+	return byteArrayToFriendlyString(h.Sum(nil)[:20])
 }
 
 func make18CharRandomString() string {
 	var b [18]byte
 	rand.Read(b[:])
-	return randomString(b[:])
+	return byteArrayToFriendlyString(b[:])
+}
+
+func xfildate() string {
+	var b [21]byte
+	rand.Read(b[:])
+	now := time.Now().Unix() / 60 / 60 / 24
+	b[2] = byte(now & 63)
+	b[1] = byte((now / 64) & 63)
+	b[0] = byte((now / 64 / 64) & 63)
+	return byteArrayToFriendlyString(b[:])
 }
 
 func grapevine(mentions []Mention) []string {
@@ -416,9 +448,14 @@ func grapevine(mentions []Mention) []string {
 func bunchofgrapes(m []string) []Mention {
 	var mentions []Mention
 	for i := range m {
-		where := gofish(m[i])
+		who := m[i]
+		if strings.HasPrefix(who, "@https://") {
+			mentions = append(mentions, Mention{Who: who, Where: who[1:]})
+			continue
+		}
+		where := gofish(who)
 		if where != "" {
-			mentions = append(mentions, Mention{Who: m[i], Where: where})
+			mentions = append(mentions, Mention{Who: who, Where: where})
 		}
 	}
 	return mentions
@@ -440,7 +477,7 @@ var emucache = gencache.New(gencache.Options[string, *Emu]{Fill: func(ename stri
 		if err != nil {
 			continue
 		}
-		url := fmt.Sprintf("https://%s/emu/%s%s", serverName, fname, ext)
+		url := serverURL("/emu/%s%s", fname, ext)
 		if develMode {
 			url = fmt.Sprintf("/emu/%s%s", fname, ext)
 		}
@@ -467,7 +504,6 @@ var re_memes = regexp.MustCompile("meme: ?([^\n]+)")
 var re_avatar = regexp.MustCompile("avatar: ?([^\n]+)")
 var re_banner = regexp.MustCompile("banner: ?([^\n]+)")
 var re_convoy = regexp.MustCompile("convoy: ?([^\n]+)")
-var re_retag = regexp.MustCompile("tags: ?([^\n]+)")
 var re_convalidate = regexp.MustCompile("^(https?|tag|data):")
 
 func memetize(honk *ActivityPubActivity) {
@@ -486,8 +522,8 @@ func memetize(honk *ActivityPubActivity) {
 		ct := http.DetectContentType(peek[:n])
 		fd.Close()
 
-		url := fmt.Sprintf("https://%s/meme/%s", serverName, name)
-		fileid, err := savefile(name, name, url, ct, false, nil)
+		url := serverURL("/meme/%s", name)
+		fileid, err := savefile(name, name, url, ct, false, nil, nil)
 		if err != nil {
 			elog.Printf("error saving meme: %s", err)
 			return x
@@ -505,27 +541,9 @@ func memetize(honk *ActivityPubActivity) {
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-func recategorize(honk *ActivityPubActivity) {
-	repl := func(x string) string {
-		x = x[5:]
-		for _, t := range strings.Split(x, " ") {
-			if t == "" {
-				continue
-			}
-			if t[0] != '#' {
-				t = "#" + t
-			}
-			dlog.Printf("hashtag: %s", t)
-			honk.Onts = append(honk.Onts, t)
-		}
-		return ""
-	}
-	honk.Noise = re_retag.ReplaceAllStringFunc(honk.Noise, repl)
-}
-
 var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]_]+([ \n:;.,']|$)")
 
-func quickrename(s string, userid int64) string {
+func quickrename(s string, userid UserID) string {
 	nonstop := true
 	for nonstop {
 		nonstop = false
@@ -560,7 +578,7 @@ func quickrename(s string, userid int64) string {
 	return s
 }
 
-var shortnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
+var shortnames = gencache.New(gencache.Options[UserID, map[string]string]{Fill: func(userid UserID) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -569,7 +587,7 @@ var shortnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: f
 	return m, true
 }, Invalidator: &honkerinvalidator})
 
-func shortname(userid int64, xid string) string {
+func shortname(userid UserID, xid string) string {
 	m, ok := shortnames.Get(userid)
 	if ok {
 		return m[xid]
@@ -577,7 +595,7 @@ func shortname(userid int64, xid string) string {
 	return ""
 }
 
-var fullnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
+var fullnames = gencache.New(gencache.Options[UserID, map[string]string]{Fill: func(userid UserID) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -586,7 +604,7 @@ var fullnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: fu
 	return m, true
 }, Invalidator: &honkerinvalidator})
 
-func fullname(name string, userid int64) string {
+func fullname(name string, userid UserID) string {
 	m, ok := fullnames.Get(userid)
 	if ok {
 		return m[name]
@@ -596,6 +614,9 @@ func fullname(name string, userid int64) string {
 
 func attoreplacer(m string) string {
 	fill := `<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`
+	if strings.HasPrefix(m, "@https://") {
+		return fmt.Sprintf(fill, html.EscapeString(m[1:]), html.EscapeString(m))
+	}
 	where := gofish(m)
 	if where == "" {
 		return m
@@ -605,12 +626,12 @@ func attoreplacer(m string) string {
 }
 
 func ontoreplacer(h string) string {
-	return fmt.Sprintf(`<a class="mention hashtag" href="https://%s/o/%s">%s</a>`, serverName,
-		strings.ToLower(h[1:]), h)
+	return fmt.Sprintf(`<a class="mention hashtag" href="%s">%s</a>`,
+		serverURL("/o/%s", strings.ToLower(h[1:])), h)
 }
 
 var re_unurl = regexp.MustCompile("https://([^/]+).*/([^/]+)")
-var re_urlhost = regexp.MustCompile("https://([^/ #)]+)")
+var re_urlhost = regexp.MustCompile("https://([^/ #)?]+)")
 
 func originate(u string) string {
 	m := re_urlhost.FindStringSubmatch(u)
@@ -620,24 +641,28 @@ func originate(u string) string {
 	return ""
 }
 
+var xonkInvalidator gencache.Invalidator[string]
+
 var allhandles = gencache.New(gencache.Options[string, string]{Fill: func(xid string) (string, bool) {
 	handle := getxonker(xid, "handle")
 	if handle == "" {
 		dlog.Printf("need to get a handle: %s", xid)
-		info, err := investigate(xid)
+		info, _, err := investigate(xid)
 		if err != nil {
+			dlog.Printf("failed to get handle: %s", err)
 			m := re_unurl.FindStringSubmatch(xid)
 			if len(m) > 2 {
 				handle = m[2]
 			} else {
 				handle = xid
 			}
+			savexonker(xid, handle, "handle")
 		} else {
 			handle = info.Name
 		}
 	}
 	return handle, true
-}})
+}, Invalidator: &xonkInvalidator})
 
 // handle, handle@host
 func handles(xid string) (string, string) {
@@ -683,10 +708,15 @@ func stringArrayTrimUntilDupe(a []string) []string {
 			j++
 		}
 	}
+	if j < len(a)/2 {
+		rv := make([]string, j)
+		copy(rv, a[:j])
+		return rv
+	}
 	return a[:j]
 }
 
-var ziggies = gencache.New(gencache.Options[int64, *KeyInfo]{Fill: func(userid int64) (*KeyInfo, bool) {
+var ziggies = gencache.New(gencache.Options[UserID, *KeyInfo]{Fill: func(userid UserID) (*KeyInfo, bool) {
 	user, ok := somenumberedusers.Get(userid)
 	if !ok {
 		return nil, false
@@ -697,7 +727,7 @@ var ziggies = gencache.New(gencache.Options[int64, *KeyInfo]{Fill: func(userid i
 	return ki, true
 }})
 
-func getPrivateKey(userid int64) *KeyInfo {
+func getPrivateKey(userid UserID) *KeyInfo {
 	ki, _ := ziggies.Get(userid)
 	return ki
 }
@@ -709,16 +739,14 @@ var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: fun
 		j, err := GetJunk(firstUserUID, keyname)
 		if err != nil {
 			ilog.Printf("error getting %s pubkey: %s", keyname, err)
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			savexonker(keyname, "failed", "pubkey")
 			return httpsig.PublicKey{}, true
 		}
 		allinjest(originate(keyname), j)
 		data = getxonker(keyname, "pubkey")
 		if data == "" {
 			ilog.Printf("key not found after ingesting")
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			savexonker(keyname, "failed", "pubkey")
 			return httpsig.PublicKey{}, true
 		}
 	}
@@ -732,7 +760,7 @@ var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: fun
 		return key, true
 	}
 	return key, true
-}, Limit: 512})
+}, Limit: 4096, Invalidator: &xonkInvalidator})
 
 func getPubKey(keyname string) (httpsig.PublicKey, error) {
 	key, _ := zaggies.Get(keyname)
@@ -751,4 +779,10 @@ func keymatch(keyname string, actor string) string {
 		return origin
 	}
 	return ""
+}
+
+var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
+
+func highlight(code, name string) string {
+	return "<pre><code>" + lighter.HighlightString(code, name) + "</code></pre>"
 }

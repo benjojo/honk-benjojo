@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Ted Unangst <tedu@tedunangst.com>
+// Copyright (c) 2019,2023 Ted Unangst <tedu@tedunangst.com>
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -29,7 +29,7 @@ import (
 type Doover struct {
 	ID     int64
 	When   time.Time
-	Userid int64
+	Userid UserID
 	Tries  int64
 	Rcpt   string
 	Msgs   [][]byte
@@ -42,7 +42,7 @@ func sayitagain(doover Doover) {
 		drift = time.Duration(doover.Tries*5) * time.Minute
 	} else if doover.Tries <= 6 { // 1, 2, 3 hours
 		drift = time.Duration(doover.Tries-3) * time.Hour
-	} else if doover.Tries <= 9 { // 12, 12, 12 hours
+	} else if doover.Tries <= maxPublicHostTriesMinusOne+1 { // 12 hours
 		drift = time.Duration(12) * time.Hour
 	} else {
 		ilog.Printf("he's dead jim: %s", doover.Rcpt)
@@ -61,10 +61,12 @@ func sayitagain(doover Doover) {
 	}
 }
 
+const maxPublicHostTriesMinusOne = 15
+
 func lethaldose(err error) int64 {
 	str := err.Error()
 	if strings.Contains(str, "no such host") {
-		return 8
+		return maxPublicHostTriesMinusOne
 	}
 	return 0
 }
@@ -82,7 +84,7 @@ func letitslide(err error) bool {
 
 var dqmtx sync.Mutex
 
-func delinquent(userid int64, rcpt string, msg []byte) bool {
+func delinquent(userid UserID, rcpt string, msg []byte) bool {
 	dqmtx.Lock()
 	defer dqmtx.Unlock()
 	row := stmtDeliquentCheck.QueryRow(userid, rcpt)
@@ -106,7 +108,7 @@ func delinquent(userid int64, rcpt string, msg []byte) bool {
 	return true
 }
 
-func deliverate(userid int64, rcpt string, msg []byte) {
+func deliverate(userid UserID, rcpt string, msg []byte) {
 	if delinquent(userid, rcpt, msg) {
 		return
 	}
@@ -137,9 +139,12 @@ func deliveration(doover Doover) {
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]
 	} else {
-		box, ok := boxofboxes.Get(rcpt)
-		if !ok {
+		box, _ := boxofboxes.Get(rcpt)
+		if box == nil {
 			ilog.Printf("failed getting inbox for %s", rcpt)
+			if doover.Tries < maxPublicHostTriesMinusOne {
+				doover.Tries = maxPublicHostTriesMinusOne
+			}
 			sayitagain(doover)
 			return
 		}

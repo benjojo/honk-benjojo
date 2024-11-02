@@ -32,9 +32,9 @@ func (ent *entry[V]) expired(now time.Time) bool {
 
 type Cache[K comparable, V any] struct {
 	mtx      sync.Mutex
-	fillmtx  sync.Mutex
 	cache    map[K]entry[V]
-	fill     func(K) (V, bool)
+	waiters  map[K][]chan bool
+	fillfn   func(K) (V, bool)
 	duration time.Duration
 	limit    int
 	serial   int
@@ -51,7 +51,8 @@ type Options[K comparable, V any] struct {
 func New[K comparable, V any](opts Options[K, V]) *Cache[K, V] {
 	c := new(Cache[K, V])
 	c.cache = make(map[K]entry[V])
-	c.fill = opts.Fill
+	c.waiters = make(map[K][]chan bool)
+	c.fillfn = opts.Fill
 	invalidators := opts.Invalidators
 	if inv := opts.Invalidator; inv != nil {
 		invalidators = append(invalidators, inv)
@@ -92,10 +93,12 @@ func (c *Cache[K, V]) cleanup() {
 	}
 }
 
-func (c *Cache[K, V]) set(key K, ent entry[V]) {
+func (c *Cache[K, V]) set(key K, value V) {
 	if c.limit > 0 && len(c.cache) == c.limit {
 		c.cleanup()
 	}
+	var ent entry[V]
+	ent.value = value
 	if c.duration > 0 {
 		ent.expiry = time.Now().Add(c.duration)
 	}
@@ -103,40 +106,70 @@ func (c *Cache[K, V]) set(key K, ent entry[V]) {
 }
 
 func (c *Cache[K, V]) Get(key K) (V, bool) {
+	return c.GetWith(key, c.fillfn)
+}
+func (c *Cache[K, V]) GetWith(key K, fillfn func(K) (V, bool)) (V, bool) {
 	c.mtx.Lock()
-recheck:
-	ent, ok := c.cache[key]
-	if ok && c.duration > 0 && ent.expired(time.Now()) {
-		delete(c.cache, key)
-		ok = false
+	defer c.mtx.Unlock()
+	for {
+		ent, ok := c.cache[key]
+		if ok && c.duration > 0 && ent.expired(time.Now()) {
+			delete(c.cache, key)
+			ok = false
+		}
+		if ok {
+			return ent.value, ok
+		}
+		ok = c.tryfill(key, fillfn)
+		if !ok {
+			var v V
+			return v, false
+		}
 	}
-	if ok {
+}
+
+func (c *Cache[K, V]) checkbusy(key K) bool {
+	waiters, busy := c.waiters[key]
+	if busy {
+		ready := make(chan bool)
+		c.waiters[key] = append(waiters, ready)
 		c.mtx.Unlock()
-		return ent.value, ok
+
+		<-ready
+		close(ready)
+
+		c.mtx.Lock()
 	}
+	return busy
+}
+
+func (c *Cache[K, V]) tryfill(key K, fillfn func(K) (V, bool)) bool {
+	if c.checkbusy(key) {
+		return true
+	}
+	c.waiters[key] = nil
 	serial := c.serial
 	c.mtx.Unlock()
-	c.fillmtx.Lock()
+	relock := true
+	defer func() {
+		if relock {
+			c.mtx.Lock()
+		}
+	}()
+
+	value, ok := fillfn(key)
+
 	c.mtx.Lock()
-	ent, ok = c.cache[key]
-	if ok {
-		c.mtx.Unlock()
-		c.fillmtx.Unlock()
-		return ent.value, ok
+	relock = false
+	if ok && serial == c.serial {
+		c.set(key, value)
 	}
-	c.mtx.Unlock()
-	ent.value, ok = c.fill(key)
-	c.mtx.Lock()
-	if serial != c.serial {
-		c.fillmtx.Unlock()
-		goto recheck
+	waiters, _ := c.waiters[key]
+	delete(c.waiters, key)
+	for _, done := range waiters {
+		done <- true
 	}
-	if ok {
-		c.set(key, ent)
-	}
-	c.fillmtx.Unlock()
-	c.mtx.Unlock()
-	return ent.value, ok
+	return ok
 }
 
 func (c *Cache[K, V]) Clear(key K) {

@@ -56,11 +56,11 @@
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Build"><a class="permalink" href="#Build">Build</a></h2>
-<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler 1.18
-    and libsqlite. On <span class="Ux">OpenBSD</span> this is the go and sqlite3
-    packages. Other platforms may require additional development libraries or
-    headers to be installed. Run make. Please be patient. Even on fast machines,
-    building from source can take several seconds.</p>
+<p class="Pp">Building <code class="Nm">honk</code> requires a go compiler 1.20+
+    and libsqlite 3.34.0+. On <span class="Ux">OpenBSD</span> this is the go and
+    sqlite3 packages. Other platforms may require additional development
+    libraries or headers to be installed. Run make. Please be patient. Even on
+    fast machines, building from source can take several seconds.</p>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Options"><a class="permalink" href="#Options">Options</a></h2>
@@ -71,12 +71,14 @@
     <var class="Ar">dir</var></dt>
   <dd>The root data directory, where the database and other user data are
       stored. This directory contains all user data that persists across
-      upgrades. Requires write access. Defaults to &quot;.&quot;.</dd>
+      upgrades. Requires write access. Defaults to &quot;.&quot;. Also set by
+      <code class="Ev">HONK_DATADIR</code>.</dd>
   <dt id="viewdir"><a class="permalink" href="#viewdir"><code class="Fl">-viewdir</code></a>
     <var class="Ar">dir</var></dt>
   <dd>The root view directory, where html and other templates are stored. The
       contents of this directory are generally replaced with each release. Read
-      only. Defaults to &quot;.&quot;.</dd>
+      only. Defaults to &quot;.&quot;. Also set by
+      <code class="Ev">HONK_VIEWDIR</code>.</dd>
 </dl>
 <p class="Pp">The following options control log output. Acceptable values
     include &quot;stderr&quot; (the default), &quot;stdout&quot;,
@@ -148,6 +150,22 @@
     <code class="Ic">follow</code> <var class="Ar">username</var>
     <var class="Ar">url</var> and <code class="Ic">unfollow</code>
     <var class="Ar">username</var> <var class="Ar">url</var>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Storage"><a class="permalink" href="#Storage">Storage</a></h2>
+<p class="Pp">By default, <code class="Nm">honk</code> will store attachments in
+    a file system directory structure, <span class="Pa">attachments</span>.
+    Previous versions stored files in a database,
+    <span class="Pa">blob.db</span>. Related commands:</p>
+<dl class="Bl-tag">
+  <dt id="storefiles"><a class="permalink" href="#storefiles"><code class="Ic">storefiles</code></a></dt>
+  <dd>Switch to storing attachments in the file system.</dd>
+  <dt id="storeblobs"><a class="permalink" href="#storeblobs"><code class="Ic">storeblobs</code></a></dt>
+  <dd>Switch to storing attachments in the blob.db.</dd>
+  <dt id="extractblobs"><a class="permalink" href="#extractblobs"><code class="Ic">extractblobs</code></a></dt>
+  <dd>Copy blobs from the blob.db into the file system. Running cleanup first
+      will reduce the time and space required.</dd>
+</dl>
 </section>
 <section class="Ss">
 <h2 class="Ss" id="Maintenance"><a class="permalink" href="#Maintenance">Maintenance</a></h2>
@@ -235,6 +253,20 @@
     specified by adding &quot;usersep&quot; and &quot;honksep&quot; options to
     the config table. e.g. example.com/users/username/honk/somehonk instead of
     example.com/u/username/h/somehonk.</p>
+<dl class="Bl-tag">
+  <dt>fasttimeout</dt>
+  <dd>Short timeout for fetching activities. (Default: 5)</dd>
+  <dt>slowtimeout</dt>
+  <dd>Long timeout for posting actvities. (Default: 30)</dd>
+  <dt>honkwindow</dt>
+  <dd>How many days to display in a timeline. (Default: 7)</dd>
+  <dt>collectforwards</dt>
+  <dd>Fetch reply actvities forwarded from other servers. (Default: true)</dd>
+  <dt>usersep</dt>
+  <dd>(Default: u)</dd>
+  <dt>honksep</dt>
+  <dd>(Default: h)</dd>
+</dl>
 </section>
 </section>
 <section class="Sh">
@@ -246,8 +278,10 @@
 <dl class="Bl-tag">
   <dt><span class="Pa">honk.db</span></dt>
   <dd>The main database.</dd>
-  <dt><span class="Pa">blob.db</span></dt>
+  <dt><span class="Pa">attachments</span></dt>
   <dd>Media and attachment storage.</dd>
+  <dt><span class="Pa">blob.db</span></dt>
+  <dd>Old location for media and attachment storage.</dd>
   <dt><span class="Pa">emus</span></dt>
   <dd>Custom emoji.</dd>
   <dt><span class="Pa">memes</span></dt>
@@ -312,8 +346,8 @@ honk-v99&gt; date; ./honk -log honk.log -datadir ../honkdata</pre>
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">January 24, 2024</td>
-    <td class="foot-os">macOS 14.2</td>
+    <td class="foot-date">August 13, 2024</td>
+    <td class="foot-os">macOS 14.5</td>
   </tr>
 </table>
 </body>

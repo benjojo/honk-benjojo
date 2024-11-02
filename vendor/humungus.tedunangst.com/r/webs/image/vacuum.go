@@ -122,21 +122,16 @@ func Vacuum(reader io.Reader, params Params) (*Image, error) {
 	}
 
 	bounds := img.Bounds()
-	for bounds.Max.X > maxw || bounds.Max.Y > maxh {
-		if bounds.Max.X > maxw*2 || bounds.Max.Y > maxh*2 {
-			bounds.Max.X = bounds.Max.X / 2
-			bounds.Max.Y = bounds.Max.Y / 2
-		} else {
-			if bounds.Max.X > maxw {
-				r := float64(maxw) / float64(bounds.Max.X)
-				bounds.Max.X = maxw
-				bounds.Max.Y = int(float64(bounds.Max.Y) * r)
-			}
-			if bounds.Max.Y > maxh {
-				r := float64(maxh) / float64(bounds.Max.Y)
-				bounds.Max.Y = maxh
-				bounds.Max.X = int(float64(bounds.Max.X) * r)
-			}
+	if bounds.Max.X > maxw || bounds.Max.Y > maxh {
+		if bounds.Max.X > maxw {
+			r := float64(maxw) / float64(bounds.Max.X)
+			bounds.Max.X = maxw
+			bounds.Max.Y = int(float64(bounds.Max.Y) * r)
+		}
+		if bounds.Max.Y > maxh {
+			r := float64(maxh) / float64(bounds.Max.Y)
+			bounds.Max.Y = maxh
+			bounds.Max.X = int(float64(bounds.Max.X) * r)
 		}
 		dst := image.NewRGBA(bounds)
 		draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
