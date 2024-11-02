@@ -55,6 +55,9 @@
 <input type="text" name="link" value="{{ .Link }}">
 <p><label for=onties>tags:</label><br>
 <input type="text" name="onties" value="{{ .Onties }}">
+<p><label for="privacy">private (tofollowers only):</label><br>
+<input class="actually-show-checkbox" type="checkbox" name="privacy">
+	
 </details>
 <p>
 <textarea name="noise" id="honknoise">{{ .Noise }}</textarea>

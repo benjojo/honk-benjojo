@@ -168,6 +168,11 @@ textarea {
 textarea#honknoise {
 	height: 10em;
 }
+.actually-show-checkbox {
+	top: 0px !important; 
+	position: relative !important;
+}
+
 input[type="checkbox"] {
 	position: fixed;
 	top: -9999px;

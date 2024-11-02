@@ -2279,6 +2279,13 @@ func submithonk(w http.ResponseWriter, r *http.Request) *ActivityPubActivity {
 			honk.Time = t
 		}
 	}
+	if honk.Public {
+		// fuck it, the form has the final say
+		honk.Public = r.FormValue("privacy") != "on"
+		if !honk.Public {
+			honk.Audience = []string{user.URL, user.URL + "/followers"}
+		}
+	}
 
 	if honk.Public {
 		honk.Whofore = WhoPublic

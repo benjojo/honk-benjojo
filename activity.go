@@ -1768,7 +1768,7 @@ func honkworldwide(user *WhatAbout, honk *ActivityPubActivity) {
 
 	aud := honk.Audience
 
-	if honk.Public {
+	if honk.Public || isAdvancedPrivateHonkActually(user, honk) {
 		for _, h := range getdubs(user.ID) {
 			if h.XID == user.URL {
 				continue
@@ -1789,6 +1789,17 @@ func honkworldwide(user *WhatAbout, honk *ActivityPubActivity) {
 	if (honk.What == "honk" || honk.What == "bonk") && honk.Public && len(honk.Onts) > 0 {
 		collectiveaction(honk)
 	}
+}
+
+func isAdvancedPrivateHonkActually(user *WhatAbout, honk *ActivityPubActivity) bool {
+	for _, aud := range honk.Audience {
+		if aud == user.URL+"/followers" {
+			log.Printf("Advanced private honk! %#v %#v", *user, *honk)
+			return true
+		}
+	}
+
+	return false
 }
 
 func collectiveaction(honk *ActivityPubActivity) {
