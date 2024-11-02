@@ -1783,12 +1783,16 @@ func honkworldwide(user *WhatAbout, honk *ActivityPubActivity) {
 	}
 	rcpts := boxuprcpts(user, aud, honk.Public)
 
-	for a := range rcpts {
-		go deliverate(user.ID, a, msg)
-	}
-	if (honk.What == "honk" || honk.What == "bonk") && honk.Public && len(honk.Onts) > 0 {
-		collectiveaction(honk)
-	}
+	go func() {
+		for a := range rcpts {
+			time.Sleep(time.Millisecond * 16)
+			go deliverate(user.ID, a, msg)
+		}
+		if (honk.What == "honk" || honk.What == "bonk") && honk.Public && len(honk.Onts) > 0 {
+			collectiveaction(honk)
+		}
+	}()
+
 }
 
 func isAdvancedPrivateHonkActually(user *WhatAbout, honk *ActivityPubActivity) bool {
