@@ -256,7 +256,7 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 
 	var honks []*ActivityPubActivity
 	if name != "" {
-		honks = gethonksbyuser(name, false, 0)
+		honks = gethonksbyuser(name, false, 0, true)
 	} else {
 		honks = getpublichonks()
 	}
@@ -823,7 +823,7 @@ var oldoutbox = gencache.New(gencache.Options[string, []byte]{Fill: func(name st
 	if err != nil {
 		return nil, false
 	}
-	honks := gethonksbyuser(name, false, 0)
+	honks := gethonksbyuser(name, false, 0, false)
 	if len(honks) > 20 {
 		honks = honks[0:20]
 	}
@@ -996,7 +996,7 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	if u != nil && u.Username != name {
 		u = nil
 	}
-	honks := gethonksbyuser(name, u != nil, 0)
+	honks := gethonksbyuser(name, u != nil, 0, login.GetUserInfo(r) == nil)
 	templinfo := getInfo(r)
 	templinfo["PageName"] = "user"
 	templinfo["PageArg"] = name
@@ -2890,7 +2890,7 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 		hydra.Srvmsg = msg
 	case "user":
 		uname := r.FormValue("uname")
-		honks = gethonksbyuser(uname, u != nil && u.Username == uname, wanted)
+		honks = gethonksbyuser(uname, u != nil && u.Username == uname, wanted, false)
 		hydra.Srvmsg = templates.Sprintf("honks by user: %s", uname)
 	default:
 		http.NotFound(w, r)
@@ -2984,7 +2984,7 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 			honks = gethonksforuser(userid, wanted)
 			honks = osmosis(honks, userid, true)
 		case "myhonks":
-			honks = gethonksbyuser(u.Username, true, wanted)
+			honks = gethonksbyuser(u.Username, true, wanted, false)
 			honks = osmosis(honks, userid, true)
 		case "saved":
 			honks = getsavedhonks(userid, wanted)

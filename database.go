@@ -238,14 +238,22 @@ func geteventhonks(userid UserID) []*ActivityPubActivity {
 	return honks
 }
 
-func gethonksbyuser(name string, includeprivate bool, wanted int64) []*ActivityPubActivity {
+func gethonksbyuser(name string, includeprivate bool, wanted int64, noreplies bool /*Useful for logged out users looking at a user page*/) []*ActivityPubActivity {
 	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	limit := 50
 	whofore := 2
 	if includeprivate {
 		whofore = 3
 	}
-	rows, err := stmtUserHonks.Query(wanted, whofore, name, dt, limit)
+	var rows *sql.Rows
+	var err error
+
+	if noreplies {
+		rows, err = stmtUserHonksNoReply.Query(wanted, whofore, name, dt, limit)
+	} else {
+		rows, err = stmtUserHonks.Query(wanted, whofore, name, dt, limit)
+	}
+
 	return getsomehonks(rows, err)
 }
 func gethonksforuser(userid UserID, wanted int64) []*ActivityPubActivity {
@@ -1099,6 +1107,7 @@ func cleanupdb(arg string) {
 var stmtHonkers, stmtDubbers, stmtNamedDubbers, stmtSaveHonker, stmtUpdateFlavor, stmtUpdateHonker *sql.Stmt
 var stmtDeleteHonker *sql.Stmt
 var stmtAnyXonk, stmtOneXonk, stmtPublicHonks, stmtUserHonks, stmtHonksByCombo, stmtHonksByConvoy *sql.Stmt
+var stmtUserHonksNoReply *sql.Stmt
 var stmtHonksByOntology, stmtHonksForUser, stmtHonksForMe, stmtSaveDub, stmtHonksByXonker *sql.Stmt
 var sqlHonksFromLongAgo string
 var stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
@@ -1161,6 +1170,7 @@ func prepareStatements(db *sql.DB) {
 	stmtPublicHonks = sqlMustPrepare(db, selecthonks+"where whofore = 2 and dt > ?"+smalllimit)
 	stmtEventHonks = sqlMustPrepare(db, selecthonks+"where (whofore = 2 or honks.userid = ?) and what = 'event'"+smalllimit)
 	stmtUserHonks = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and (whofore = 2 or whofore = ?) and username = ? and dt > ?"+smalllimit)
+	stmtUserHonksNoReply = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and (whofore = 2 or whofore = ?) and username = ? and (rid = '' or what = 'bonk') and dt > ?"+smalllimit)
 	myhonkers := " and honker in (select xid from honkers where userid = ? and (flavor = 'sub' or flavor = 'peep' or flavor = 'presub') and combos not like '% - %')"
 	stmtHonksForUser = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
 	stmtHonksForUserFirstClass = sqlMustPrepare(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (rid = '' or what = 'bonk')"+myhonkers+butnotthose+limit)
