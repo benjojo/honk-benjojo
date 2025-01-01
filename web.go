@@ -3128,10 +3128,25 @@ func bgmonitor() {
 	}
 }
 
+var coolGuysISuppose = []string{
+	"chrome-extension://",
+	"safari-extension://",
+	"moz-extension://",
+	"ms-browser-extension://",
+}
+
 func addcspheaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestWG.Add(1)
 		defer requestWG.Done()
+
+		origin := r.Header.Get("Origin")
+		for _, v := range coolGuysISuppose {
+			if strings.HasPrefix(origin, v) {
+				w.Header().Set("access-control-allow-origin", "*")
+			}
+		}
+
 		policy := "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'"
 		if develMode {
 			policy += "; report-uri /csp-violation"
